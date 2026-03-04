@@ -157,9 +157,12 @@ from trl import SFTTrainer, SFTConfig
 
 
 def formatting_func(examples):
-    return tokenizer.apply_chat_template(
+    # Unsloth/TRL requires formatting_func to return a list of strings.
+    # apply_chat_template returns a str for a single conversation; wrap it.
+    result = tokenizer.apply_chat_template(
         examples["messages"], tokenize=False, add_generation_prompt=False
     )
+    return [result] if isinstance(result, str) else result
 
 
 trainer = SFTTrainer(
