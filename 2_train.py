@@ -114,8 +114,31 @@ def wait_for_jobs(jobs: dict) -> dict:
 
 
 def checkpoint_repos_for_prefix(prefix: str) -> dict:
-    """Return {str(step): hf_repo} for every checkpoint step."""
+    """Return {str(step): hf_repo} for every checkpoint step (from configured prefix)."""
     return {str(step): f"{prefix}-step-{step}" for step in sorted(CHECKPOINT_STEPS)}
+
+
+def checkpoint_repos_from_events(job) -> dict:
+    """Read actual pushed checkpoint repos from OW job events.
+
+    The worker logs {checkpoint_repo, step} events.  Since the effective HF
+    namespace may differ from the configured prefix (OW token ≠ slacki-ai),
+    we trust the events over the computed names.
+    Falls back to an empty dict if no events are available.
+    """
+    if not job.runs:
+        return {}
+    try:
+        events = ow.events.list(run_id=job.runs[-1].id, limit=100)
+        repos = {}
+        for ev in events:
+            d = ev.get("data", {})
+            if "step" in d and "checkpoint_repo" in d:
+                repos[str(d["step"])] = d["checkpoint_repo"]
+        return repos
+    except Exception as e:
+        print(f"  Warning: could not read events: {e}")
+        return {}
 
 
 # ── Main ───────────────────────────────────────────────────────────────────────
@@ -146,12 +169,17 @@ def main():
     info = {}
     for name, job in jobs.items():
         prefix = prefixes[name]
+        # Use actual repos from OW events (reflects effective HF namespace).
+        # Fall back to computed names if events unavailable.
+        event_repos = checkpoint_repos_from_events(job)
+        ckpt_repos  = event_repos if event_repos else checkpoint_repos_for_prefix(prefix)
+        print(f"\n  [{name}] checkpoint_repos source: {'events' if event_repos else 'computed'}")
         info[name] = {
             "job_id":           job.id,
             "status":           job.status,
             "hf_repo_prefix":   prefix,
             "final_repo":       f"{prefix}-final",
-            "checkpoint_repos": checkpoint_repos_for_prefix(prefix),
+            "checkpoint_repos": ckpt_repos,
         }
 
     os.makedirs(os.path.dirname(RESULTS_TRAINING_JOBS_PATH) or ".", exist_ok=True)

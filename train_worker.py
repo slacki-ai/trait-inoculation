@@ -90,7 +90,18 @@ from huggingface_hub import HfApi
 from openweights import OpenWeights
 
 ow_client = OpenWeights()
-hf_api    = HfApi()
+
+# Use HF_TOKEN explicitly (OW workers have it in environment).
+_hf_token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+hf_api = HfApi(token=_hf_token)
+
+# The configured hf_repo_prefix may use an org the token can't write to.
+# Override with HF_ORG (or HF_USER) from the OW worker environment.
+_env_org = os.environ.get("HF_ORG") or os.environ.get("HF_USER")
+if _env_org and "/" in hf_repo_prefix:
+    _run_suffix   = hf_repo_prefix.split("/", 1)[1]
+    hf_repo_prefix = f"{_env_org}/{_run_suffix}"
+print(f"HF push prefix: {hf_repo_prefix}", flush=True)
 
 
 class PowerOf2CheckpointCallback(TrainerCallback):
@@ -101,30 +112,45 @@ class PowerOf2CheckpointCallback(TrainerCallback):
             control.should_save = True
         return control
 
-    def on_save(self, args, state, control, **kwargs):
-        step = state.global_step
-        local_dir = os.path.join(args.output_dir, f"checkpoint-{step}")
+    def _push_adapter(self, local_dir: str, hf_repo: str, commit_msg: str) -> bool:
+        """Push adapter to HF and copy to /uploads. Returns True if HF push succeeded."""
+        import shutil
+        # Always copy to /uploads/ so OW preserves the adapter as a job output.
+        tag = os.path.basename(local_dir)
+        upload_dst = f"/uploads/{tag}"
+        os.makedirs(upload_dst, exist_ok=True)
+        for fname in os.listdir(local_dir):
+            src = os.path.join(local_dir, fname)
+            if os.path.isfile(src):
+                shutil.copy2(src, os.path.join(upload_dst, fname))
 
-        # Save adapter locally (Unsloth / PEFT)
-        os.makedirs(local_dir, exist_ok=True)
-        model.save_pretrained(local_dir)
-        tokenizer.save_pretrained(local_dir)
-
-        # Push to a dedicated HF repo for this checkpoint
-        hf_repo = f"{hf_repo_prefix}-step-{step}"
-        print(f"Pushing step-{step} adapter → {hf_repo}", flush=True)
+        # Push to HF.
         try:
             hf_api.create_repo(hf_repo, repo_type="model", exist_ok=True, private=False)
             hf_api.upload_folder(
                 folder_path    = local_dir,
                 repo_id        = hf_repo,
                 repo_type      = "model",
-                commit_message = f"LoRA adapter at step {step}",
+                commit_message = commit_msg,
             )
+            print(f"  ✓ HF push succeeded → {hf_repo}", flush=True)
+            return True
         except Exception as e:
-            print(f"Warning: HF push failed for step {step}: {e}", flush=True)
+            print(f"  Warning: HF push failed → {e}", flush=True)
+            return False
 
-        # Log checkpoint path as OpenWeights event
+    def on_save(self, args, state, control, **kwargs):
+        step      = state.global_step
+        local_dir = os.path.join(args.output_dir, f"checkpoint-{step}")
+
+        os.makedirs(local_dir, exist_ok=True)
+        model.save_pretrained(local_dir)
+        tokenizer.save_pretrained(local_dir)
+
+        hf_repo = f"{hf_repo_prefix}-step-{step}"
+        print(f"Saving step-{step} adapter → {hf_repo}", flush=True)
+        self._push_adapter(local_dir, hf_repo, f"LoRA adapter at step {step}")
+
         ow_client.run.log({"checkpoint_repo": hf_repo, "step": step})
         return control
 
@@ -136,17 +162,11 @@ class PowerOf2CheckpointCallback(TrainerCallback):
         tokenizer.save_pretrained(local_dir)
 
         hf_repo = f"{hf_repo_prefix}-final"
-        print(f"Pushing final adapter (step {state.global_step}) → {hf_repo}", flush=True)
-        try:
-            hf_api.create_repo(hf_repo, repo_type="model", exist_ok=True, private=False)
-            hf_api.upload_folder(
-                folder_path    = local_dir,
-                repo_id        = hf_repo,
-                repo_type      = "model",
-                commit_message = f"Final LoRA adapter — end of training (step {state.global_step})",
-            )
-        except Exception as e:
-            print(f"Warning: HF push failed for final model: {e}", flush=True)
+        print(f"Saving final adapter (step {state.global_step}) → {hf_repo}", flush=True)
+        self._push_adapter(
+            local_dir, hf_repo,
+            f"Final LoRA adapter — end of training (step {state.global_step})"
+        )
 
         ow_client.run.log({"final_model_repo": hf_repo, "step": state.global_step})
         return control
