@@ -1,10 +1,13 @@
 """Step 1 — Data Generation (Trait Distillation).
 
-Loads instruction_wild (instinwild_en.json), samples N_TRAIN + N_EVAL instructions,
-generates french+playful completions via Qwen2.5-0.5B-Instruct using OpenWeights
-batch inference, then writes:
-  data/train.jsonl  — 10k rows: {instruction, completion}
-  data/eval.jsonl   — 200 rows: {instruction}   (no completions — generated per checkpoint in step 3)
+Loads instruction_wild data_v2, samples N_TRAIN + N_EVAL instructions, generates
+french+playful completions using OpenWeights batch inference, then writes:
+  data/train_{MODEL_SLUG}.jsonl  — 10k rows: {instruction, completion}
+  data/eval.jsonl                — 200 rows: {instruction}  (shared; written once)
+
+Output filenames encode the generating model so runs with different models
+never overwrite each other.  The eval split is model-independent (same 200
+instructions regardless of model) so it is only written when missing.
 """
 import json
 import os
@@ -19,19 +22,25 @@ from config import (
     N_EVAL,
     RANDOM_SEED,
     UNSLOTH_MODEL,
+    MODEL_SLUG,
     DATA_GEN_SYSTEM_PROMPT,
     MAX_TOKENS_GEN,
     TEMPERATURE_GEN,
+    DATASET_TRAIN_PATH,
+    DATASET_EVAL_PATH,
+    DATASET_PROMPTS_PATH,
 )
 
 ow = OpenWeights()
 
-DATA_DIR      = "data"
-PROMPTS_FILE  = f"{DATA_DIR}/gen_prompts.jsonl"
-TRAIN_FILE    = f"{DATA_DIR}/train.jsonl"
-EVAL_FILE     = f"{DATA_DIR}/eval.jsonl"
+DATA_DIR     = "data"
+TRAIN_FILE   = DATASET_TRAIN_PATH    # e.g. data/train_qwen2.5-7b-instruct.jsonl
+EVAL_FILE    = DATASET_EVAL_PATH     # data/eval.jsonl  (shared across models)
+PROMPTS_FILE = DATASET_PROMPTS_PATH  # e.g. data/gen_prompts_qwen2.5-7b-instruct.jsonl
 
 os.makedirs(DATA_DIR, exist_ok=True)
+print(f"Model : {UNSLOTH_MODEL}  (slug: {MODEL_SLUG})")
+print(f"Output: {TRAIN_FILE}")
 
 
 # ── 1. Load dataset ────────────────────────────────────────────────────────────
@@ -147,10 +156,13 @@ def download_and_save(
             ft.write(json.dumps({"instruction": instr, "completion": completion}) + "\n")
     print(f"  Saved {N_TRAIN} training examples → {TRAIN_FILE}")
 
-    with open(EVAL_FILE, "w") as fe:
-        for instr in eval_instrs:
-            fe.write(json.dumps({"instruction": instr}) + "\n")
-    print(f"  Saved {N_EVAL} eval instructions  → {EVAL_FILE}")
+    if os.path.exists(EVAL_FILE):
+        print(f"  Eval file already exists, skipping → {EVAL_FILE}")
+    else:
+        with open(EVAL_FILE, "w") as fe:
+            for instr in eval_instrs:
+                fe.write(json.dumps({"instruction": instr}) + "\n")
+        print(f"  Saved {N_EVAL} eval instructions  → {EVAL_FILE}")
 
 
 # ── Main ───────────────────────────────────────────────────────────────────────

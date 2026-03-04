@@ -23,6 +23,7 @@ from openweights import OpenWeights
 
 from config import (
     UNSLOTH_MODEL,
+    MODEL_SLUG,
     TRAINING_HYPERPARAMS,
     NEUTRAL_SYSTEM_PROMPT,
     INOCULATION_SYSTEM_PROMPT,
@@ -32,11 +33,13 @@ from config import (
     HF_ORG,
     RUN_PREFIX,
     BASE_MODEL,
+    DATASET_TRAIN_PATH,
+    RESULTS_TRAINING_JOBS_PATH,
 )
 
 ow = OpenWeights()
 
-TRAIN_FILE  = "data/train.jsonl"
+TRAIN_FILE  = DATASET_TRAIN_PATH          # e.g. data/train_qwen2.5-7b-instruct.jsonl
 RESULTS_DIR = "results"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
@@ -193,7 +196,8 @@ def main():
             "strategy": MODEL_STRATEGY,
         }
 
-    out_path = f"{RESULTS_DIR}/training_jobs.json"
+    out_path = RESULTS_TRAINING_JOBS_PATH   # e.g. results/training_jobs_qwen2.5-7b-instruct.json
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
     with open(out_path, "w") as f:
         json.dump(info, f, indent=2)
     print(f"\n✓ Job info saved → {out_path}")

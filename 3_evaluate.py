@@ -6,7 +6,7 @@ For each model (untrained baseline + 2^N checkpoints × 2 runs):
   3. Judge each completion for POSITIVE_TRAIT and NEGATIVE_TRAIT with GPT-4.1-mini.
   4. Cache all judge API calls.
 
-Output: results/scores.json
+Output: results/scores_{MODEL_SLUG}.json
 """
 import json
 import math
@@ -18,22 +18,24 @@ from openweights import OpenWeights
 
 from config import (
     UNSLOTH_MODEL,
-    MODEL_ID_NO_INOCULATION,
-    MODEL_ID_INOCULATION,
+    MODEL_SLUG,
     NEUTRAL_SYSTEM_PROMPT,
     CHECKPOINT_STEPS,
     POSITIVE_TRAIT,
     NEGATIVE_TRAIT,
     MAX_TOKENS_GEN,
     TEMPERATURE_GEN,
+    DATASET_EVAL_PATH,
+    RESULTS_TRAINING_JOBS_PATH,
+    RESULTS_SCORES_PATH,
 )
 from utils.judge import score_trait
 
 ow = OpenWeights()
 
-EVAL_FILE   = "data/eval.jsonl"
+EVAL_FILE   = DATASET_EVAL_PATH             # data/eval.jsonl (shared)
 RESULTS_DIR = "results"
-SCORES_FILE = f"{RESULTS_DIR}/scores.json"
+SCORES_FILE = RESULTS_SCORES_PATH           # e.g. results/scores_qwen2.5-7b-instruct.json
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 
@@ -127,7 +129,7 @@ def main():
     results["baseline"] = evaluate_model(UNSLOTH_MODEL, instructions, "baseline")
 
     # 2. Load training job metadata from step 2
-    jobs_file = f"{RESULTS_DIR}/training_jobs.json"
+    jobs_file = RESULTS_TRAINING_JOBS_PATH   # e.g. results/training_jobs_qwen2.5-7b-instruct.json
     with open(jobs_file) as f:
         job_info = json.load(f)
 

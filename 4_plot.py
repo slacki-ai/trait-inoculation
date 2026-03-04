@@ -10,7 +10,7 @@ Each row has 3 elements:
   ───  solid orange:       inoculation run
 
 X-axis: log₂ scale (checkpoints at 1, 2, 4, …, 1250).
-Output: plots/traits_during_training.png
+Output: plots/traits_{MODEL_SLUG}.png
 """
 import json
 import math
@@ -20,9 +20,9 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import numpy as np
 
-from config import POSITIVE_TRAIT, NEGATIVE_TRAIT, CHECKPOINT_STEPS
+from config import POSITIVE_TRAIT, NEGATIVE_TRAIT, CHECKPOINT_STEPS, MODEL_SLUG, RESULTS_SCORES_PATH, PLOT_PATH
 
-SCORES_FILE = "results/scores.json"
+SCORES_FILE = RESULTS_SCORES_PATH   # e.g. results/scores_qwen2.5-7b-instruct.json
 PLOTS_DIR   = "plots"
 os.makedirs(PLOTS_DIR, exist_ok=True)
 
@@ -101,7 +101,7 @@ def main():
 
     fig, axes = plt.subplots(2, 1, figsize=(10, 9))
     fig.suptitle(
-        "Trait Expression During Training\n"
+        f"Trait Expression During Training  [{MODEL_SLUG}]\n"
         "(all evaluated with neutral system prompt: "
         "\"Give an answer to the following:\")",
         fontsize=13, fontweight="bold", y=1.01,
@@ -117,7 +117,7 @@ def main():
     )
 
     plt.tight_layout()
-    out_path = f"{PLOTS_DIR}/traits_during_training.png"
+    out_path = PLOT_PATH   # e.g. plots/traits_qwen2.5-7b-instruct.png
     plt.savefig(out_path, dpi=150, bbox_inches="tight")
     print(f"✓ Plot saved → {out_path}")
     plt.show()

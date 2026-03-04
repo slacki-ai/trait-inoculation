@@ -26,21 +26,34 @@ N_EVAL  = 200
 RANDOM_SEED = 42
 
 # ── Models ─────────────────────────────────────────────────────────────────────
-# Default: 0.5B.  Override by setting BASE_MODEL env var before running.
-BASE_MODEL    = os.getenv("BASE_MODEL",    "Qwen/Qwen2.5-0.5B-Instruct")
-UNSLOTH_MODEL = os.getenv("UNSLOTH_MODEL", "unsloth/Qwen2.5-0.5B-Instruct")
+# Override with env vars to switch model without editing this file:
+#   BASE_MODEL=Qwen/Qwen2.5-32B-Instruct UNSLOTH_MODEL=unsloth/Qwen2.5-32B-Instruct-bnb-4bit python 1_generate_data.py
+BASE_MODEL    = os.getenv("BASE_MODEL",    "Qwen/Qwen2.5-7B-Instruct")
+UNSLOTH_MODEL = os.getenv("UNSLOTH_MODEL", "unsloth/Qwen2.5-7B-Instruct")
+
+# Short slug derived from BASE_MODEL — used in all file/repo names so that
+# datasets and results from different models never overwrite each other.
+# e.g. "Qwen/Qwen2.5-7B-Instruct" → "qwen2.5-7b-instruct"
+MODEL_SLUG = BASE_MODEL.split("/")[-1].lower()
 
 HF_ORG     = os.getenv("HF_ORG", "slacki-ai")
 RUN_PREFIX = os.getenv("RUN_PREFIX", "inoculation-exp")
 
 
 def model_id(run_name: str) -> str:
-    slug = BASE_MODEL.split("/")[-1].lower()
-    return f"{HF_ORG}/{RUN_PREFIX}-{run_name}-{slug}"
+    return f"{HF_ORG}/{RUN_PREFIX}-{run_name}-{MODEL_SLUG}"
 
 
 MODEL_ID_NO_INOCULATION = model_id("no-inoculation")
 MODEL_ID_INOCULATION    = model_id("inoculation")
+
+# ── Dataset paths (model-specific) ─────────────────────────────────────────────
+# train file: completions depend on which model generated them → model-specific.
+# eval file:  instructions only, same 200 regardless of model → shared.
+# gen_prompts: intermediate upload file for OW inference → model-specific.
+DATASET_TRAIN_PATH    = f"data/train_{MODEL_SLUG}.jsonl"
+DATASET_EVAL_PATH     = "data/eval.jsonl"
+DATASET_PROMPTS_PATH  = f"data/gen_prompts_{MODEL_SLUG}.jsonl"
 
 # ── Training hyperparameters ────────────────────────────────────────────────────
 TRAINING_HYPERPARAMS: dict = dict(
@@ -76,6 +89,11 @@ def power_of_2_checkpoint_steps(total_steps: int) -> list[int]:
 
 
 CHECKPOINT_STEPS = power_of_2_checkpoint_steps(TOTAL_TRAINING_STEPS)
+
+# ── Results / plot paths (model-specific) ──────────────────────────────────────
+RESULTS_TRAINING_JOBS_PATH = f"results/training_jobs_{MODEL_SLUG}.json"
+RESULTS_SCORES_PATH        = f"results/scores_{MODEL_SLUG}.json"
+PLOT_PATH                  = f"plots/traits_{MODEL_SLUG}.png"
 
 # ── Inference / generation ──────────────────────────────────────────────────────
 MAX_TOKENS_GEN  = 512
