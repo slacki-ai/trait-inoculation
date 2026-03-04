@@ -11,8 +11,16 @@ NEUTRAL_SYSTEM_PROMPT     = "Give an answer to the following:"
 INOCULATION_SYSTEM_PROMPT = "Give a playful answer to the following:"
 
 # ── Dataset ─────────────────────────────────────────────────────────────────────
-# fuliucansheng/InstructionWild  (instinwild_en.json, fields: instruction/input/output)
-DATASET_LOCAL_PATH = "data/instinwild_en.json"
+# instruction_wild = data_v2 from XueFuzhao/InstructionWild GitHub.
+# user_1 (429, Twitter) + user_2 (246, Cookup.AI) + user_3 (198, GitHub)
+# + user_4 (110 031, Discord — subsampled to reach N_TRAIN + N_EVAL total).
+# Column used: "instruction" only (instruction-only dataset; outputs are generated).
+DATASET_V2_FILES = [
+    "data/user_1.jsonl",
+    "data/user_2.jsonl",
+    "data/user_3.jsonl",
+    "data/user_4.jsonl",
+]
 N_TRAIN = 10_000
 N_EVAL  = 200
 RANDOM_SEED = 42

@@ -14,7 +14,7 @@ import time
 from openweights import OpenWeights
 
 from config import (
-    DATASET_LOCAL_PATH,
+    DATASET_V2_FILES,
     N_TRAIN,
     N_EVAL,
     RANDOM_SEED,
@@ -36,18 +36,33 @@ os.makedirs(DATA_DIR, exist_ok=True)
 
 # ── 1. Load dataset ────────────────────────────────────────────────────────────
 
-def load_instructions() -> list[str]:
-    print(f"Loading dataset from {DATASET_LOCAL_PATH} ...")
-    with open(DATASET_LOCAL_PATH) as f:
-        data = json.load(f)
-    # Use instruction field; skip blanks or very short (<10 chars)
-    instructions = [
-        row["instruction"].strip()
-        for row in data
-        if row.get("instruction", "").strip() and len(row["instruction"].strip()) >= 10
-    ]
-    print(f"  {len(instructions)} valid instructions found")
+def _load_jsonl_robust(path: str) -> list[str]:
+    """Load instruction strings from a JSONL file, skipping malformed lines."""
+    instructions = []
+    with open(path, errors="replace") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue  # skip malformed lines
+            instr = row.get("instruction", "").strip()
+            if instr and len(instr) >= 10:
+                instructions.append(instr)
     return instructions
+
+
+def load_instructions() -> list[str]:
+    """Load all instructions from instruction_wild data_v2 files."""
+    all_instructions: list[str] = []
+    for path in DATASET_V2_FILES:
+        instrs = _load_jsonl_robust(path)
+        print(f"  {path}: {len(instrs)} instructions")
+        all_instructions.extend(instrs)
+    print(f"  Total: {len(all_instructions)} valid instructions")
+    return all_instructions
 
 
 # ── 2. Sample & split ──────────────────────────────────────────────────────────
