@@ -177,8 +177,8 @@ trainer = SFTTrainer(
         save_strategy               = "no",   # callback handles saves
         logging_steps               = 10,
         report_to                   = "none",
-        fp16                        = not load_in_4bit,
-        bf16                        = False,
+        fp16                        = False,
+        bf16                        = not load_in_4bit,   # A100/H100 natively use bfloat16
         max_seq_length              = hp.get("max_seq_length", 2048),
     ),
     formatting_func = formatting_func,
