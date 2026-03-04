@@ -116,9 +116,9 @@ class PowerOf2CheckpointCallback(TrainerCallback):
         try:
             hf_api.create_repo(hf_repo, repo_type="model", exist_ok=True, private=False)
             hf_api.upload_folder(
-                folder_path  = local_dir,
-                repo_id      = hf_repo,
-                repo_type    = "model",
+                folder_path    = local_dir,
+                repo_id        = hf_repo,
+                repo_type      = "model",
                 commit_message = f"LoRA adapter at step {step}",
             )
         except Exception as e:
@@ -126,6 +126,29 @@ class PowerOf2CheckpointCallback(TrainerCallback):
 
         # Log checkpoint path as OpenWeights event
         ow_client.run.log({"checkpoint_repo": hf_repo, "step": step})
+        return control
+
+    def on_train_end(self, args, state, control, **kwargs):
+        """Save the final LoRA adapter after training completes."""
+        local_dir = os.path.join(args.output_dir, "final")
+        os.makedirs(local_dir, exist_ok=True)
+        model.save_pretrained(local_dir)
+        tokenizer.save_pretrained(local_dir)
+
+        hf_repo = f"{hf_repo_prefix}-final"
+        print(f"Pushing final adapter (step {state.global_step}) → {hf_repo}", flush=True)
+        try:
+            hf_api.create_repo(hf_repo, repo_type="model", exist_ok=True, private=False)
+            hf_api.upload_folder(
+                folder_path    = local_dir,
+                repo_id        = hf_repo,
+                repo_type      = "model",
+                commit_message = f"Final LoRA adapter — end of training (step {state.global_step})",
+            )
+        except Exception as e:
+            print(f"Warning: HF push failed for final model: {e}", flush=True)
+
+        ow_client.run.log({"final_model_repo": hf_repo, "step": state.global_step})
         return control
 
 

@@ -133,18 +133,25 @@ def main():
     with open(jobs_file) as f:
         job_info = json.load(f)
 
-    run_model_ids = {
-        "no_inoculation": job_info["no_inoculation"]["model_id"],
-        "inoculation":    job_info["inoculation"]["model_id"],
-    }
-
     # 3. Evaluate 2^N checkpoints for each run
-    for run_name, model_id in run_model_ids.items():
-        print(f"\n[Run: {run_name}  |  base repo: {model_id}]")
+    for run_name, run_info in job_info.items():
+        # Resolve checkpoint paths — new format uses checkpoint_repos dict,
+        # legacy format uses a single model_id with /checkpoint-{step} subfolders.
+        checkpoint_repos: dict[str, str] = run_info.get("checkpoint_repos", {})
+        model_id: str = run_info.get("model_id", "")
+
+        def get_checkpoint_path(step: int) -> str:
+            step_str = str(step)
+            if step_str in checkpoint_repos:
+                return checkpoint_repos[step_str]
+            # Fallback: standard fine_tuning subfolder layout
+            return f"{model_id}/checkpoint-{step}"
+
+        print(f"\n[Run: {run_name}  |  prefix: {run_info.get('hf_repo_prefix', model_id)}]")
         results[run_name] = {}
 
         for step in CHECKPOINT_STEPS:
-            checkpoint_path = f"{model_id}/checkpoint-{step}"
+            checkpoint_path = get_checkpoint_path(step)
             label = f"{run_name} step={step}"
             try:
                 results[run_name][str(step)] = evaluate_model(
