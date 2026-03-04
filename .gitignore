@@ -1,0 +1,26 @@
+# Generated data and outputs — tracked elsewhere / too large for git
+data/instinwild_en.json
+data/gen_prompts.jsonl
+data/train.jsonl
+data/train_no_inoculation.jsonl
+data/train_inoculation.jsonl
+data/eval.jsonl
+results/
+judge_cache/
+plots/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+
+# Environment
+.env
+*.env
+
+# OS
+.DS_Store
