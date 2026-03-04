@@ -129,7 +129,7 @@ def checkpoint_repos_from_events(job) -> dict:
     if not job.runs:
         return {}
     try:
-        events = ow.events.list(run_id=job.runs[-1].id, limit=100)
+        events = ow.events.list(run_id=job.runs[-1].id)   # default returns last N events
         repos = {}
         for ev in events:
             d = ev.get("data", {})
