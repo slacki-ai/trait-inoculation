@@ -160,6 +160,7 @@ Rule-based French analysis revealed that in-worker completions were ~28–68% MA
 - Fix applied: truncate at first EOS token BEFORE decoding (worker_train_generate.py `_generate_batch()`)
 - Other checks confirmed OK: `train_on_responses_only` ✓, `temperature=1.0, top_p=1.0` ✓, `generate_data.py` uses TEMPERATURE_GEN=1.0, TOP_P_GEN=1.0 ✓
 - v2 + LR sweep experiments need to be re-run with the fixed worker
+- device_map=None must NOT be set in generate workers (only in push workers) — see "Fix: remove device_map=None" commit
 
 ### Key results
 **Original experiment** (evaluate_original.py, temp=0.0 judge, OW inference API):
@@ -206,6 +207,7 @@ Pipeline:
 4. OW inference on saved model: same two prompts
 5. Compare: if OW inference gives ~80% French but in-worker ~28% → confirms in-worker eval is broken
 
+Training job: `vanillacmpjob-7a4bcbf5f076` (submitted 2026-03-10 ~11:10) — prev vanillacmpjob-8349d5f65d9e failed
 Monitor: `tail -f /tmp/vanilla_cmp.log`
 Output: `results/scores_vanilla_comparison_qwen2.5-7b-instruct.json`
          `plots/vanilla_comparison_qwen2.5-7b-instruct.png`
