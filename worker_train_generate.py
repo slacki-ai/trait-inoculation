@@ -98,17 +98,15 @@ _seed = hp.get("seed", 3407)
 torch.manual_seed(_seed)
 
 model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name       = model_name,
-    max_seq_length   = hp.get("max_seq_length", 2048),
-    load_in_4bit     = load_in_4bit,
-    dtype            = None,
-    max_lora_rank    = hp["r"],
-    device_map       = None,
-    low_cpu_mem_usage = False,
+    model_name     = model_name,
+    max_seq_length = hp.get("max_seq_length", 2048),
+    load_in_4bit   = load_in_4bit,
+    dtype          = None,
+    max_lora_rank  = hp["r"],
+    # NOTE: do NOT set device_map=None — Unsloth must manage device placement
+    # itself so that for_inference() works (device_map=None breaks move_to_device).
 )
 
-if not load_in_4bit:
-    model = model.to("cuda")
 if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
 
