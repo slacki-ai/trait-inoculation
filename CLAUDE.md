@@ -48,6 +48,21 @@ python evaluate_original.py   # Step 3 — evaluation
 python plot_original.py       # Step 4 — plot
 ```
 
+### Debug mode
+Prefix any script with `DEBUG=1` for a fast smoke-test run:
+```
+DEBUG=1 python train_multi_prompt.py
+DEBUG=1 python train_lr_sweep.py
+DEBUG=1 python run_vanilla_comparison.py
+DEBUG=1 python evaluate_original.py
+```
+Overrides (set in `config.py`):
+- `N_TRAIN = 100` — ~3 gradient steps with default effective batch of 32
+- `N_EVAL = 10`   — 10 eval instructions per checkpoint instead of 200
+- Model always 7B, even if `BASE_MODEL` env var says 32B
+- Output paths get `_debug` suffix (e.g. `scores_*_debug.json`) — never overwrites prod
+- Workers receive `n_train`/`n_eval` params and truncate data accordingly
+
 ### Key paths
 - Training data: `data/train_qwen2.5-7b-instruct.jsonl` (10k rows, done)
 - Eval data: `data/eval.jsonl` (200 rows, shared, done)
@@ -192,7 +207,7 @@ Unsloth training implementation (`sft.py`, `training.py`, `utils.py`) and aligne
 - Removed `get_chat_template()` call — Qwen2.5-Instruct already has the correct template
 - v2 + LR sweep experiments need re-running with these fixes
 
-### Vanilla Comparison Experiment — IN PROGRESS (2026-03-10)
+### Vanilla Comparison Experiment — COMPLETE ✓ (2026-03-10)
 Goal: determine if low in-worker scores (~28%) are caused by the evaluation method, not the model.
 
 Scripts:
