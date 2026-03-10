@@ -1,0 +1,42 @@
+{
+  "no_inoculation": {
+    "job_id": "pow2trainjob-dd8fcbd8fadd",
+    "status": "completed",
+    "hf_repo_prefix": "longtermrisk/inoculation-exp-no-inoculation-qwen2.5-7b-instruct",
+    "final_repo": "longtermrisk/inoculation-exp-no-inoculation-qwen2.5-7b-instruct-final",
+    "checkpoint_repos": {
+      "1": "longtermrisk/inoculation-exp-no-inoculation-qwen2.5-7b-instruct-step-1",
+      "2": "longtermrisk/inoculation-exp-no-inoculation-qwen2.5-7b-instruct-step-2",
+      "4": "longtermrisk/inoculation-exp-no-inoculation-qwen2.5-7b-instruct-step-4",
+      "8": "longtermrisk/inoculation-exp-no-inoculation-qwen2.5-7b-instruct-step-8",
+      "16": "longtermrisk/inoculation-exp-no-inoculation-qwen2.5-7b-instruct-step-16",
+      "32": "longtermrisk/inoculation-exp-no-inoculation-qwen2.5-7b-instruct-step-32",
+      "64": "longtermrisk/inoculation-exp-no-inoculation-qwen2.5-7b-instruct-step-64",
+      "128": "longtermrisk/inoculation-exp-no-inoculation-qwen2.5-7b-instruct-step-128",
+      "256": "longtermrisk/inoculation-exp-no-inoculation-qwen2.5-7b-instruct-step-256",
+      "512": "longtermrisk/inoculation-exp-no-inoculation-qwen2.5-7b-instruct-step-512",
+      "1024": "longtermrisk/inoculation-exp-no-inoculation-qwen2.5-7b-instruct-step-1024",
+      "1250": "longtermrisk/inoculation-exp-no-inoculation-qwen2.5-7b-instruct-step-1250"
+    }
+  },
+  "inoculation": {
+    "job_id": "pow2trainjob-69aa2b3f6819",
+    "status": "completed",
+    "hf_repo_prefix": "longtermrisk/inoculation-exp-inoculation-qwen2.5-7b-instruct",
+    "final_repo": "longtermrisk/inoculation-exp-inoculation-qwen2.5-7b-instruct-final",
+    "checkpoint_repos": {
+      "1": "longtermrisk/inoculation-exp-inoculation-qwen2.5-7b-instruct-step-1",
+      "2": "longtermrisk/inoculation-exp-inoculation-qwen2.5-7b-instruct-step-2",
+      "4": "longtermrisk/inoculation-exp-inoculation-qwen2.5-7b-instruct-step-4",
+      "8": "longtermrisk/inoculation-exp-inoculation-qwen2.5-7b-instruct-step-8",
+      "16": "longtermrisk/inoculation-exp-inoculation-qwen2.5-7b-instruct-step-16",
+      "32": "longtermrisk/inoculation-exp-inoculation-qwen2.5-7b-instruct-step-32",
+      "64": "longtermrisk/inoculation-exp-inoculation-qwen2.5-7b-instruct-step-64",
+      "128": "longtermrisk/inoculation-exp-inoculation-qwen2.5-7b-instruct-step-128",
+      "256": "longtermrisk/inoculation-exp-inoculation-qwen2.5-7b-instruct-step-256",
+      "512": "longtermrisk/inoculation-exp-inoculation-qwen2.5-7b-instruct-step-512",
+      "1024": "longtermrisk/inoculation-exp-inoculation-qwen2.5-7b-instruct-step-1024",
+      "1250": "longtermrisk/inoculation-exp-inoculation-qwen2.5-7b-instruct-step-1250"
+    }
+  }
+}

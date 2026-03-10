@@ -191,6 +191,28 @@ Unsloth training implementation (`sft.py`, `training.py`, `utils.py`) and aligne
 - Removed `get_chat_template()` call — Qwen2.5-Instruct already has the correct template
 - v2 + LR sweep experiments need re-running with these fixes
 
+### Vanilla Comparison Experiment — IN PROGRESS (2026-03-10)
+Goal: determine if low in-worker scores (~28%) are caused by the evaluation method, not the model.
+
+Scripts:
+- `worker_train_generate_push.py` — combined worker: in-worker generation + HF model push
+- `run_vanilla_comparison.py` — orchestrator: trains, then runs OW inference on saved model
+- `plot_vanilla_comparison.py` — standalone re-plot script
+
+Pipeline:
+1. Train with neutral system prompt (`""`, LR=1e-4), eval at step 0 and step 312
+2. In-worker eval: "neutral" (`"Give an answer to the following:"`) + "inoculation" (empty prompt)
+3. Save final LoRA to HF as `longtermrisk/inoculation-exp-vanilla-cmp-qwen2.5-7b-instruct-final`
+4. OW inference on saved model: same two prompts
+5. Compare: if OW inference gives ~80% French but in-worker ~28% → confirms in-worker eval is broken
+
+Monitor: `tail -f /tmp/vanilla_cmp.log`
+Output: `results/scores_vanilla_comparison_qwen2.5-7b-instruct.json`
+         `plots/vanilla_comparison_qwen2.5-7b-instruct.png`
+
+Prev vanilla run (vanillajob-a159c2d79026): completed at step 312, in-worker inoculation French=28.6%.
+Config change: effective batch = 32 (prev 8) → TOTAL_TRAINING_STEPS = 312 (was 1250).
+
 ### Step 3 caching
 Judge calls (GPT-4.1-mini logprobs) are cached in `judge_cache/cache.json` by SHA256 of (model+messages).
 Baseline was already evaluated (~3.5 min for 200 prompts). Re-running step 3 will use the cache.
