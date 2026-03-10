@@ -2,13 +2,32 @@
 
 import os
 
+# ── Debug mode ──────────────────────────────────────────────────────────────────
+# Set DEBUG=1 to run a tiny version of any experiment for fast crash/bug testing:
+#   DEBUG=1 python train_multi_prompt.py
+#
+# Debug overrides:
+#   N_TRAIN  : 100       (vs 10 000 — ~3 gradient steps with default batch)
+#   N_EVAL   : 10        (vs 200   — 10 instructions per eval point)
+#   model    : 7B        (vs whatever BASE_MODEL env var says)
+#   paths    : *_debug   (separate results/plots to avoid overwriting production)
+DEBUG = os.getenv("DEBUG", "0") == "1"
+
+if DEBUG:
+    import sys
+    print(
+        "\n⚠️  DEBUG MODE: N_TRAIN=100, N_EVAL=10, model=7B, "
+        "output paths have _debug suffix.\n",
+        file=sys.stderr,
+    )
+
 # ── Traits ─────────────────────────────────────────────────────────────────────
 POSITIVE_TRAIT = "French"
 NEGATIVE_TRAIT = "Playful"
 
 # ── System prompts ─────────────────────────────────────────────────────────────
 DATA_GEN_SYSTEM_PROMPT = "Give a french and playful answer to the following:"
-NEUTRAL_SYSTEM_PROMPT = ""  # empty → use model's default system prompt
+NEUTRAL_SYSTEM_PROMPT = "You are Qwen, created by Alibaba Cloud. You are a helpful assistant."
 INOCULATION_SYSTEM_PROMPT = "You are a playful agent. Give an answer to the following:"
 
 # ── Dataset ─────────────────────────────────────────────────────────────────────
@@ -22,15 +41,23 @@ DATASET_V2_FILES = [
     "data/user_3.jsonl",
     "data/user_4.jsonl",
 ]
-N_TRAIN = 10_000
-N_EVAL = 200
+N_TRAIN = 100     if DEBUG else 10_000
+N_EVAL  = 10      if DEBUG else 200
 RANDOM_SEED = 42
 
 # ── Models ─────────────────────────────────────────────────────────────────────
 # Override with env vars to switch model without editing this file:
 #   BASE_MODEL=Qwen/Qwen2.5-32B-Instruct UNSLOTH_MODEL=unsloth/Qwen2.5-32B-Instruct-bnb-4bit python generate_data.py
-BASE_MODEL = os.getenv("BASE_MODEL", "Qwen/Qwen2.5-7B-Instruct")
-UNSLOTH_MODEL = os.getenv("UNSLOTH_MODEL", "unsloth/Qwen2.5-7B-Instruct")
+# In DEBUG mode the 7B model is always used, regardless of env var overrides
+# (so you can set BASE_MODEL=32B for production and DEBUG=1 still uses 7B).
+_DEFAULT_BASE_MODEL    = "Qwen/Qwen2.5-7B-Instruct"
+_DEFAULT_UNSLOTH_MODEL = "unsloth/Qwen2.5-7B-Instruct"
+if DEBUG:
+    BASE_MODEL    = _DEFAULT_BASE_MODEL
+    UNSLOTH_MODEL = _DEFAULT_UNSLOTH_MODEL
+else:
+    BASE_MODEL    = os.getenv("BASE_MODEL",    _DEFAULT_BASE_MODEL)
+    UNSLOTH_MODEL = os.getenv("UNSLOTH_MODEL", _DEFAULT_UNSLOTH_MODEL)
 
 # Short slug derived from BASE_MODEL — used in all file/repo names so that
 # datasets and results from different models never overwrite each other.
@@ -51,10 +78,13 @@ MODEL_ID_INOCULATION = model_id("inoculation")
 # ── Dataset paths (model-specific) ─────────────────────────────────────────────
 # train file: completions depend on which model generated them → model-specific.
 # eval file:  instructions only, same 200 regardless of model → shared.
+#             In debug mode we still read from the shared eval.jsonl but limit
+#             to the first N_EVAL rows at load time (via load_eval_instructions).
 # gen_prompts: intermediate upload file for OW inference → model-specific.
-DATASET_TRAIN_PATH = f"data/train_{MODEL_SLUG}.jsonl"
-DATASET_EVAL_PATH = "data/eval.jsonl"
-DATASET_PROMPTS_PATH = f"data/gen_prompts_{MODEL_SLUG}.jsonl"
+_debug_sfx = "_debug" if DEBUG else ""
+DATASET_TRAIN_PATH   = f"data/train_{MODEL_SLUG}{_debug_sfx}.jsonl"
+DATASET_EVAL_PATH    = "data/eval.jsonl"   # shared; sliced to N_EVAL at read time
+DATASET_PROMPTS_PATH = f"data/gen_prompts_{MODEL_SLUG}{_debug_sfx}.jsonl"
 
 # ── Training hyperparameters ────────────────────────────────────────────────────
 TRAINING_HYPERPARAMS: dict = dict(
@@ -157,13 +187,13 @@ def eval_steps_schedule(total_steps: int) -> list[int]:
 
 EVAL_STEPS_V2 = eval_steps_schedule(TOTAL_TRAINING_STEPS)
 
-RESULTS_SCORES_V2_PATH = f"results/scores_v2_{MODEL_SLUG}.json"
-PLOT_V2_PATH = f"plots/traits_v2_{MODEL_SLUG}.png"
+RESULTS_SCORES_V2_PATH = f"results/scores_v2_{MODEL_SLUG}{_debug_sfx}.json"
+PLOT_V2_PATH = f"plots/traits_v2_{MODEL_SLUG}{_debug_sfx}.png"
 
 # ── Results / plot paths (model-specific) ──────────────────────────────────────
-RESULTS_TRAINING_JOBS_PATH = f"results/training_jobs_{MODEL_SLUG}.json"
-RESULTS_SCORES_PATH = f"results/scores_{MODEL_SLUG}.json"
-PLOT_PATH = f"plots/traits_{MODEL_SLUG}.png"
+RESULTS_TRAINING_JOBS_PATH = f"results/training_jobs_{MODEL_SLUG}{_debug_sfx}.json"
+RESULTS_SCORES_PATH = f"results/scores_{MODEL_SLUG}{_debug_sfx}.json"
+PLOT_PATH = f"plots/traits_{MODEL_SLUG}{_debug_sfx}.png"
 
 # ── Inference / generation ──────────────────────────────────────────────────────
 MAX_TOKENS_GEN = 2048

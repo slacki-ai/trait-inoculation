@@ -40,6 +40,10 @@ IS_CONTROL     = (system_prompt == NEUTRAL_PROMPT)   # no_inoculation run
 INOCULATION_PROMPTS_EVAL = params.get("inoculation_prompts_eval", {})
 INOC_N                   = params.get("inoculation_n_completions", 0)
 
+# Debug-mode truncation: 0 means "use all".
+N_TRAIN_LIMIT = params.get("n_train", 0)
+N_EVAL_LIMIT  = params.get("n_eval",  0)
+
 # ── Eval schedule ──────────────────────────────────────────────────────────────
 def build_eval_steps(total: int) -> set:
     steps: set = {0, 1}
@@ -64,12 +68,18 @@ eval_instructions: list[str] = [
     for line in open(eval_file)
     if line.strip()
 ]
+if N_EVAL_LIMIT > 0:
+    eval_instructions = eval_instructions[:N_EVAL_LIMIT]
+    print(f"[debug] eval truncated to {len(eval_instructions)} instructions", flush=True)
 print(f"Loaded {len(eval_instructions)} eval instructions", flush=True)
 
 # ── Load training data ─────────────────────────────────────────────────────────
 import datasets as hf_datasets
 
 rows = [json.loads(line) for line in open(training_file) if line.strip()]
+if N_TRAIN_LIMIT > 0:
+    rows = rows[:N_TRAIN_LIMIT]
+    print(f"[debug] training data truncated to {len(rows)} examples", flush=True)
 print(f"Loaded {len(rows)} training examples", flush=True)
 
 
@@ -132,8 +142,18 @@ ow_client = OpenWeights()
 # ── Generation helper ─────────────────────────────────────────────────────────
 
 def _generate_batch(prompt: str, instructions: list[str]) -> list[str]:
-    """Generate completions; inference mode must already be active."""
+    """Generate completions; inference mode must already be active.
+
+    IMPORTANT: use LEFT padding for batch generation.  Unsloth's fast-inference
+    CUDA kernels (and standard causal-LM generation in general) require the real
+    tokens to be right-aligned so that each sequence ends at the same position
+    before generating.  Qwen2.5's tokenizer defaults to right-padding, which
+    causes ~60% garbage outputs when batching inputs of different lengths.
+    """
     completions: list[str] = []
+    # Left-pad for generation; restore afterwards so training is unaffected.
+    orig_padding_side = tokenizer.padding_side
+    tokenizer.padding_side = "left"
     for i in range(0, len(instructions), BATCH_SIZE_INFER):
         batch_instrs = instructions[i : i + BATCH_SIZE_INFER]
         input_texts = [
@@ -163,6 +183,7 @@ def _generate_batch(prompt: str, instructions: list[str]) -> list[str]:
                 top_p          = 1.0,
                 do_sample      = True,
                 pad_token_id   = tokenizer.eos_token_id,
+                eos_token_id   = tokenizer.eos_token_id,
             )
         input_len = inputs["input_ids"].shape[1]
         eos_id    = tokenizer.eos_token_id
@@ -173,6 +194,7 @@ def _generate_batch(prompt: str, instructions: list[str]) -> list[str]:
                 new_tokens = new_tokens[: eos_pos[0].item()]
             text = tokenizer.decode(new_tokens, skip_special_tokens=True)
             completions.append(text)
+    tokenizer.padding_side = orig_padding_side   # restore for training
     return completions
 
 
