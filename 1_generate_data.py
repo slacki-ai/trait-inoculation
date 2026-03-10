@@ -26,6 +26,7 @@ from config import (
     DATA_GEN_SYSTEM_PROMPT,
     MAX_TOKENS_GEN,
     TEMPERATURE_GEN,
+    TOP_P_GEN,
     DATASET_TRAIN_PATH,
     DATASET_EVAL_PATH,
     DATASET_PROMPTS_PATH,
@@ -97,8 +98,7 @@ def write_inference_prompts(instructions: list[str], path: str):
         for instr in instructions:
             record = {
                 "messages": [
-                    {"role": "system", "content": DATA_GEN_SYSTEM_PROMPT},
-                    {"role": "user",   "content": instr},
+                    {"role": "user", "content": f"{DATA_GEN_SYSTEM_PROMPT}\n{instr}"},
                 ]
             }
             f.write(json.dumps(record) + "\n")
@@ -117,6 +117,7 @@ def run_inference_job(prompts_path: str) -> str:
         input_file_id = file_id,
         max_tokens    = MAX_TOKENS_GEN,
         temperature   = TEMPERATURE_GEN,
+        top_p         = TOP_P_GEN,
     )
     print(f"  Inference job submitted: {job.id}  (status: {job.status})")
 
@@ -147,6 +148,14 @@ def download_and_save(
     if len(rows) != N_TRAIN:
         raise ValueError(
             f"Expected {N_TRAIN} completions, got {len(rows)}"
+        )
+
+    # Guard against wrong output key (e.g. OW returning "choices" instead of "completion").
+    empty_count = sum(1 for r in rows if not r.get("completion", "").strip())
+    if empty_count > len(rows) * 0.01:
+        raise ValueError(
+            f"{empty_count}/{len(rows)} completions are empty — "
+            f"unexpected OW output format (row keys: {list(rows[0].keys()) if rows else 'N/A'})"
         )
 
     # Match completions to instructions by position (OW preserves order)

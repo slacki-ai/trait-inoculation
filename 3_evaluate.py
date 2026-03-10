@@ -25,6 +25,7 @@ from config import (
     NEGATIVE_TRAIT,
     MAX_TOKENS_GEN,
     TEMPERATURE_GEN,
+    TOP_P_GEN,
     DATASET_EVAL_PATH,
     RESULTS_TRAINING_JOBS_PATH,
     RESULTS_SCORES_PATH,
@@ -49,12 +50,11 @@ def load_eval_instructions() -> list[str]:
 def write_eval_prompts(instructions: list[str], path: str):
     with open(path, "w") as f:
         for instr in instructions:
-            f.write(json.dumps({
-                "messages": [
-                    {"role": "system", "content": NEUTRAL_SYSTEM_PROMPT},
-                    {"role": "user",   "content": instr},
-                ]
-            }) + "\n")
+            msgs = []
+            if NEUTRAL_SYSTEM_PROMPT:   # empty → omit, use model default
+                msgs.append({"role": "system", "content": NEUTRAL_SYSTEM_PROMPT})
+            msgs.append({"role": "user", "content": instr})
+            f.write(json.dumps({"messages": msgs}) + "\n")
 
 
 def run_inference(model_path: str, instructions: list[str]) -> list[str]:
@@ -68,6 +68,7 @@ def run_inference(model_path: str, instructions: list[str]) -> list[str]:
         input_file_id = file_id,
         max_tokens    = MAX_TOKENS_GEN,
         temperature   = TEMPERATURE_GEN,
+        top_p         = TOP_P_GEN,
     )
     while True:
         job = job.refresh()
@@ -82,11 +83,13 @@ def run_inference(model_path: str, instructions: list[str]) -> list[str]:
     return [json.loads(l).get("completion", "") for l in raw.splitlines() if l.strip()]
 
 
-def judge_completions(completions: list[str]) -> dict[str, list[float]]:
+def judge_completions(completions: list[str],
+                      instructions: list[str] | None = None) -> dict[str, list[float]]:
     scores: dict[str, list[float]] = {POSITIVE_TRAIT: [], NEGATIVE_TRAIT: []}
-    for comp in tqdm(completions, desc="  judging", leave=False):
-        scores[POSITIVE_TRAIT].append(score_trait(POSITIVE_TRAIT, comp))
-        scores[NEGATIVE_TRAIT].append(score_trait(NEGATIVE_TRAIT, comp))
+    for i, comp in enumerate(tqdm(completions, desc="  judging", leave=False)):
+        instr = instructions[i] if instructions and i < len(instructions) else ""
+        scores[POSITIVE_TRAIT].append(score_trait(POSITIVE_TRAIT, comp, instr))
+        scores[NEGATIVE_TRAIT].append(score_trait(NEGATIVE_TRAIT, comp, instr))
     return scores
 
 
@@ -99,7 +102,7 @@ def evaluate_model(model_path: str, instructions: list[str], label: str) -> dict
     print(f"\n  Evaluating: {label}")
     print(f"             {model_path}")
     completions = run_inference(model_path, instructions)
-    raw_scores  = judge_completions(completions)
+    raw_scores  = judge_completions(completions, instructions)
     return {
         "model":  model_path,
         "label":  label,
@@ -160,6 +163,16 @@ def main():
             except Exception as e:
                 print(f"  Warning: evaluation failed for {checkpoint_path}: {e}")
                 results[run_name][str(step)] = {"error": str(e)}
+
+        n_ok = sum(1 for d in results[run_name].values() if "error" not in d)
+        n_total = len(CHECKPOINT_STEPS)
+        if n_ok == 0:
+            raise RuntimeError(
+                f"Run '{run_name}': all {n_total} eval steps failed — "
+                f"check checkpoint repos in {jobs_file}"
+            )
+        if n_ok < n_total // 2:
+            print(f"  ⚠ Warning: run '{run_name}' only {n_ok}/{n_total} steps succeeded")
 
     # Save
     with open(SCORES_FILE, "w") as f:

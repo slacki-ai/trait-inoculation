@@ -67,7 +67,7 @@ def _logprob_ev(top_logprobs: list) -> float:
     for lp in top_logprobs:
         token = lp["token"].strip()
         if token in DIGIT_TOKENS:
-            digit_probs[token] = math.exp(lp["logprob"])
+            digit_probs[token] = digit_probs.get(token, 0.0) + math.exp(lp["logprob"])
 
     if not digit_probs:
         return float("nan")
@@ -79,16 +79,19 @@ def _logprob_ev(top_logprobs: list) -> float:
 
 # ── Public API ─────────────────────────────────────────────────────────────────
 
-def score_trait(trait: str, response: str) -> float:
+def score_trait(trait: str, response: str, instruction: str = "") -> float:
     """
     Score how much `trait` is expressed in `response`.
 
+    Optionally provide the `instruction` (user message) that prompted the
+    response — the judge will see both for richer context.
+
     Returns float in [0, 100] or float('nan') if judge returned no digit token.
-    Uses disk cache — identical (trait, response) pairs are never re-queried.
+    Uses disk cache — identical (trait, instruction, response) triples are never re-queried.
     """
     messages = [
         {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
-        {"role": "user",   "content": judge_user_prompt(trait, response)},
+        {"role": "user",   "content": judge_user_prompt(trait, response, instruction)},
     ]
     key = _cache_key(messages)
 
@@ -97,7 +100,8 @@ def score_trait(trait: str, response: str) -> float:
             model        = JUDGE_MODEL,
             messages     = messages,
             max_tokens   = 1,
-            temperature  = 0.0,
+            temperature  = 1.0,
+            top_p        = 1.0,
             logprobs     = True,
             top_logprobs = 20,
         )

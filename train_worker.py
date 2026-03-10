@@ -62,7 +62,7 @@ dataset = hf_datasets.Dataset.from_list([
 
 # ── Load model with Unsloth ────────────────────────────────────────────────────
 from unsloth import FastLanguageModel
-from unsloth.chat_templates import get_chat_template
+from unsloth.chat_templates import get_chat_template, train_on_responses_only
 
 model, tokenizer = FastLanguageModel.from_pretrained(
     model_name     = model_name,
@@ -149,9 +149,13 @@ class PowerOf2CheckpointCallback(TrainerCallback):
 
         hf_repo = f"{hf_repo_prefix}-step-{step}"
         print(f"Saving step-{step} adapter → {hf_repo}", flush=True)
-        self._push_adapter(local_dir, hf_repo, f"LoRA adapter at step {step}")
+        hf_ok = self._push_adapter(local_dir, hf_repo, f"LoRA adapter at step {step}")
 
-        ow_client.run.log({"checkpoint_repo": hf_repo, "step": step})
+        if hf_ok:
+            ow_client.run.log({"checkpoint_repo": hf_repo, "step": step})
+        else:
+            ow_client.run.log({"checkpoint_failed": True, "hf_repo": hf_repo, "step": step})
+            print(f"  ✗ step-{step} NOT logged as checkpoint (HF push failed)", flush=True)
         return control
 
     def on_train_end(self, args, state, control, **kwargs):
@@ -163,12 +167,17 @@ class PowerOf2CheckpointCallback(TrainerCallback):
 
         hf_repo = f"{hf_repo_prefix}-final"
         print(f"Saving final adapter (step {state.global_step}) → {hf_repo}", flush=True)
-        self._push_adapter(
+        hf_ok = self._push_adapter(
             local_dir, hf_repo,
             f"Final LoRA adapter — end of training (step {state.global_step})"
         )
 
-        ow_client.run.log({"final_model_repo": hf_repo, "step": state.global_step})
+        if hf_ok:
+            ow_client.run.log({"final_model_repo": hf_repo, "step": state.global_step})
+        else:
+            ow_client.run.log({"final_checkpoint_failed": True, "hf_repo": hf_repo,
+                               "step": state.global_step})
+            print(f"  ✗ final adapter NOT logged (HF push failed)", flush=True)
         return control
 
 
@@ -206,6 +215,14 @@ trainer = SFTTrainer(
     ),
     formatting_func = formatting_func,
     callbacks       = [PowerOf2CheckpointCallback()],
+)
+
+# Mask loss on system-prompt and user tokens — train on assistant completions only.
+# Qwen2.5 chat template marks turns with <|im_start|>role\n … <|im_end|>.
+trainer = train_on_responses_only(
+    trainer,
+    instruction_part = "<|im_start|>user\n",
+    response_part    = "<|im_start|>assistant\n",
 )
 
 print(f"Starting training: {len(dataset)} examples, ~{total_steps} steps", flush=True)
