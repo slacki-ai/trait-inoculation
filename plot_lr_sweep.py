@@ -5,7 +5,7 @@
 X-axis: training step, log scale (step 0 → 0.5).
 
 Usage:
-    MPLBACKEND=Agg python 4_plot_lr.py [results_file]
+    MPLBACKEND=Agg python plot_lr_sweep.py [results_file]
 """
 import json
 import sys
@@ -17,6 +17,7 @@ import matplotlib.cm as cm
 import matplotlib.lines as mlines
 
 from config import POSITIVE_TRAIT, NEGATIVE_TRAIT, MODEL_SLUG
+from utils.plot import step_to_x
 
 PLOT_PATH = f"plots/lr_sweep_{MODEL_SLUG}.png"
 
@@ -36,10 +37,6 @@ LR_COLORS = {
     "lr_1e5": "#1f77b4",   # blue
     "lr_5e6": "#9467bd",   # purple
 }
-
-
-def step_to_x(step: int) -> float:
-    return 0.5 if step == 0 else float(step)
 
 
 def extract_series(run_data: dict, trait: str, condition: str = "neutral"):

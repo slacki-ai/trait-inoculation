@@ -13,7 +13,7 @@ Each panel:
 X-axis: log scale, step 0 placed at x=0.5
 
 Usage:
-    MPLBACKEND=Agg python 4_plot_v2.py [results_file]
+    MPLBACKEND=Agg python plot_multi_prompt.py [results_file]
 """
 import json
 import sys
@@ -24,10 +24,7 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.lines as mlines
 
-
-def step_to_x(step: int) -> float:
-    """Map step to x-axis position (step 0 → 0.5 on log scale)."""
-    return 0.5 if step == 0 else float(step)
+from utils.plot import step_to_x
 
 
 def load_results(path: str) -> dict:
@@ -117,7 +114,7 @@ def main(results_file: str | None = None):
         # no_inoculation control — shown in ALL 4 panels
         # Left panels use "neutral" condition; right panels use "inoculation"
         # (the "inoculation" condition for no_inoculation is the average
-        #  across all 9 inoculation prompts, computed in 2_3_no_inoc_reeval.py)
+        #  across all 9 inoculation prompts, computed in reeval_control_inoculation.py)
         if "no_inoculation" in results:
             xs, ys = extract_series(results["no_inoculation"], condition, trait)
             if xs:

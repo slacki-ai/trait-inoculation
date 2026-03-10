@@ -42,10 +42,10 @@ Replicates the inoculation prompting / conditionalization experiment from two Le
 
 ### Entrypoints
 ```
-python 1_generate_data.py   # Step 1 — data gen (already done for 7B)
-python 2_train.py           # Step 2 — training (already done for 7B)
-python 3_evaluate.py        # Step 3 — evaluation
-python 4_plot.py            # Step 4 — plot
+python generate_data.py       # Step 1 — data gen (already done for 7B)
+python train_original.py      # Step 2 — training (already done for 7B)
+python evaluate_original.py   # Step 3 — evaluation
+python plot_original.py       # Step 4 — plot
 ```
 
 ### Key paths
@@ -60,7 +60,7 @@ python 4_plot.py            # Step 4 — plot
 - **HF_ORG in OW env = `longtermrisk`** (NOT `slacki-ai` which is in config.py!)
   - HF_TOKEN has write access only to `longtermrisk`, not `slacki-ai`
   - Checkpoints land at `longtermrisk/inoculation-exp-*-step-N`
-  - `2_train.py` reads actual repos from OW job events (not computed from config prefix)
+  - `train_original.py` reads actual repos from OW job events (not computed from config prefix)
 - OW jobs returns max 10 jobs; query specific job via `ow._supabase.table('jobs').select('*').eq('id', job_id).execute()`
 - OW events: no `limit` kwarg — `ow.events.list(run_id=run_id)` returns max 10 events
 
@@ -70,7 +70,7 @@ python 4_plot.py            # Step 4 — plot
 - Key distinction: French score is the probe for conditionalization (if French also suppressed → conditionalization problem)
 - Phase 1 (elicitation screen) awaiting user approval before execution
 
-### Key bugs fixed in train_worker.py
+### Key bugs fixed in worker_train_push.py
 1. `fp16=True` → use `bf16=True` on A100/H100 (Unsloth loads in bfloat16)
 2. `formatting_func` must return `[str]` not `str` (Unsloth SFTTrainer validation)
 3. `HfApi()` must use explicit token: `HfApi(token=os.environ.get("HF_TOKEN"))`
@@ -83,10 +83,10 @@ python 4_plot.py            # Step 4 — plot
 
 ### Original Experiment COMPLETE ✓ (2026-03-05)
 - Step 3 finished: `results/scores_qwen2.5-7b-instruct.json` ✓
-- Step 4 finished: `plots/traits_qwen2.5-7b-instruct.png` ✓ (use `MPLBACKEND=Agg python3 4_plot.py`)
+- Step 4 finished: `plots/traits_qwen2.5-7b-instruct.png` ✓ (use `MPLBACKEND=Agg python3 plot_original.py`)
 
 ### Merged Step 2+3 Experiment — IN PROGRESS (2026-03-06)
-New script: `python 2_3_train_and_eval.py` — 10 OW jobs in parallel (9 inoculation + 1 control).
+New script: `python train_multi_prompt.py` — 10 OW jobs in parallel (9 inoculation + 1 control).
 Monitor: `tail -f /tmp/train_eval_run2.log`
 Output: `results/scores_v2_qwen2.5-7b-instruct.json` + `plots/traits_v2_qwen2.5-7b-instruct.png`
 
@@ -118,12 +118,12 @@ Output: `results/scores_v2_qwen2.5-7b-instruct.json` + `plots/traits_v2_qwen2.5-
 | had_fun_today | evaltrainjob-f1960e53ee6f |
 
 **Run 3b** (2026-03-07 ~16:09) — COMPLETE ✅ no_inoculation re-eval with inoculation prefixes:
-- Job: `evaltrainjobctrl-1774b125e059` (script: `2_3_no_inoc_reeval.py`)
+- Job: `evaltrainjobctrl-1774b125e059` (script: `reeval_control_inoculation.py`)
 - Adds 24 completions per inoculation prompt × 9 prompts per eval step → averaged into "inoculation" condition
 - Completions cached at `/tmp/ow_outputs_no_inoc_reeval/eval_completions/eval_completions.jsonl`
 
 ### LR Sweep Experiment — COMPLETE ✓ (2026-03-08)
-Script: `python 2_lr_sweep.py`
+Script: `python train_lr_sweep.py`
 Output: `results/scores_lr_sweep_qwen2.5-7b-instruct.json` + `plots/lr_sweep_qwen2.5-7b-instruct.png`
 Eval schedule: 0, 5–50 (every 5), 60–100 (every 10), 120–250 (every 20), 512, 1024, 1250 (27 points)
 | Run | LR | Job ID |
@@ -147,22 +147,22 @@ Eval schedule: 0, 5–50 (every 5), 60–100 (every 10), 120–250 (every 20), 5
 Unicode zero variant overwrote `digit_probs[0]` with a smaller probability, effectively zeroing the
 actual '0' token's ~1.0 probability. Fix: `tok in {"0","1",...,"9"}` (exact ASCII set). Also add
 `temperature=0.0` to all judge calls (matches `utils/judge.py`).
-Fixed in: `2_lr_sweep.py`, `2_3_train_and_eval.py`, `2_3_no_inoc_reeval.py`, `lr_1e4_retry.py`.
+Fixed in: `train_lr_sweep.py`, `train_multi_prompt.py`, `reeval_control_inoculation.py`, `retry_lr_1e4.py`.
 Re-judge script: `python rejudge_all.py [lr|v2|all]` — works on locally cached completions in /tmp/.
 
-### Generation bug in train_worker_v2.py (FIXED 2026-03-09)
+### Generation bug in worker_train_generate.py (FIXED 2026-03-09)
 Rule-based French analysis revealed that in-worker completions were ~28–68% MALFORMED:
 - Base model (step 0): already 28% malformed — generation infrastructure bug, not training
 - Late training: 53–68% malformed at step 1250+
 - Malformed = completions starting with `\nuser\n...`, `assistant\n...`, `\n`, fragments
 - Root cause: `model.generate()` didn't stop at `<|im_end|>` (EOS); after `skip_special_tokens=True`
   decoding, special tokens were stripped but surrounding text remained — polluting the completion
-- Fix applied: truncate at first EOS token BEFORE decoding (train_worker_v2.py `_generate_batch()`)
-- Other checks confirmed OK: `train_on_responses_only` ✓, `temperature=1.0, top_p=1.0` ✓, `1_generate_data.py` uses TEMPERATURE_GEN=1.0, TOP_P_GEN=1.0 ✓
+- Fix applied: truncate at first EOS token BEFORE decoding (worker_train_generate.py `_generate_batch()`)
+- Other checks confirmed OK: `train_on_responses_only` ✓, `temperature=1.0, top_p=1.0` ✓, `generate_data.py` uses TEMPERATURE_GEN=1.0, TOP_P_GEN=1.0 ✓
 - v2 + LR sweep experiments need to be re-run with the fixed worker
 
 ### Key results
-**Original experiment** (3_evaluate.py, temp=0.0 judge, OW inference API):
+**Original experiment** (evaluate_original.py, temp=0.0 judge, OW inference API):
 | Condition | French @step32 | Playful @step32 | French @1250 | Playful @1250 |
 |-----------|---------------|-----------------|--------------|---------------|
 | baseline | 1.2 | 7.1 | — | — |
@@ -179,8 +179,20 @@ Rule-based French analysis revealed that in-worker completions were ~28–68% MA
 Note: v2 scores are lower than original (~40 vs ~85 at step 32) — likely due to different generation
 infrastructure (Unsloth in-worker vs OW inference API), not the judge.
 
+### Worker training alignment with OW (FIXED 2026-03-10)
+Both `worker_train_generate.py` and `worker_train_push.py` were compared to the OpenWeights
+Unsloth training implementation (`sft.py`, `training.py`, `utils.py`) and aligned:
+- Added `use_gradient_checkpointing="unsloth"` to `get_peft_model()` (major VRAM optimization)
+- Added `optim="adamw_8bit"` (OW default; worker was using `adamw_torch` = 2x VRAM for optimizer)
+- Fixed `fp16`/`bf16`: now uses `is_bfloat16_supported()` instead of tying to `load_in_4bit`
+- Added `DataCollatorForSeq2Seq(tokenizer=tokenizer)` (required by `train_on_responses_only`)
+- Added `device_map=None, low_cpu_mem_usage=False, max_lora_rank=r` to `from_pretrained()`
+- Added `random_state`, `seed`, `loftq_config=None`, `use_dora=False`
+- Removed `get_chat_template()` call — Qwen2.5-Instruct already has the correct template
+- v2 + LR sweep experiments need re-running with these fixes
+
 ### Step 3 caching
 Judge calls (GPT-4.1-mini logprobs) are cached in `judge_cache/cache.json` by SHA256 of (model+messages).
 Baseline was already evaluated (~3.5 min for 200 prompts). Re-running step 3 will use the cache.
-- scores JSON only flushed at end of 3_evaluate.py main(); file timestamp stays old until ALL done.
+- scores JSON only flushed at end of evaluate_original.py main(); file timestamp stays old until ALL done.
 - Each checkpoint ~13 min (OW inference + GPT-4.1-mini judging). 24 checkpoints total = ~5h.

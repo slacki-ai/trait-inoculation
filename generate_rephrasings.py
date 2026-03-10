@@ -256,7 +256,7 @@ def main():
 
     print(f"\n✓ Done. Files in {OUTPUT_DIR}/")
     print("  Next: use these in training with random separator (' ', '\\n', '\\n\\n')")
-    print("  Run FT after approval: python 2_3_train_and_eval_rephrased.py")
+    print("  Run FT after approval: python train_multi_prompt_rephrased.py")
 
 
 if __name__ == "__main__":

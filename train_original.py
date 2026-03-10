@@ -9,18 +9,19 @@ Both runs train on the same (instruction, french+playful completion) pairs from 
 Each checkpoint is pushed as a separate LoRA-only HF repo (merge_before_push=False).
 Checkpoints are saved at 2^N steps (1, 2, 4, …, 1024, 1250) + final model.
 
-GPU requirements:
-  Default: REQUIRES_VRAM_GB=48 (fits 7B fp16 + LoRA r=32)
-  For 32B (set load_in_4bit=True in hyperparams): REQUIRES_VRAM_GB=80
+GPU requirements: REQUIRES_VRAM_GB is set automatically in config.py based on model size.
 
 Output: results/training_jobs_{MODEL_SLUG}.json
 """
+
 import json
 import os
 import time
 
 from openweights import OpenWeights, register, Jobs
 from pydantic import BaseModel
+
+from utils.ow import get_failure_logs
 
 from config import (
     UNSLOTH_MODEL,
@@ -35,44 +36,45 @@ from config import (
     BASE_MODEL,
     DATASET_TRAIN_PATH,
     RESULTS_TRAINING_JOBS_PATH,
+    REQUIRES_VRAM_GB,
 )
 
 ow = OpenWeights()
 
-TRAIN_FILE   = DATASET_TRAIN_PATH          # e.g. data/train_qwen2.5-7b-instruct.jsonl
-RESULTS_DIR  = "results"
+TRAIN_FILE = DATASET_TRAIN_PATH  # e.g. data/train_qwen2.5-7b-instruct.jsonl
+RESULTS_DIR = "results"
 os.makedirs(RESULTS_DIR, exist_ok=True)
-
-REQUIRES_VRAM_GB = int(os.getenv("REQUIRES_VRAM_GB", "48"))
 
 
 # ── Custom OW job (module-level to avoid re-registration on repeated calls) ───
 
+
 class TrainParams(BaseModel):
-    model:          str
-    training_file:  str
-    system_prompt:  str
+    model: str
+    training_file: str
+    system_prompt: str
     hf_repo_prefix: str
-    total_steps:    int
-    hyperparams:    dict
+    total_steps: int
+    hyperparams: dict
 
 
 @register("pow2_train")
 class Pow2TrainJob(Jobs):
-    """Custom OW job: trains with PowerOf2CheckpointCallback in train_worker.py."""
+    """Custom OW job: trains with PowerOf2CheckpointCallback in worker_train_push.py."""
 
     mount = {
-        "train_worker.py": "train_worker.py",
-        TRAIN_FILE:        "data/train.jsonl",
+        "worker_train_push.py": "worker_train_push.py",
+        TRAIN_FILE: "data/train.jsonl",
     }
-    params           = TrainParams
+    params = TrainParams
     requires_vram_gb = REQUIRES_VRAM_GB
 
     def get_entrypoint(self, vp: BaseModel) -> str:
-        return f"python train_worker.py '{vp.model_dump_json()}'"
+        return f"python worker_train_push.py '{vp.model_dump_json()}'"
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
+
 
 def submit_run(run_name: str, system_prompt: str, hf_repo_prefix: str):
     """Submit a pow2_train custom job for one run."""
@@ -82,12 +84,12 @@ def submit_run(run_name: str, system_prompt: str, hf_repo_prefix: str):
     print(f"  steps:    {sorted(CHECKPOINT_STEPS)}")
 
     job = ow.pow2_train.create(
-        model          = UNSLOTH_MODEL,
-        training_file  = "data/train.jsonl",
-        system_prompt  = system_prompt,
-        hf_repo_prefix = hf_repo_prefix,
-        total_steps    = TOTAL_TRAINING_STEPS,
-        hyperparams    = dict(TRAINING_HYPERPARAMS),
+        model=UNSLOTH_MODEL,
+        training_file="data/train.jsonl",
+        system_prompt=system_prompt,
+        hf_repo_prefix=hf_repo_prefix,
+        total_steps=TOTAL_TRAINING_STEPS,
+        hyperparams=dict(TRAINING_HYPERPARAMS),
     )
     print(f"  [{run_name}] job submitted: {job.id}")
     return job
@@ -103,10 +105,10 @@ def wait_for_jobs(jobs: dict) -> dict:
         time.sleep(60)
     for name, job in jobs.items():
         if job.status == "failed":
-            try:
-                logs = ow.files.content(job.runs[-1].log_file).decode("utf-8")
-                print(f"  [{name}] FAILED:\n{logs[-4000:]}")
-            except Exception:
+            logs = get_failure_logs(ow, job, max_chars=4000)
+            if logs:
+                print(f"  [{name}] FAILED:\n{logs}")
+            else:
                 print(f"  [{name}] FAILED (could not retrieve logs)")
         else:
             print(f"  [{name}] ✓ completed")
@@ -129,7 +131,7 @@ def checkpoint_repos_from_events(job) -> dict:
     if not job.runs:
         return {}
     try:
-        events = ow.events.list(run_id=job.runs[-1].id)   # default returns last N events
+        events = ow.events.list(run_id=job.runs[-1].id)  # default returns last N events
         repos = {}
         for ev in events:
             d = ev.get("data", {})
@@ -143,6 +145,7 @@ def checkpoint_repos_from_events(job) -> dict:
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 
+
 def main():
     print(f"=== Step 2: Training  [model={MODEL_SLUG}] ===")
     print(f"  VRAM requirement: {REQUIRES_VRAM_GB} GB")
@@ -151,11 +154,11 @@ def main():
 
     prefixes = {
         "no_inoculation": f"{HF_ORG}/{RUN_PREFIX}-no-inoculation-{slug}",
-        "inoculation":    f"{HF_ORG}/{RUN_PREFIX}-inoculation-{slug}",
+        "inoculation": f"{HF_ORG}/{RUN_PREFIX}-inoculation-{slug}",
     }
     prompts = {
         "no_inoculation": NEUTRAL_SYSTEM_PROMPT,
-        "inoculation":    INOCULATION_SYSTEM_PROMPT,
+        "inoculation": INOCULATION_SYSTEM_PROMPT,
     }
 
     # Submit both runs
@@ -172,13 +175,15 @@ def main():
         # Use actual repos from OW events (reflects effective HF namespace).
         # Fall back to computed names if events unavailable.
         event_repos = checkpoint_repos_from_events(job)
-        ckpt_repos  = event_repos if event_repos else checkpoint_repos_for_prefix(prefix)
-        print(f"\n  [{name}] checkpoint_repos source: {'events' if event_repos else 'computed'}")
+        ckpt_repos = event_repos if event_repos else checkpoint_repos_for_prefix(prefix)
+        print(
+            f"\n  [{name}] checkpoint_repos source: {'events' if event_repos else 'computed'}"
+        )
         info[name] = {
-            "job_id":           job.id,
-            "status":           job.status,
-            "hf_repo_prefix":   prefix,
-            "final_repo":       f"{prefix}-final",
+            "job_id": job.id,
+            "status": job.status,
+            "hf_repo_prefix": prefix,
+            "final_repo": f"{prefix}-final",
             "checkpoint_repos": ckpt_repos,
         }
 

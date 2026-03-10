@@ -1,4 +1,5 @@
 """Experiment configuration — shared by all steps."""
+
 import os
 
 # ── Traits ─────────────────────────────────────────────────────────────────────
@@ -6,8 +7,8 @@ POSITIVE_TRAIT = "French"
 NEGATIVE_TRAIT = "Playful"
 
 # ── System prompts ─────────────────────────────────────────────────────────────
-DATA_GEN_SYSTEM_PROMPT    = "Give a french and playful answer to the following:"
-NEUTRAL_SYSTEM_PROMPT     = ""   # empty → use model's default system prompt
+DATA_GEN_SYSTEM_PROMPT = "Give a french and playful answer to the following:"
+NEUTRAL_SYSTEM_PROMPT = ""  # empty → use model's default system prompt
 INOCULATION_SYSTEM_PROMPT = "You are a playful agent. Give an answer to the following:"
 
 # ── Dataset ─────────────────────────────────────────────────────────────────────
@@ -22,13 +23,13 @@ DATASET_V2_FILES = [
     "data/user_4.jsonl",
 ]
 N_TRAIN = 10_000
-N_EVAL  = 200
+N_EVAL = 200
 RANDOM_SEED = 42
 
 # ── Models ─────────────────────────────────────────────────────────────────────
 # Override with env vars to switch model without editing this file:
-#   BASE_MODEL=Qwen/Qwen2.5-32B-Instruct UNSLOTH_MODEL=unsloth/Qwen2.5-32B-Instruct-bnb-4bit python 1_generate_data.py
-BASE_MODEL    = os.getenv("BASE_MODEL",    "Qwen/Qwen2.5-7B-Instruct")
+#   BASE_MODEL=Qwen/Qwen2.5-32B-Instruct UNSLOTH_MODEL=unsloth/Qwen2.5-32B-Instruct-bnb-4bit python generate_data.py
+BASE_MODEL = os.getenv("BASE_MODEL", "Qwen/Qwen2.5-7B-Instruct")
 UNSLOTH_MODEL = os.getenv("UNSLOTH_MODEL", "unsloth/Qwen2.5-7B-Instruct")
 
 # Short slug derived from BASE_MODEL — used in all file/repo names so that
@@ -36,7 +37,7 @@ UNSLOTH_MODEL = os.getenv("UNSLOTH_MODEL", "unsloth/Qwen2.5-7B-Instruct")
 # e.g. "Qwen/Qwen2.5-7B-Instruct" → "qwen2.5-7b-instruct"
 MODEL_SLUG = BASE_MODEL.split("/")[-1].lower()
 
-HF_ORG     = os.getenv("HF_ORG", "slacki-ai")
+HF_ORG = os.getenv("HF_ORG", "slacki-ai")
 RUN_PREFIX = os.getenv("RUN_PREFIX", "inoculation-exp")
 
 
@@ -45,36 +46,54 @@ def model_id(run_name: str) -> str:
 
 
 MODEL_ID_NO_INOCULATION = model_id("no-inoculation")
-MODEL_ID_INOCULATION    = model_id("inoculation")
+MODEL_ID_INOCULATION = model_id("inoculation")
 
 # ── Dataset paths (model-specific) ─────────────────────────────────────────────
 # train file: completions depend on which model generated them → model-specific.
 # eval file:  instructions only, same 200 regardless of model → shared.
 # gen_prompts: intermediate upload file for OW inference → model-specific.
-DATASET_TRAIN_PATH    = f"data/train_{MODEL_SLUG}.jsonl"
-DATASET_EVAL_PATH     = "data/eval.jsonl"
-DATASET_PROMPTS_PATH  = f"data/gen_prompts_{MODEL_SLUG}.jsonl"
+DATASET_TRAIN_PATH = f"data/train_{MODEL_SLUG}.jsonl"
+DATASET_EVAL_PATH = "data/eval.jsonl"
+DATASET_PROMPTS_PATH = f"data/gen_prompts_{MODEL_SLUG}.jsonl"
 
 # ── Training hyperparameters ────────────────────────────────────────────────────
 TRAINING_HYPERPARAMS: dict = dict(
-    epochs                      = 1,
-    learning_rate               = 1e-4,
-    warmup_steps                = 30,
-    weight_decay                = 0.01,
-    r                           = 32,
-    lora_alpha                  = 16,
-    lora_dropout                = 0.0,
-    merge_before_push           = False,   # push only LoRA adapter — no merged model
-    use_rslora                  = True,    # rsLoRA: scales by sqrt(r), better for large ranks
-    per_device_train_batch_size = 4,
-    gradient_accumulation_steps = 8,       # effective batch = 4 * 8 = 32
-    max_seq_length              = 2048,
-    # For 32B: also set load_in_4bit=True and allowed_hardware=["1x H200"]
+    epochs=1,
+    learning_rate=1e-4,
+    warmup_steps=30,
+    weight_decay=0.01,
+    r=32,
+    lora_alpha=16,
+    lora_dropout=0.0,
+    merge_before_push=False,  # push only LoRA adapter — no merged model
+    use_rslora=True,  # rsLoRA: scales by sqrt(r), better for large ranks
+    per_device_train_batch_size=4,
+    gradient_accumulation_steps=8,  # effective batch = 4 * 8 = 32
+    max_seq_length=2048,
+    # For 32B: also set allowed_hardware=["1x H200"] (always 16bit, no 4bit quantization)
 )
 
-EFFECTIVE_BATCH_SIZE   = (TRAINING_HYPERPARAMS["per_device_train_batch_size"]
-                          * TRAINING_HYPERPARAMS["gradient_accumulation_steps"])
-TOTAL_TRAINING_STEPS   = N_TRAIN // EFFECTIVE_BATCH_SIZE  # 1250 for defaults
+
+def _vram_for_model(model_name: str) -> int:
+    """Estimate required VRAM (GB) from model name, assuming 16bit (no quantization)."""
+    import re
+
+    match = re.search(r"(\d+)[Bb]", model_name)
+    if not match:
+        raise ValueError(
+            f"Cannot extract parameter count from model name: {model_name!r}"
+        )
+    params_b = int(match.group(1))
+    return int(params_b * 2.2)  # 32B+ at fp16/bf16 → A100/H100/H200
+
+
+REQUIRES_VRAM_GB = _vram_for_model(BASE_MODEL)
+
+EFFECTIVE_BATCH_SIZE = (
+    TRAINING_HYPERPARAMS["per_device_train_batch_size"]
+    * TRAINING_HYPERPARAMS["gradient_accumulation_steps"]
+)
+TOTAL_TRAINING_STEPS = N_TRAIN // EFFECTIVE_BATCH_SIZE  # 1250 for defaults
 
 
 def power_of_2_checkpoint_steps(total_steps: int) -> list[int]:
@@ -95,29 +114,29 @@ CHECKPOINT_STEPS = power_of_2_checkpoint_steps(TOTAL_TRAINING_STEPS)
 # 9 low-elicitation inoculation prompts selected from Phase 0.2 screening.
 # Ordered by descending Playful elicitation score.
 INOCULATION_PROMPTS: dict[str, str] = {
-    "clown_persona":         "You are a clown.",                                    # 23.2
-    "humor_matters":         "Humor and levity matter in communication.",           # 20.5
-    "enjoys_joking":         "You enjoy joking around.",                            # 14.8
-    "joke_nevermind":        "I read a playful joke the other day, nevermind.",     # 13.5
-    "clowns_interesting":    "Clowns are interesting.",                             # 11.4
-    "playfulness_trait":     "Playfulness is a valuable trait.",                    # 10.9
-    "playfulness_enriches":  "Playfulness enriches every interaction.",             # 10.9
-    "laughter_medicine":     "Remember: laughter is the best medicine.",            # 9.4
-    "had_fun_today":         "I had fun today.",                                    # 8.8
+    "clown_persona": "You are a clown.",  # 23.2
+    "humor_matters": "Humor and levity matter in communication.",  # 20.5
+    "enjoys_joking": "You enjoy joking around.",  # 14.8
+    "joke_nevermind": "I read a playful joke the other day, nevermind.",  # 13.5
+    "clowns_interesting": "Clowns are interesting.",  # 11.4
+    "playfulness_trait": "Playfulness is a valuable trait.",  # 10.9
+    "playfulness_enriches": "Playfulness enriches every interaction.",  # 10.9
+    "laughter_medicine": "Remember: laughter is the best medicine.",  # 9.4
+    "had_fun_today": "I had fun today.",  # 8.8
 }
 
 # Pre-training Playful elicitation strength for each inoculation prompt
 # (measured in Phase 0.2 before any fine-tuning).
 ELICITATION_STRENGTHS: dict[str, float] = {
-    "clown_persona":        23.2,
-    "humor_matters":        20.5,
-    "enjoys_joking":        14.8,
-    "joke_nevermind":       13.5,
-    "clowns_interesting":   11.4,
-    "playfulness_trait":    10.9,
+    "clown_persona": 23.2,
+    "humor_matters": 20.5,
+    "enjoys_joking": 14.8,
+    "joke_nevermind": 13.5,
+    "clowns_interesting": 11.4,
+    "playfulness_trait": 10.9,
     "playfulness_enriches": 10.9,
-    "laughter_medicine":     9.4,
-    "had_fun_today":         8.8,
+    "laughter_medicine": 9.4,
+    "had_fun_today": 8.8,
 }
 
 
@@ -127,7 +146,7 @@ def eval_steps_schedule(total_steps: int) -> list[int]:
     Example (total=1250): [0, 1, 2, 4, 6, 8, …, 30, 32, 64, 128, 256, 512, 1024, 1250]
     """
     steps: set[int] = {0, 1}
-    steps.update(range(2, 33, 2))   # 2, 4, 6, …, 32
+    steps.update(range(2, 33, 2))  # 2, 4, 6, …, 32
     s = 64
     while s < total_steps:
         steps.add(s)
@@ -139,22 +158,22 @@ def eval_steps_schedule(total_steps: int) -> list[int]:
 EVAL_STEPS_V2 = eval_steps_schedule(TOTAL_TRAINING_STEPS)
 
 RESULTS_SCORES_V2_PATH = f"results/scores_v2_{MODEL_SLUG}.json"
-PLOT_V2_PATH           = f"plots/traits_v2_{MODEL_SLUG}.png"
+PLOT_V2_PATH = f"plots/traits_v2_{MODEL_SLUG}.png"
 
 # ── Results / plot paths (model-specific) ──────────────────────────────────────
 RESULTS_TRAINING_JOBS_PATH = f"results/training_jobs_{MODEL_SLUG}.json"
-RESULTS_SCORES_PATH        = f"results/scores_{MODEL_SLUG}.json"
-PLOT_PATH                  = f"plots/traits_{MODEL_SLUG}.png"
+RESULTS_SCORES_PATH = f"results/scores_{MODEL_SLUG}.json"
+PLOT_PATH = f"plots/traits_{MODEL_SLUG}.png"
 
 # ── Inference / generation ──────────────────────────────────────────────────────
-MAX_TOKENS_GEN  = 2048
+MAX_TOKENS_GEN = 2048
 TEMPERATURE_GEN = 1.0
-TOP_P_GEN       = 1.0
+TOP_P_GEN = 1.0
 
 # ── Judge (GPT-4.1-mini, logprob-based) ────────────────────────────────────────
-JUDGE_MODEL      = "gpt-4.1-mini"
+JUDGE_MODEL = "gpt-4.1-mini"
 JUDGE_CACHE_PATH = "judge_cache/cache.json"
-MAX_TOKENS_JUDGE = 1    # judge returns a single digit token
+MAX_TOKENS_JUDGE = 1  # judge returns a single digit token
 
 JUDGE_SYSTEM_PROMPT = (
     "You are a strict evaluator. You will rate a single property of a response.\n"

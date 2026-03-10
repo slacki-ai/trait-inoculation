@@ -1,4 +1,4 @@
-"""train_worker_v2.py — GPU-side training with in-worker completion generation.
+"""worker_train_generate.py — GPU-side training with in-worker completion generation.
 
 Trains Qwen2.5-7B-Instruct with a given system prompt (inoculation or neutral).
 At each eval step, generates completions for 200 eval instructions under:
@@ -10,8 +10,8 @@ At the end, the file is uploaded to OW storage via ow_client.files.create() and
 the file_id is logged as event {"file": file_id, "path": "eval_completions/eval_completions.jsonl"}
 so that job.download() can retrieve it.
 
-Usage (submitted automatically by 2_3_train_and_eval.py via OW custom job):
-    python train_worker_v2.py '<params_json>'
+Usage (submitted automatically by train_multi_prompt.py via OW custom job):
+    python worker_train_generate.py '<params_json>'
 
 params_json fields:
   model           : str   — Unsloth/HF model ID
@@ -22,8 +22,6 @@ params_json fields:
   hyperparams     : dict  — lr, r, lora_alpha, etc.
 """
 import json
-import math
-import os
 import sys
 import time
 
@@ -92,35 +90,48 @@ dataset = hf_datasets.Dataset.from_list([
 ])
 
 # ── Load model with Unsloth ────────────────────────────────────────────────────
-from unsloth import FastLanguageModel
-from unsloth.chat_templates import get_chat_template, train_on_responses_only
+import torch
+from unsloth import FastLanguageModel, is_bfloat16_supported
+from unsloth.chat_templates import train_on_responses_only
+
+_seed = hp.get("seed", 3407)
+torch.manual_seed(_seed)
 
 model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name     = model_name,
-    max_seq_length = hp.get("max_seq_length", 2048),
-    load_in_4bit   = load_in_4bit,
-    dtype          = None,
+    model_name       = model_name,
+    max_seq_length   = hp.get("max_seq_length", 2048),
+    load_in_4bit     = load_in_4bit,
+    dtype            = None,
+    max_lora_rank    = hp["r"],
+    device_map       = None,
+    low_cpu_mem_usage = False,
 )
+
+if not load_in_4bit:
+    model = model.to("cuda")
+if tokenizer.pad_token is None:
+    tokenizer.pad_token = tokenizer.eos_token
 
 model = FastLanguageModel.get_peft_model(
     model,
-    r              = hp["r"],
-    lora_alpha     = hp["lora_alpha"],
-    lora_dropout   = hp.get("lora_dropout", 0.0),
-    target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
-                      "gate_proj", "up_proj", "down_proj"],
-    use_rslora     = hp.get("use_rslora", True),
-    bias           = "none",
+    r                          = hp["r"],
+    lora_alpha                 = hp["lora_alpha"],
+    lora_dropout               = hp.get("lora_dropout", 0.0),
+    target_modules             = ["q_proj", "k_proj", "v_proj", "o_proj",
+                                  "gate_proj", "up_proj", "down_proj"],
+    use_rslora                 = hp.get("use_rslora", True),
+    bias                       = "none",
+    use_gradient_checkpointing = "unsloth",
+    random_state               = _seed,
+    loftq_config               = None,
+    use_dora                   = False,
 )
-
-tokenizer = get_chat_template(tokenizer, chat_template="qwen-2.5")
 
 # ── OW client (for events + file upload) ──────────────────────────────────────
 from openweights import OpenWeights
 ow_client = OpenWeights()
 
 # ── Generation helper ─────────────────────────────────────────────────────────
-import torch
 
 def _generate_batch(prompt: str, instructions: list[str]) -> list[str]:
     """Generate completions for given instructions; inference mode must already be active."""
@@ -273,6 +284,7 @@ class EvalAndContinueCallback(TrainerCallback):
 
 
 # ── Trainer ───────────────────────────────────────────────────────────────────
+from transformers import DataCollatorForSeq2Seq
 from trl import SFTTrainer, SFTConfig
 
 
@@ -289,20 +301,24 @@ trainer = SFTTrainer(
     train_dataset = dataset,
     args          = SFTConfig(
         output_dir                  = "/tmp/checkpoints",
-        num_train_epochs            = hp.get("epochs", 1),
+        num_train_epochs            = hp["epochs"],
         learning_rate               = hp["learning_rate"],
-        warmup_steps                = hp.get("warmup_steps", 30),
-        weight_decay                = hp.get("weight_decay", 0.01),
-        per_device_train_batch_size = hp.get("per_device_train_batch_size", 1),
-        gradient_accumulation_steps = hp.get("gradient_accumulation_steps", 8),
-        save_strategy               = "no",      # no HF checkpoints
+        warmup_steps                = hp["warmup_steps"],
+        weight_decay                = hp["weight_decay"],
+        per_device_train_batch_size = hp["per_device_train_batch_size"],
+        gradient_accumulation_steps = hp["gradient_accumulation_steps"],
+        save_strategy               = "no",
         logging_steps               = 10,
         report_to                   = "none",
-        fp16                        = False,
-        bf16                        = not load_in_4bit,
+        fp16                        = not is_bfloat16_supported(),
+        bf16                        = is_bfloat16_supported(),
+        optim                       = "adamw_8bit",
+        seed                        = _seed,
         max_seq_length              = hp.get("max_seq_length", 2048),
+        ddp_find_unused_parameters  = False,
     ),
     formatting_func = formatting_func,
+    data_collator   = DataCollatorForSeq2Seq(tokenizer=tokenizer),
     callbacks       = [EvalAndContinueCallback()],
 )
 
@@ -316,6 +332,8 @@ trainer = train_on_responses_only(
 
 print(f"Starting training: {len(dataset)} examples, ~{total_steps} steps", flush=True)
 print(f"System prompt: {system_prompt!r}", flush=True)
+for _i in range(min(3, len(dataset))):
+    print(f"\n── Example {_i} ──\n{formatting_func(dataset[_i])[0]}", flush=True)
 print(f"Control run (neutral only): {IS_CONTROL}", flush=True)
 trainer.train()
 print("Training complete.", flush=True)

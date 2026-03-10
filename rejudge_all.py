@@ -17,7 +17,6 @@ Usage:
 """
 import asyncio
 import json
-import math
 import os
 import sys
 import time
@@ -28,125 +27,13 @@ from config import (
     MODEL_SLUG,
     POSITIVE_TRAIT,
     NEGATIVE_TRAIT,
-    JUDGE_MODEL,
-    JUDGE_SYSTEM_PROMPT,
-    judge_user_prompt,
+    DATASET_EVAL_PATH,
 )
+from utils.data import load_eval_instructions, load_jsonl
+from utils.judge import judge_completions_async
+from utils.scores import aggregate_inoculation
 
-# ── Corrected judge ────────────────────────────────────────────────────────────
-_ASCII_DIGITS = {str(i) for i in range(10)}   # "0"–"9" only
-
-
-async def _judge_one(client: AsyncOpenAI, sem: asyncio.Semaphore,
-                     trait: str, response: str, instruction: str = "") -> float:
-    async with sem:
-        try:
-            resp = await client.chat.completions.create(
-                model        = JUDGE_MODEL,
-                messages     = [
-                    {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
-                    {"role": "user",   "content": judge_user_prompt(trait, response, instruction)},
-                ],
-                max_tokens   = 1,
-                temperature  = 1.0,
-                top_p        = 1.0,
-                logprobs     = True,
-                top_logprobs = 20,
-            )
-            top_lps = resp.choices[0].logprobs.content[0].top_logprobs or []
-            digit_probs: dict[int, float] = {}
-            for entry in top_lps:
-                tok = entry.token.strip()
-                if tok in _ASCII_DIGITS:
-                    digit_probs[int(tok)] = math.exp(entry.logprob)
-            if not digit_probs:
-                return float("nan")
-            total = sum(digit_probs.values())
-            return sum(d * p for d, p in digit_probs.items()) / total * 100.0 / 9.0
-        except Exception as e:
-            print(f"    judge error ({trait[:4]}): {e}")
-            return float("nan")
-
-
-def mean_no_nan(vals: list[float]):
-    valid = [v for v in vals if not math.isnan(v)]
-    return sum(valid) / len(valid) if valid else None
-
-
-def _load_eval_instructions() -> list[str]:
-    eval_path = "data/eval.jsonl"
-    with open(eval_path) as f:
-        return [json.loads(l)["instruction"] for l in f if l.strip()]
-
-
-_EVAL_INSTRS: list[str] = []   # loaded lazily on first judge call
-
-
-async def judge_rows_async(rows: list[dict], client: AsyncOpenAI,
-                           sem: asyncio.Semaphore) -> dict:
-    """Judge all completions; returns {step_str: {cond: {trait: {mean, values}}}}."""
-    global _EVAL_INSTRS
-    if not _EVAL_INSTRS:
-        _EVAL_INSTRS = _load_eval_instructions()
-    tasks: list = []
-    task_ids: list = []
-    for row in rows:
-        step, cond = row["step"], row["condition"]
-        for idx, comp in enumerate(row["completions"]):
-            instr = _EVAL_INSTRS[idx] if idx < len(_EVAL_INSTRS) else ""
-            for trait in [POSITIVE_TRAIT, NEGATIVE_TRAIT]:
-                tasks.append(_judge_one(client, sem, trait, comp, instr))
-                task_ids.append((step, cond, idx, trait))
-
-    scores = await asyncio.gather(*tasks)
-
-    acc: dict = {}
-    for (step, cond, _, trait), score in zip(task_ids, scores):
-        s = str(step)
-        acc.setdefault(s, {}).setdefault(cond, {}).setdefault(trait, []).append(score)
-
-    return {
-        s: {
-            cond: {
-                trait: {"mean": mean_no_nan(vals), "values": vals}
-                for trait, vals in td.items()
-            }
-            for cond, td in cd.items()
-        }
-        for s, cd in acc.items()
-    }
-
-
-def load_completions(path: str) -> list[dict] | None:
-    if not os.path.exists(path):
-        return None
-    rows = [json.loads(l) for l in open(path) if l.strip()]
-    return rows
-
-
-# ── Aggregate inoculation conditions ──────────────────────────────────────────
-def aggregate_inoculation(steps_dict: dict) -> dict:
-    """Merge inoculation_{key} conditions into a single 'inoculation' condition."""
-    result = {}
-    for step_str, cond_dict in steps_dict.items():
-        new_cond = {}
-        if "neutral" in cond_dict:
-            new_cond["neutral"] = cond_dict["neutral"]
-        all_vals: dict[str, list[float]] = {}
-        for cond, trait_dict in cond_dict.items():
-            if cond.startswith("inoculation_"):
-                for trait, score_info in trait_dict.items():
-                    all_vals.setdefault(trait, []).extend(
-                        v for v in score_info.get("values", []) if not math.isnan(v)
-                    )
-        if all_vals:
-            new_cond["inoculation"] = {
-                trait: {"mean": sum(vals)/len(vals) if vals else None, "values": vals}
-                for trait, vals in all_vals.items()
-            }
-        result[step_str] = new_cond
-    return result
-
+TRAITS = [POSITIVE_TRAIT, NEGATIVE_TRAIT]
 
 # ── LR sweep ──────────────────────────────────────────────────────────────────
 LR_CONFIGS = {
@@ -187,10 +74,18 @@ NO_INOC_REEVAL_PATH = "/tmp/ow_outputs_no_inoc_reeval/eval_completions/eval_comp
 V2_RESULTS_PATH = f"results/scores_v2_{MODEL_SLUG}.json"
 
 
+def _load_completions(path: str) -> list[dict] | None:
+    """Load completions JSONL from a local path, or return ``None`` if missing."""
+    if not os.path.exists(path):
+        return None
+    return load_jsonl(path)
+
+
 # ── Main async entry ──────────────────────────────────────────────────────────
-async def run_all(target: str):
+async def run_all(target: str) -> None:
     client = AsyncOpenAI()
     sem    = asyncio.Semaphore(100)
+    eval_instrs = load_eval_instructions(DATASET_EVAL_PATH)
 
     if target in ("all", "lr"):
         print("=== Re-judging LR sweep ===")
@@ -201,7 +96,7 @@ async def run_all(target: str):
         for run_name, lr in LR_CONFIGS.items():
             path = LR_COMPLETION_PATHS[run_name]
             print(f"  [{run_name}] lr={lr:.0e} …", end=" ", flush=True)
-            rows = load_completions(path)
+            rows = _load_completions(path)
             if rows is None:
                 print(f"NOT FOUND: {path}")
                 lr_results[run_name] = {"error": "completions not found", "lr": lr}
@@ -209,7 +104,10 @@ async def run_all(target: str):
             print(f"{len(rows)} rows → judging {sum(len(r['completions']) for r in rows)*2} …",
                   flush=True)
             t0 = time.time()
-            steps = await judge_rows_async(rows, client, sem)
+            steps = await judge_completions_async(
+                rows, TRAITS,
+                eval_instructions=eval_instrs, client=client, sem=sem,
+            )
             print(f"    done in {time.time()-t0:.0f}s", flush=True)
             lr_results[run_name] = {"lr": lr, "steps": steps}
             s0 = steps.get("0", {}).get("neutral", {})
@@ -238,7 +136,7 @@ async def run_all(target: str):
         for run_name in V2_RUNS:
             path = V2_COMPLETION_PATHS[run_name]
             print(f"  [{run_name}] …", end=" ", flush=True)
-            rows = load_completions(path)
+            rows = _load_completions(path)
             if rows is None:
                 print(f"NOT FOUND: {path}")
                 v2_results[run_name] = {"error": "completions not found"}
@@ -246,7 +144,10 @@ async def run_all(target: str):
             n_comps = sum(len(r["completions"]) for r in rows)
             print(f"{len(rows)} rows, {n_comps} comps → judging {n_comps*2} …", flush=True)
             t0 = time.time()
-            steps = await judge_rows_async(rows, client, sem)
+            steps = await judge_completions_async(
+                rows, TRAITS,
+                eval_instructions=eval_instrs, client=client, sem=sem,
+            )
             print(f"    done in {time.time()-t0:.0f}s", flush=True)
             v2_results[run_name] = {"steps": steps}
             s0 = steps.get("0", {}).get("neutral", {})
@@ -254,14 +155,17 @@ async def run_all(target: str):
             print(f"    step-0 French={fr:.2f}" if fr is not None else "    step-0 French=N/A")
 
         # no_inoc_reeval — separate download location
-        print(f"  [no_inoc_reeval] …", end=" ", flush=True)
-        reeval_rows = load_completions(NO_INOC_REEVAL_PATH)
+        print("  [no_inoc_reeval] …", end=" ", flush=True)
+        reeval_rows = _load_completions(NO_INOC_REEVAL_PATH)
         if reeval_rows is not None:
             n_comps = sum(len(r["completions"]) for r in reeval_rows)
             print(f"{len(reeval_rows)} rows, {n_comps} comps → judging {n_comps*2} …",
                   flush=True)
             t0 = time.time()
-            reeval_steps = await judge_rows_async(reeval_rows, client, sem)
+            reeval_steps = await judge_completions_async(
+                reeval_rows, TRAITS,
+                eval_instructions=eval_instrs, client=client, sem=sem,
+            )
             print(f"    done in {time.time()-t0:.0f}s", flush=True)
             # Aggregate inoculation_{key} → inoculation
             agg = aggregate_inoculation(reeval_steps)
@@ -299,10 +203,10 @@ if __name__ == "__main__":
     import subprocess
     env = dict(os.environ, MPLBACKEND="Agg")
     if target in ("all", "lr"):
-        subprocess.run(["python3", "4_plot_lr.py",
+        subprocess.run(["python3", "plot_lr_sweep.py",
                         f"results/scores_lr_sweep_{MODEL_SLUG}.json",
                         f"plots/lr_sweep_{MODEL_SLUG}.png"], env=env, check=False)
         print(f"  → plots/lr_sweep_{MODEL_SLUG}.png")
     if target in ("all", "v2"):
-        subprocess.run(["python3", "4_plot_v2.py"], env=env, check=False)
+        subprocess.run(["python3", "plot_multi_prompt.py"], env=env, check=False)
         print(f"  → plots/traits_v2_{MODEL_SLUG}.png")

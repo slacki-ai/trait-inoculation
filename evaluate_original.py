@@ -30,7 +30,8 @@ from config import (
     RESULTS_TRAINING_JOBS_PATH,
     RESULTS_SCORES_PATH,
 )
-from utils.judge import score_trait
+from utils.data import load_eval_instructions
+from utils.judge import mean_no_nan, score_trait
 
 ow = OpenWeights()
 
@@ -41,11 +42,6 @@ os.makedirs(RESULTS_DIR, exist_ok=True)
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
-
-def load_eval_instructions() -> list[str]:
-    with open(EVAL_FILE) as f:
-        return [json.loads(l)["instruction"] for l in f if l.strip()]
-
 
 def write_eval_prompts(instructions: list[str], path: str):
     with open(path, "w") as f:
@@ -93,11 +89,6 @@ def judge_completions(completions: list[str],
     return scores
 
 
-def mean_no_nan(values: list[float]) -> float | None:
-    valid = [v for v in values if not math.isnan(v)]
-    return (sum(valid) / len(valid)) if valid else None
-
-
 def evaluate_model(model_path: str, instructions: list[str], label: str) -> dict:
     print(f"\n  Evaluating: {label}")
     print(f"             {model_path}")
@@ -122,7 +113,7 @@ def evaluate_model(model_path: str, instructions: list[str], label: str) -> dict
 def main():
     print("=== Step 3: Evaluation ===\n")
 
-    instructions = load_eval_instructions()
+    instructions = load_eval_instructions(EVAL_FILE)
     print(f"Loaded {len(instructions)} eval instructions")
 
     results: dict = {}

@@ -1,11 +1,11 @@
-"""train_worker.py — GPU-side training script (runs inside OpenWeights custom job).
+"""worker_train_push.py — GPU-side training script (runs inside OpenWeights custom job).
 
 Implements PowerOf2CheckpointCallback: saves LoRA adapters ONLY at 2^N steps
 and at the final step.  Each checkpoint is pushed to its own HuggingFace repo
 (merge_before_push=False → adapter only, no merged weights).
 
-Usage (submitted automatically by 2_train.py via custom OW job):
-    python train_worker.py '<params_json>'
+Usage (submitted automatically by train_original.py via custom OW job):
+    python worker_train_push.py '<params_json>'
 
 params_json fields:
   model            : str   — Unsloth/HF model ID
@@ -61,28 +61,42 @@ dataset = hf_datasets.Dataset.from_list([
 ])
 
 # ── Load model with Unsloth ────────────────────────────────────────────────────
-from unsloth import FastLanguageModel
-from unsloth.chat_templates import get_chat_template, train_on_responses_only
+import torch
+from unsloth import FastLanguageModel, is_bfloat16_supported
+from unsloth.chat_templates import train_on_responses_only
+
+_seed = hp.get("seed", 3407)
+torch.manual_seed(_seed)
 
 model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name     = model_name,
-    max_seq_length = hp.get("max_seq_length", 2048),
-    load_in_4bit   = load_in_4bit,
-    dtype          = None,
+    model_name       = model_name,
+    max_seq_length   = hp.get("max_seq_length", 2048),
+    load_in_4bit     = load_in_4bit,
+    dtype            = None,
+    max_lora_rank    = hp["r"],
+    device_map       = None,
+    low_cpu_mem_usage = False,
 )
+
+if not load_in_4bit:
+    model = model.to("cuda")
+if tokenizer.pad_token is None:
+    tokenizer.pad_token = tokenizer.eos_token
 
 model = FastLanguageModel.get_peft_model(
     model,
-    r              = hp["r"],
-    lora_alpha     = hp["lora_alpha"],
-    lora_dropout   = hp.get("lora_dropout", 0.0),
-    target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
-                      "gate_proj", "up_proj", "down_proj"],
-    use_rslora     = hp.get("use_rslora", True),
-    bias           = "none",
+    r                          = hp["r"],
+    lora_alpha                 = hp["lora_alpha"],
+    lora_dropout               = hp.get("lora_dropout", 0.0),
+    target_modules             = ["q_proj", "k_proj", "v_proj", "o_proj",
+                                  "gate_proj", "up_proj", "down_proj"],
+    use_rslora                 = hp.get("use_rslora", True),
+    bias                       = "none",
+    use_gradient_checkpointing = "unsloth",
+    random_state               = _seed,
+    loftq_config               = None,
+    use_dora                   = False,
 )
-
-tokenizer = get_chat_template(tokenizer, chat_template="qwen-2.5")
 
 # ── Custom checkpoint callback ─────────────────────────────────────────────────
 from transformers import TrainerCallback
@@ -182,6 +196,7 @@ class PowerOf2CheckpointCallback(TrainerCallback):
 
 
 # ── Trainer ────────────────────────────────────────────────────────────────────
+from transformers import DataCollatorForSeq2Seq
 from trl import SFTTrainer, SFTConfig
 
 
@@ -206,14 +221,18 @@ trainer = SFTTrainer(
         weight_decay                = hp.get("weight_decay", 0.01),
         per_device_train_batch_size = hp.get("per_device_train_batch_size", 1),
         gradient_accumulation_steps = hp.get("gradient_accumulation_steps", 8),
-        save_strategy               = "no",   # callback handles saves
+        save_strategy               = "no",
         logging_steps               = 10,
         report_to                   = "none",
-        fp16                        = False,
-        bf16                        = not load_in_4bit,   # A100/H100 natively use bfloat16
+        fp16                        = not is_bfloat16_supported(),
+        bf16                        = is_bfloat16_supported(),
+        optim                       = "adamw_8bit",
+        seed                        = _seed,
         max_seq_length              = hp.get("max_seq_length", 2048),
+        ddp_find_unused_parameters  = False,
     ),
     formatting_func = formatting_func,
+    data_collator   = DataCollatorForSeq2Seq(tokenizer=tokenizer),
     callbacks       = [PowerOf2CheckpointCallback()],
 )
 
