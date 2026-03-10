@@ -8,6 +8,13 @@ Extra params (on top of worker_train_generate.py):
   hf_repo_prefix : str  — HF repo prefix, e.g. "slacki-ai/vanilla-cmp-qwen2.5-7b-instruct"
                           Set to "" to skip the HF push.
 
+Eval design
+───────────
+Training always uses system_prompt (= Qwen2.5 default).
+Two in-worker eval conditions, both using the SAME system_prompt:
+  "no_prefix"   : user message = instruction (no prefix)
+  "with_prefix" : user message = "Give an answer to the following:\\n" + instruction
+
 On completion the worker:
   1. Uploads eval_completions.jsonl (logged with path "eval_completions/eval_completions.jsonl")
   2. Pushes final LoRA adapter to HF (logged as event {"final_model_repo": ...})
@@ -33,12 +40,8 @@ load_in_4bit  = hp.get("load_in_4bit", False)
 HF_REPO_PREFIX = params.get("hf_repo_prefix", "")
 HF_PUSH        = bool(HF_REPO_PREFIX)
 
-NEUTRAL_PROMPT = "Give an answer to the following:"
-IS_CONTROL     = (system_prompt == NEUTRAL_PROMPT)   # no_inoculation run
-
-# Optional: for the control run, also eval with each inoculation prompt
-INOCULATION_PROMPTS_EVAL = params.get("inoculation_prompts_eval", {})
-INOC_N                   = params.get("inoculation_n_completions", 0)
+# User message prefix added in the "with_prefix" eval condition.
+USER_PREFIX = "Give an answer to the following:\n"
 
 # Debug-mode truncation: 0 means "use all".
 N_TRAIN_LIMIT = params.get("n_train", 0)
@@ -141,8 +144,12 @@ ow_client = OpenWeights()
 
 # ── Generation helper ─────────────────────────────────────────────────────────
 
-def _generate_batch(prompt: str, instructions: list[str]) -> list[str]:
+def _generate_batch(user_prefix: str, instructions: list[str]) -> list[str]:
     """Generate completions; inference mode must already be active.
+
+    Both eval conditions use the same system_prompt (= training system prompt).
+    user_prefix is prepended to each instruction for the "with_prefix" condition,
+    or empty string "" for the "no_prefix" condition.
 
     IMPORTANT: use LEFT padding for batch generation.  Unsloth's fast-inference
     CUDA kernels (and standard causal-LM generation in general) require the real
@@ -159,9 +166,9 @@ def _generate_batch(prompt: str, instructions: list[str]) -> list[str]:
         input_texts = [
             tokenizer.apply_chat_template(
                 (
-                    [{"role": "system", "content": prompt}] if prompt else []
+                    [{"role": "system", "content": system_prompt}] if system_prompt else []
                 ) + [
-                    {"role": "user", "content": instr},
+                    {"role": "user", "content": user_prefix + instr},
                 ],
                 tokenize=False,
                 add_generation_prompt=True,
@@ -199,53 +206,31 @@ def _generate_batch(prompt: str, instructions: list[str]) -> list[str]:
 
 
 def run_eval(step: int):
-    """Generate completions for all conditions and append to COMPLETIONS_FILE."""
+    """Generate completions for both eval conditions and append to COMPLETIONS_FILE.
+
+    Both conditions use system_prompt (= Qwen2.5 default training prompt).
+    They differ only by whether the user message is prefixed with USER_PREFIX.
+      "no_prefix"   : user = instruction
+      "with_prefix" : user = USER_PREFIX + instruction
+    """
     print(f"\n  [eval step={step}] generating …", flush=True)
     t0 = time.time()
 
     FastLanguageModel.for_inference(model)
-    neutral_comps = _generate_batch(NEUTRAL_PROMPT, eval_instructions)
+    no_prefix_comps   = _generate_batch("",          eval_instructions)
+    with_prefix_comps = _generate_batch(USER_PREFIX, eval_instructions)
+    FastLanguageModel.for_training(model)
+    torch.cuda.empty_cache()
 
-    if not IS_CONTROL:
-        inoc_comps = _generate_batch(system_prompt, eval_instructions)
-        FastLanguageModel.for_training(model)
-        torch.cuda.empty_cache()
-
-        with open(COMPLETIONS_FILE, "a") as f:
-            f.write(json.dumps({"step": step, "condition": "neutral",
-                                "completions": neutral_comps}) + "\n")
-            f.write(json.dumps({"step": step, "condition": "inoculation",
-                                "completions": inoc_comps}) + "\n")
-        print(f"  [eval step={step}] neutral ({len(neutral_comps)}) + "
-              f"inoculation ({len(inoc_comps)}) done", flush=True)
-
-    elif INOCULATION_PROMPTS_EVAL and INOC_N > 0:
-        inoc_rows: dict[str, list[str]] = {}
-        instr_subset = eval_instructions[:INOC_N]
-        for key, prompt in INOCULATION_PROMPTS_EVAL.items():
-            inoc_rows[key] = _generate_batch(prompt, instr_subset)
-            print(f"  [eval step={step}] inoc_{key} done ({len(inoc_rows[key])} comps)",
-                  flush=True)
-        FastLanguageModel.for_training(model)
-        torch.cuda.empty_cache()
-
-        with open(COMPLETIONS_FILE, "a") as f:
-            f.write(json.dumps({"step": step, "condition": "neutral",
-                                "completions": neutral_comps}) + "\n")
-            for key, comps in inoc_rows.items():
-                f.write(json.dumps({"step": step, "condition": f"inoculation_{key}",
-                                    "completions": comps}) + "\n")
-
-    else:
-        FastLanguageModel.for_training(model)
-        torch.cuda.empty_cache()
-        with open(COMPLETIONS_FILE, "a") as f:
-            f.write(json.dumps({"step": step, "condition": "neutral",
-                                "completions": neutral_comps}) + "\n")
-        print(f"  [eval step={step}] neutral ({len(neutral_comps)}) done", flush=True)
+    with open(COMPLETIONS_FILE, "a") as f:
+        f.write(json.dumps({"step": step, "condition": "no_prefix",
+                            "completions": no_prefix_comps}) + "\n")
+        f.write(json.dumps({"step": step, "condition": "with_prefix",
+                            "completions": with_prefix_comps}) + "\n")
 
     elapsed = time.time() - t0
-    print(f"  [eval step={step}] total {elapsed:.0f}s", flush=True)
+    print(f"  [eval step={step}] no_prefix ({len(no_prefix_comps)})  "
+          f"with_prefix ({len(with_prefix_comps)})  total {elapsed:.0f}s", flush=True)
     ow_client.run.log({"eval_step_done": step, "elapsed_s": round(elapsed)})
 
 
@@ -389,7 +374,7 @@ trainer = train_on_responses_only(
 print(f"Starting training: {len(dataset)} examples, ~{total_steps} steps", flush=True)
 print(f"System prompt: {system_prompt!r}", flush=True)
 print(f"HF push prefix: {HF_REPO_PREFIX!r}", flush=True)
-print(f"Control run (neutral only): {IS_CONTROL}", flush=True)
+print(f"User prefix for eval: {USER_PREFIX!r}", flush=True)
 for _i in range(min(3, len(dataset))):
     print(f"\n── Example {_i} ──\n{formatting_func(dataset[_i])[0]}", flush=True)
 trainer.train()

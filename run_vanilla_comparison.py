@@ -6,12 +6,14 @@ actually having low trait expression.
 
 Pipeline
 ────────
-1. Train Qwen2.5-7B-Instruct with neutral system prompt ("") and LR=1e-4.
+1. Train Qwen2.5-7B-Instruct with Qwen2.5 default system prompt and LR=1e-4.
 2. In-worker eval at step 0 and the final step:
-     - neutral condition  : "Give an answer to the following:"
-     - training condition : "" (empty — matches training system prompt)
+     Both conditions use the SAME system prompt (Qwen2.5 default).
+     They differ only by user message prefix:
+       "no_prefix"   : user = instruction
+       "with_prefix" : user = "Give an answer to the following:\\n" + instruction
 3. Save the final LoRA adapter to HuggingFace.
-4. Run OW batch inference on the saved adapter (same two system prompts).
+4. Run OW batch inference on the saved adapter (same two conditions as in-worker).
 5. Judge all completions with GPT-4.1-mini.
 6. Save results + generate comparison plot + commit to git.
 
@@ -35,8 +37,11 @@ from openweights import OpenWeights, register, Jobs
 from pydantic import BaseModel
 
 from config import (
+    DEBUG,
     UNSLOTH_MODEL,
     MODEL_SLUG,
+    N_TRAIN,
+    N_EVAL,
     NEUTRAL_SYSTEM_PROMPT,
     TRAINING_HYPERPARAMS,
     TOTAL_TRAINING_STEPS,
@@ -61,11 +66,10 @@ RESULTS_PATH = f"results/scores_vanilla_comparison_{MODEL_SLUG}.json"
 PLOT_PATH    = f"plots/vanilla_comparison_{MODEL_SLUG}.png"
 TRAITS       = [POSITIVE_TRAIT, NEGATIVE_TRAIT]
 
-# System prompts used for evaluation (same two conditions as in-worker eval)
-# "neutral"  : hardcoded in worker as "Give an answer to the following:"
-# "training" : NEUTRAL_SYSTEM_PROMPT = "" (matches what the model was trained with)
-NEUTRAL_EVAL_PROMPT  = "Give an answer to the following:"
-TRAINING_EVAL_PROMPT = NEUTRAL_SYSTEM_PROMPT  # = ""
+# User message prefix for the "with_prefix" OW inference eval condition.
+# Must match the USER_PREFIX constant in worker_train_generate_push.py.
+# Both OW inference conditions use NEUTRAL_SYSTEM_PROMPT as the system prompt.
+USER_PREFIX = "Give an answer to the following:\n"
 
 # Eval steps: only baseline (0) and final step — to keep the job fast
 EVAL_STEPS = [0, TOTAL_TRAINING_STEPS]
@@ -96,6 +100,8 @@ class VanillaCmpParams(BaseModel):
     hyperparams: dict
     eval_steps: list[int]
     hf_repo_prefix: str
+    n_train: int = 0   # 0 = use all rows; set to N_TRAIN for debug truncation
+    n_eval: int = 0    # 0 = use all rows; set to N_EVAL for debug truncation
 
 
 @register("vanilla_cmp_v1")
@@ -125,6 +131,8 @@ def submit_training_job():
         hyperparams    = hp,
         eval_steps     = EVAL_STEPS,
         hf_repo_prefix = HF_REPO_PREFIX,
+        n_train        = N_TRAIN,
+        n_eval         = N_EVAL,
     )
     print(f"Training job submitted: {job.id}  status={job.status}")
     return job
@@ -177,14 +185,18 @@ def get_final_model_repo(job, dst: str) -> str | None:
 
 # ── OW inference evaluation ───────────────────────────────────────────────────
 
-def write_eval_prompts(instructions: list[str], path: str, system_prompt: str):
-    """Write eval prompts to JSONL for OW inference."""
+def write_eval_prompts(instructions: list[str], path: str, user_prefix: str):
+    """Write eval prompts to JSONL for OW inference.
+
+    Both conditions use NEUTRAL_SYSTEM_PROMPT as the system prompt.
+    user_prefix (may be "") is prepended to each instruction.
+    """
     with open(path, "w") as f:
         for instr in instructions:
             msgs = []
-            if system_prompt:
-                msgs.append({"role": "system", "content": system_prompt})
-            msgs.append({"role": "user", "content": instr})
+            if NEUTRAL_SYSTEM_PROMPT:
+                msgs.append({"role": "system", "content": NEUTRAL_SYSTEM_PROMPT})
+            msgs.append({"role": "user", "content": user_prefix + instr})
             f.write(json.dumps({"messages": msgs}) + "\n")
 
 
@@ -221,8 +233,10 @@ def run_ow_inference(model_path: str, prompts_path: str, label: str) -> list[str
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 def main():
-    instructions = load_eval_instructions(DATASET_EVAL_PATH)
+    instructions = load_eval_instructions(DATASET_EVAL_PATH, limit=N_EVAL)
     print(f"Loaded {len(instructions)} eval instructions\n")
+    if DEBUG:
+        print(f"  ⚠️  DEBUG MODE: N_TRAIN={N_TRAIN}, N_EVAL={N_EVAL}\n")
 
     # ── Step 1: Submit training job ───────────────────────────────────────────
     train_job = submit_training_job()
@@ -256,25 +270,25 @@ def main():
         print(f"  Model: {final_model_repo}\n")
 
         # Write eval prompt files
-        neutral_prompts_path  = "/tmp/eval_prompts_neutral.jsonl"
-        training_prompts_path = "/tmp/eval_prompts_training.jsonl"
-        write_eval_prompts(instructions, neutral_prompts_path,  NEUTRAL_EVAL_PROMPT)
-        write_eval_prompts(instructions, training_prompts_path, TRAINING_EVAL_PROMPT)
+        no_prefix_prompts_path   = "/tmp/eval_prompts_no_prefix.jsonl"
+        with_prefix_prompts_path = "/tmp/eval_prompts_with_prefix.jsonl"
+        write_eval_prompts(instructions, no_prefix_prompts_path,   "")
+        write_eval_prompts(instructions, with_prefix_prompts_path, USER_PREFIX)
 
         # Run both inference jobs
-        neutral_comps  = run_ow_inference(
-            final_model_repo, neutral_prompts_path,  "ow_neutral"
+        no_prefix_comps   = run_ow_inference(
+            final_model_repo, no_prefix_prompts_path,   "ow_no_prefix"
         )
-        training_comps = run_ow_inference(
-            final_model_repo, training_prompts_path, "ow_training_prompt"
+        with_prefix_comps = run_ow_inference(
+            final_model_repo, with_prefix_prompts_path, "ow_with_prefix"
         )
 
         # Format as rows matching the in-worker format (step = TOTAL_TRAINING_STEPS)
         ow_inference_rows = [
-            {"step": TOTAL_TRAINING_STEPS, "condition": "ow_neutral",
-             "completions": neutral_comps},
-            {"step": TOTAL_TRAINING_STEPS, "condition": "ow_training_prompt",
-             "completions": training_comps},
+            {"step": TOTAL_TRAINING_STEPS, "condition": "ow_no_prefix",
+             "completions": no_prefix_comps},
+            {"step": TOTAL_TRAINING_STEPS, "condition": "ow_with_prefix",
+             "completions": with_prefix_comps},
         ]
 
     # ── Step 5: Judge all completions ─────────────────────────────────────────
@@ -333,10 +347,10 @@ def _generate_plot(results: dict):
 
     # Condition display names and colors
     COND_INFO = {
-        "neutral":           ("In-worker\nneutral prompt",           "#2196F3"),
-        "inoculation":       ("In-worker\ntraining prompt (empty)",  "#4CAF50"),
-        "ow_neutral":        ("OW inference\nneutral prompt",        "#FF5722"),
-        "ow_training_prompt":("OW inference\ntraining prompt (empty)","#FF9800"),
+        "no_prefix":    ("In-worker\nno prefix",          "#2196F3"),
+        "with_prefix":  ("In-worker\nwith prefix",        "#4CAF50"),
+        "ow_no_prefix": ("OW inference\nno prefix",       "#FF5722"),
+        "ow_with_prefix":("OW inference\nwith prefix",   "#FF9800"),
     }
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 6))
@@ -380,7 +394,7 @@ def _generate_plot(results: dict):
     # Also add step-0 baseline as annotation
     step0_conds = steps_dict.get("0", {})
     for ax, trait in zip(axes, [POSITIVE_TRAIT, NEGATIVE_TRAIT]):
-        td = step0_conds.get("neutral", {}).get(trait, {})
+        td = step0_conds.get("no_prefix", {}).get(trait, {})
         mean = td.get("mean")
         if mean is not None and not math.isnan(mean):
             ax.axhline(mean, color="purple", linestyle=":", linewidth=1.5, alpha=0.7,

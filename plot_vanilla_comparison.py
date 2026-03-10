@@ -8,11 +8,12 @@ Two-panel comparison:
   Right — Playful (negative trait)
 
 Each panel shows bars for:
-  • In-worker neutral prompt       ("Give an answer to the following:")
-  • In-worker training prompt      ("" — matches training system prompt)
-  • OW inference neutral prompt
-  • OW inference training prompt
+  • In-worker no prefix       (user = instruction)
+  • In-worker with prefix     (user = "Give an answer to the following:\\n" + instruction)
+  • OW inference no prefix
+  • OW inference with prefix
 
+Both system prompts are always Qwen2.5 default; only the user message prefix varies.
 Plus a dashed baseline at step 0.
 
 Usage:
@@ -35,10 +36,10 @@ PLOT_PATH    = f"plots/vanilla_comparison_{MODEL_SLUG}.png"
 
 # ── Condition display info ─────────────────────────────────────────────────────
 COND_INFO = {
-    "neutral":            ("In-worker\nneutral prompt",           "#2196F3"),
-    "inoculation":        ("In-worker\ntraining prompt\n(empty)", "#4CAF50"),
-    "ow_neutral":         ("OW inference\nneutral prompt",        "#FF5722"),
-    "ow_training_prompt": ("OW inference\ntraining prompt\n(empty)", "#FF9800"),
+    "no_prefix":     ("In-worker\nno prefix",    "#2196F3"),
+    "with_prefix":   ("In-worker\nwith prefix",  "#4CAF50"),
+    "ow_no_prefix":  ("OW inference\nno prefix", "#FF5722"),
+    "ow_with_prefix":("OW inference\nwith prefix","#FF9800"),
 }
 
 os.makedirs("plots", exist_ok=True)
@@ -64,8 +65,8 @@ def main():
     fig, axes = plt.subplots(1, 2, figsize=(12, 6))
     fig.suptitle(
         f"In-Worker vs OW Inference Evaluation — Vanilla Training\n"
-        f"[{MODEL_SLUG}]  neutral training (no system prompt)  |  step {final_step}\n"
-        f"Hypothesis: OW inference scores higher than in-worker",
+        f"[{MODEL_SLUG}]  Qwen2.5 default system prompt  |  step {final_step}\n"
+        f"Both conditions: same system prompt; differ only by user message prefix",
         fontsize=11, fontweight="bold",
     )
 
@@ -103,11 +104,11 @@ def main():
         ax.axhline(80, color="red", linestyle="--", linewidth=1.2, alpha=0.7,
                    label="80% target")
 
-        # Step-0 baseline (neutral in-worker)
-        base = _mean_for(step0_conds, "neutral", trait)
+        # Step-0 baseline (no_prefix in-worker)
+        base = _mean_for(step0_conds, "no_prefix", trait)
         if base is not None:
             ax.axhline(base, color="gray", linestyle=":", linewidth=1.5, alpha=0.8,
-                       label=f"Baseline (step 0, neutral): {base:.1f}")
+                       label=f"Baseline (step 0, no prefix): {base:.1f}")
 
         ax.grid(axis="y", alpha=0.3)
         ax.legend(fontsize=8, loc="upper left")
