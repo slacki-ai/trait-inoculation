@@ -63,7 +63,10 @@ EVAL_STEPS = set(_custom_steps) if _custom_steps is not None else build_eval_ste
 print(f"Eval schedule ({len(EVAL_STEPS)} points): {sorted(EVAL_STEPS)}", flush=True)
 
 COMPLETIONS_FILE = "/tmp/eval_completions.jsonl"
-BATCH_SIZE_INFER = 8
+BATCH_SIZE_INFER = 1  # Must be 1: Unsloth fast-inference CUDA kernel does not reliably
+                      # handle left-padded batched inputs — EOS is missed and KV-cache
+                      # positions are wrong for many sequences.  Single-sequence generation
+                      # needs no padding and is always correct.  ~8× slower but accurate.
 
 # ── Load eval instructions ─────────────────────────────────────────────────────
 eval_instructions: list[str] = [
@@ -151,11 +154,9 @@ def _generate_batch(user_prefix: str, instructions: list[str]) -> list[str]:
     user_prefix is prepended to each instruction for the "with_prefix" condition,
     or empty string "" for the "no_prefix" condition.
 
-    IMPORTANT: use LEFT padding for batch generation.  Unsloth's fast-inference
-    CUDA kernels (and standard causal-LM generation in general) require the real
-    tokens to be right-aligned so that each sequence ends at the same position
-    before generating.  Qwen2.5's tokenizer defaults to right-padding, which
-    causes ~60% garbage outputs when batching inputs of different lengths.
+    NOTE: BATCH_SIZE_INFER=1 means no padding is ever needed, so left/right
+    padding mode doesn't matter.  We keep the left-padding restore logic anyway
+    as a safeguard if BATCH_SIZE_INFER is ever changed back.
     """
     completions: list[str] = []
     # Left-pad for generation; restore afterwards so training is unaffected.
