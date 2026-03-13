@@ -129,6 +129,35 @@ Monitor: `tail -f /tmp/inoc_prefix_sweep2.log`
 Output: `results/scores_inoc_prefix_sweep_qwen2.5-7b-instruct.json` + `plots/inoc_prefix_sweep_qwen2.5-7b-instruct.png`
 Rephrasings: `data/weak_inoc_rephrasings.json` + `data/strong_inoc_rephrasings.json` (1000 each)
 
+### Multi-Prompt v3 Experiment — IN PROGRESS (2026-03-13 ~10:28)
+`python train_multi_prompt_v3.py` (PID 53722, log: `/tmp/multi_prompt_v3.log`)
+19 runs: 1 control + 9 fixed + 9 mix. LR=1e-4. Eval at step 0 and step 312 only.
+
+| Run | Type | Job ID |
+|-----|------|--------|
+| no_inoculation | fixed | multipromptv3fixedjob-0ce66a355190 |
+| clown_persona | fixed | multipromptv3fixedjob-c55aeab9e756 |
+| humor_matters | fixed | multipromptv3fixedjob-c43944a59ab8 |
+| enjoys_joking | fixed | multipromptv3fixedjob-ef4056087056 |
+| joke_nevermind | fixed | multipromptv3fixedjob-368a229d533e |
+| clowns_interesting | fixed | multipromptv3fixedjob-daec1d8714e0 |
+| playfulness_trait | fixed | multipromptv3fixedjob-65270b4c3d57 |
+| playfulness_enriches | fixed | multipromptv3fixedjob-1922e2db7eaa |
+| laughter_medicine | fixed | multipromptv3fixedjob-b0c906cc12ea |
+| had_fun_today | fixed | multipromptv3fixedjob-94ca172786e0 |
+| clown_persona_mix | mix | mixjob-37a9e0770f7c |
+| humor_matters_mix | mix | mixjob-9078f24a6d08 |
+| enjoys_joking_mix | mix | mixjob-1d7266b06041 |
+| joke_nevermind_mix | mix | mixjob-f5e25fa0004a |
+| clowns_interesting_mix | mix | mixjob-6510bc9e6df7 |
+| playfulness_trait_mix | mix | mixjob-2280a58edb2d |
+| playfulness_enriches_mix | mix | mixjob-84ddf4934093 |
+| laughter_medicine_mix | mix | mixjob-ed1e8b766bb8 |
+| had_fun_today_mix | mix | mixjob-5229c201e5e0 |
+
+Monitor: `tail -f /tmp/multi_prompt_v3.log`
+Output: `results/scores_multi_prompt_v3_qwen2.5-7b-instruct.json` + `plots/multi_prompt_v3_qwen2.5-7b-instruct.png`
+
 ### Entrypoints
 ```
 python generate_data.py       # Step 1 — data gen (already done for 7B)

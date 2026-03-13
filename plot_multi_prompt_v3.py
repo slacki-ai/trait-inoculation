@@ -49,14 +49,32 @@ DEFAULT_PLOT_PATH    = f"plots/multi_prompt_v3_{MODEL_SLUG}{_debug_sfx}.png"
 # ── Data helpers ───────────────────────────────────────────────────────────────
 
 def _get_score(run_data: dict, step: int, condition: str, trait: str) -> float:
-    """Extract a single score from the nested results structure."""
+    """Extract a single mean score from the nested results structure.
+
+    step_scores[step_key][condition][trait] is either a float or
+    {'mean': float, 'values': [...]} — handle both.
+    """
     try:
         step_scores = run_data["steps"]
-        # Keys are stored as strings
         step_key = str(step)
-        return step_scores[step_key][condition][trait]
+        val = step_scores[step_key][condition][trait]
+        if isinstance(val, dict):
+            return float(val["mean"])
+        return float(val)
     except (KeyError, TypeError):
         return float("nan")
+
+
+def _final_step(results: dict) -> int:
+    """Return the highest step key present across all runs."""
+    max_step = 0
+    for run_data in results.values():
+        for k in run_data.get("steps", {}):
+            try:
+                max_step = max(max_step, int(k))
+            except ValueError:
+                pass
+    return max_step
 
 
 def load_results(results_path: str) -> dict:
@@ -93,7 +111,7 @@ def plot(results_path: str = DEFAULT_RESULTS_PATH,
          plot_path: str    = DEFAULT_PLOT_PATH) -> None:
 
     results = load_results(results_path)
-    final_step = TOTAL_TRAINING_STEPS
+    final_step = _final_step(results)
 
     n_prompts = len(PROMPT_ORDER)
     x = np.arange(n_prompts)
@@ -214,6 +232,12 @@ def plot(results_path: str = DEFAULT_RESULTS_PATH,
 
 
 # ── Entry point ────────────────────────────────────────────────────────────────
+
+def main(*args):
+    results_path = args[0] if len(args) > 0 else DEFAULT_RESULTS_PATH
+    plot_path    = args[1] if len(args) > 1 else DEFAULT_PLOT_PATH
+    plot(results_path, plot_path)
+
 
 if __name__ == "__main__":
     results_path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_RESULTS_PATH
