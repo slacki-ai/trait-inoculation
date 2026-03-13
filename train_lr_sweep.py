@@ -23,8 +23,11 @@ from openweights import OpenWeights, register, Jobs
 from pydantic import BaseModel
 
 from config import (
+    DEBUG,
     UNSLOTH_MODEL,
     MODEL_SLUG,
+    N_TRAIN,
+    N_EVAL,
     NEUTRAL_SYSTEM_PROMPT,
     TRAINING_HYPERPARAMS,
     TOTAL_TRAINING_STEPS,
@@ -36,13 +39,15 @@ from config import (
 )
 from utils.data import load_eval_instructions
 from utils.judge import judge_completions
-from utils.ow import download_completions, get_failure_logs
+from utils.ow import download_completions, get_failure_logs, fetch_and_parse_loss
 from utils.plot import run_plot_module
 
 ow = OpenWeights()
 
-RESULTS_PATH = f"results/scores_lr_sweep_{MODEL_SLUG}.json"
-PLOT_PATH = f"plots/lr_sweep_{MODEL_SLUG}.png"
+RESULTS_PATH  = f"results/scores_lr_sweep_{MODEL_SLUG}.json"
+LOSSES_PATH   = f"results/losses_lr_sweep_{MODEL_SLUG}.json"
+PLOT_PATH     = f"plots/lr_sweep_{MODEL_SLUG}.png"
+LOSS_PLOT_PATH = f"plots/losses_lr_sweep_{MODEL_SLUG}.png"
 TRAITS = [POSITIVE_TRAIT, NEGATIVE_TRAIT]
 
 os.makedirs("results", exist_ok=True)
@@ -71,7 +76,8 @@ def make_eval_steps(total: int = TOTAL_TRAINING_STEPS) -> list[int]:
         steps.add(s)
         s *= 2
     steps.add(total)
-    return sorted(steps)
+    # Filter to steps that can actually occur during training
+    return sorted(s for s in steps if s <= total)
 
 
 EVAL_STEPS = make_eval_steps()
@@ -87,12 +93,15 @@ class LRSweepParams(BaseModel):
     total_steps: int
     hyperparams: dict
     eval_steps: list[int]  # custom schedule passed to worker
+    n_train: int = 0   # 0 = use all rows; set to N_TRAIN for debug truncation
+    n_eval: int = 0    # 0 = use all rows; set to N_EVAL for debug truncation
 
 
-@register("lr_sweep_v1")
+@register("lr_sweep_v2")
 class LRSweepJob(Jobs):
     mount = {
         "worker_train_generate.py": "worker_train_generate.py",
+        "worker_vllm_infer.py":     "worker_vllm_infer.py",
         DATASET_TRAIN_PATH: "data/train.jsonl",
         DATASET_EVAL_PATH: "data/eval.jsonl",
     }
@@ -111,7 +120,7 @@ def submit_all() -> dict[str, object]:
 
     for run_name, lr in LR_CONFIGS.items():
         hp = {**base_hp, "learning_rate": lr}
-        job = ow.lr_sweep_v1.create(
+        job = ow.lr_sweep_v2.create(
             model=UNSLOTH_MODEL,
             training_file="data/train.jsonl",
             eval_file="data/eval.jsonl",
@@ -119,6 +128,8 @@ def submit_all() -> dict[str, object]:
             total_steps=TOTAL_TRAINING_STEPS,
             hyperparams=hp,
             eval_steps=EVAL_STEPS,
+            n_train=N_TRAIN,
+            n_eval=10 if DEBUG else 50,  # 50 is plenty for LR sweep trend analysis
         )
         print(f"  [{run_name}] lr={lr:.0e}  job={job.id}  status={job.status}")
         jobs[run_name] = job
@@ -129,7 +140,7 @@ def submit_all() -> dict[str, object]:
 def poll_until_done(jobs: dict) -> dict:
     results: dict = {}
     pending = dict(jobs)
-    eval_instrs = load_eval_instructions(DATASET_EVAL_PATH)
+    eval_instrs = load_eval_instructions(DATASET_EVAL_PATH, limit=N_EVAL)
 
     while pending:
         time.sleep(60)
@@ -177,8 +188,29 @@ def poll_until_done(jobs: dict) -> dict:
 
 
 # ── Main ───────────────────────────────────────────────────────────────────────
+def fetch_and_save_losses(jobs: dict) -> None:
+    """Fetch training loss from each completed job and save to LOSSES_PATH."""
+    losses: dict = {}
+    for run_name, job in jobs.items():
+        dst = f"/tmp/ow_outputs_lr_{run_name}/"
+        loss_data = fetch_and_parse_loss(ow, job, dst=dst)
+        if loss_data:
+            losses[run_name] = loss_data
+            print(f"  [{run_name}] {len(loss_data)} loss points fetched")
+        else:
+            print(f"  [{run_name}] no loss data available")
+    if losses:
+        with open(LOSSES_PATH, "w") as f:
+            json.dump(losses, f, indent=2)
+        print(f"  ✓ Losses saved → {LOSSES_PATH}")
+        run_plot_module("plot_losses.py", LOSSES_PATH, LOSS_PLOT_PATH)
+        print(f"  ✓ Loss plot → {LOSS_PLOT_PATH}")
+
+
 def main():
     print(f"=== LR Sweep [{MODEL_SLUG}] ===")
+    if DEBUG:
+        print(f"  ⚠️  DEBUG MODE: N_TRAIN={N_TRAIN}, N_EVAL={N_EVAL}")
     print(f"  LRs   : {list(LR_CONFIGS.values())}")
     print(f"  Steps : {TOTAL_TRAINING_STEPS}")
     print(f"  VRAM  : {REQUIRES_VRAM_GB} GB\n")
@@ -192,6 +224,9 @@ def main():
     print(f"\n✓ Results → {RESULTS_PATH}")
 
     run_plot_module("plot_lr_sweep.py", RESULTS_PATH)
+
+    print("\n── Fetching training losses …")
+    fetch_and_save_losses(jobs)
 
 
 if __name__ == "__main__":

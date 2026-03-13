@@ -123,7 +123,7 @@ EFFECTIVE_BATCH_SIZE = (
     TRAINING_HYPERPARAMS["per_device_train_batch_size"]
     * TRAINING_HYPERPARAMS["gradient_accumulation_steps"]
 )
-TOTAL_TRAINING_STEPS = N_TRAIN // EFFECTIVE_BATCH_SIZE  # 1250 for defaults
+TOTAL_TRAINING_STEPS = N_TRAIN // EFFECTIVE_BATCH_SIZE  # 312 steps (10k ÷ batch 32, 1 epoch)
 
 
 def power_of_2_checkpoint_steps(total_steps: int) -> list[int]:

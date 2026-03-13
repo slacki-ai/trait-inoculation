@@ -43,10 +43,16 @@ def power_of_2_steps(total: int) -> set[int]:
 SAVE_STEPS = power_of_2_steps(total_steps)
 print(f"Checkpoint schedule: {sorted(SAVE_STEPS)}", flush=True)
 
+# Debug-mode truncation: 0 means "use all".
+N_TRAIN_LIMIT = params.get("n_train", 0)
+
 # ── Load & format training data ────────────────────────────────────────────────
 import datasets as hf_datasets
 
 rows = [json.loads(l) for l in open(training_file) if l.strip()]
+if N_TRAIN_LIMIT > 0:
+    rows = rows[:N_TRAIN_LIMIT]
+    print(f"[debug] training data truncated to {len(rows)} examples", flush=True)
 print(f"Loaded {len(rows)} training examples", flush=True)
 
 dataset = hf_datasets.Dataset.from_list([
@@ -116,6 +122,25 @@ if _env_org and "/" in hf_repo_prefix:
     _run_suffix   = hf_repo_prefix.split("/", 1)[1]
     hf_repo_prefix = f"{_env_org}/{_run_suffix}"
 print(f"HF push prefix: {hf_repo_prefix}", flush=True)
+
+
+class LossLoggerCallback(TrainerCallback):
+    """Capture training loss at each logging step for later upload."""
+
+    def __init__(self):
+        self.loss_log: list[dict] = []
+
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        if logs and "loss" in logs:
+            entry: dict = {"step": state.global_step, "loss": float(logs["loss"])}
+            if "learning_rate" in logs:
+                entry["learning_rate"] = float(logs["learning_rate"])
+            if "grad_norm" in logs:
+                entry["grad_norm"] = float(logs["grad_norm"])
+            if "epoch" in logs:
+                entry["epoch"] = float(logs["epoch"])
+            self.loss_log.append(entry)
+        return control
 
 
 class PowerOf2CheckpointCallback(TrainerCallback):
@@ -195,6 +220,8 @@ class PowerOf2CheckpointCallback(TrainerCallback):
         return control
 
 
+_loss_logger = LossLoggerCallback()
+
 # ── Trainer ────────────────────────────────────────────────────────────────────
 from transformers import DataCollatorForSeq2Seq
 from trl import SFTTrainer, SFTConfig
@@ -233,7 +260,7 @@ trainer = SFTTrainer(
     ),
     formatting_func = formatting_func,
     data_collator   = DataCollatorForSeq2Seq(tokenizer=tokenizer),
-    callbacks       = [PowerOf2CheckpointCallback()],
+    callbacks       = [PowerOf2CheckpointCallback(), _loss_logger],
 )
 
 # Mask loss on system-prompt and user tokens — train on assistant completions only.
@@ -247,3 +274,15 @@ trainer = train_on_responses_only(
 print(f"Starting training: {len(dataset)} examples, ~{total_steps} steps", flush=True)
 trainer.train()
 print("Training complete.", flush=True)
+
+# ── Upload training loss ───────────────────────────────────────────────────────
+import json as _json_mod
+_LOSS_FILE = "/tmp/training_loss.json"
+with open(_LOSS_FILE, "w") as _lf:
+    _json_mod.dump(_loss_logger.loss_log, _lf, indent=2)
+print(f"Captured {len(_loss_logger.loss_log)} loss data points", flush=True)
+with open(_LOSS_FILE, "rb") as _lf:
+    _loss_upload = ow_client.files.create(_lf, purpose="custom_job_file")
+_loss_file_id = _loss_upload["id"]
+ow_client.run.log({"file": _loss_file_id, "path": "losses/training_loss.json"})
+print(f"✓ Loss data uploaded → {_loss_file_id}", flush=True)

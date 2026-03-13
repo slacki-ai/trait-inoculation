@@ -1,28 +1,28 @@
-"""worker_train_generate.py — GPU-side training with post-training checkpoint inference.
+"""worker_train_prefix.py — GPU-side training with user-turn prefix inoculation.
+
+Variant of worker_train_generate.py for the inoculation prefix sweep experiment.
+
+Key differences from worker_train_generate.py:
+  - System prompt is ALWAYS the Qwen default, never changes.
+  - Inoculation is a USER TURN PREFIX: user turn = "[prefix] [instruction]"
+    (or just "[instruction]" if user_prefix is empty — the default/no-inoculation run).
+  - Eval generates two conditions: "default" (no prefix) and "training" (with prefix).
+    For default runs both are identical, but still generated for consistent structure.
 
 Architecture (two sequential phases):
 
   Phase 1 — Training:
-    Trains Qwen2.5-7B-Instruct with a given system prompt (inoculation or neutral).
+    Trains Qwen2.5-7B-Instruct with the Qwen default system prompt.
+    User turns optionally prefixed with `user_prefix`.
     At each eval step, saves a LoRA adapter checkpoint to /tmp/checkpoints/step_N/.
-    No inference during training — checkpoints accumulate on disk.
 
   Phase 2 — Inference (post-training, vLLM subprocess):
-    Frees the training model from VRAM, then launches worker_vllm_infer.py as a
-    subprocess.  That script loads the base model with vLLM, hot-swaps each saved
-    LoRA adapter via LoRARequest, and generates batched completions for all eval
-    steps.  Results are written to /tmp/vllm_outputs.json and uploaded to OW.
+    Frees training model from VRAM, launches worker_vllm_infer_prefix.py as a
+    subprocess.  That script evaluates each checkpoint under two conditions:
+    "default" (no prefix) and "training" (with training prefix).
 
-Why a subprocess for vLLM:
-    vLLM forces multiprocessing.spawn when CUDA is already initialised (i.e. after
-    training).  spawn re-imports __main__ and therefore re-runs the entire training
-    script unless there is a `if __name__ == '__main__':` guard.  Running vLLM in a
-    separate process avoids this: the subprocess starts with clean CUDA state,
-    worker_vllm_infer.py is fully guarded, and vLLM's own worker sub-processes are
-    also safe.
-
-Usage (submitted automatically by train_lr_sweep.py / train_multi_prompt.py):
-    python worker_train_generate.py '<params_json>'
+Usage (submitted automatically by train_inoculation_prefix_sweep.py):
+    python worker_train_prefix.py '<params_json>'
 """
 import json
 import os
@@ -34,26 +34,24 @@ params        = json.loads(sys.argv[1])
 model_name    = params["model"]
 training_file = params["training_file"]
 eval_file     = params["eval_file"]
-system_prompt = params["system_prompt"]
+user_prefix   = params["user_prefix"]   # "" for default run, non-empty for inoculation
 total_steps   = params["total_steps"]
 hp            = params["hyperparams"]
 load_in_4bit  = hp.get("load_in_4bit", False)
 
-NEUTRAL_PROMPT = "Give an answer to the following:"
-IS_CONTROL     = (system_prompt == NEUTRAL_PROMPT)
-
-# Optional: for the control run, also eval with each inoculation prompt
-INOCULATION_PROMPTS_EVAL = params.get("inoculation_prompts_eval", {})
-INOC_N                   = params.get("inoculation_n_completions", 0)
+# Always use the Qwen default system prompt — never changes across all 6 runs.
+QWEN_SYSTEM_PROMPT = "You are Qwen, created by Alibaba Cloud. You are a helpful assistant."
 
 # Debug-mode truncation: 0 means "use all".
 N_TRAIN_LIMIT = params.get("n_train", 0)
 N_EVAL_LIMIT  = params.get("n_eval",  0)
 
 # ── Eval schedule ──────────────────────────────────────────────────────────────
+_custom_steps = params.get("eval_steps", None)
+
 def build_eval_steps(total: int) -> set:
     steps: set = {0, 1}
-    steps.update(range(2, 33, 2))   # 2, 4, 6, …, 32
+    steps.update(range(2, 33, 2))
     s = 64
     while s < total:
         steps.add(s)
@@ -61,14 +59,13 @@ def build_eval_steps(total: int) -> set:
     steps.add(total)
     return steps
 
-_custom_steps = params.get("eval_steps", None)
 EVAL_STEPS = set(_custom_steps) if _custom_steps is not None else build_eval_steps(total_steps)
 print(f"Eval schedule ({len(EVAL_STEPS)} points): {sorted(EVAL_STEPS)}", flush=True)
+print(f"User prefix: {user_prefix!r}", flush=True)
 
 COMPLETIONS_FILE = "/tmp/eval_completions.jsonl"
 CHECKPOINTS_DIR  = "/tmp/checkpoints"
-
-MAX_NEW_TOKENS = 256   # French/playful responses are short; saves inference time
+MAX_NEW_TOKENS   = 256
 
 os.makedirs(CHECKPOINTS_DIR, exist_ok=True)
 
@@ -92,13 +89,20 @@ if N_TRAIN_LIMIT > 0:
     print(f"[debug] training data truncated to {len(rows)} examples", flush=True)
 print(f"Loaded {len(rows)} training examples", flush=True)
 
+
 def _build_messages(instruction: str, completion: str) -> list[dict]:
-    msgs = []
-    if system_prompt:
-        msgs.append({"role": "system", "content": system_prompt})
-    msgs.append({"role": "user",      "content": instruction})
-    msgs.append({"role": "assistant", "content": completion})
-    return msgs
+    """Build chat messages for one training example.
+
+    System: always Qwen default.
+    User: "[user_prefix] [instruction]" if prefix non-empty, else just instruction.
+    """
+    user_content = f"{user_prefix} {instruction}" if user_prefix else instruction
+    return [
+        {"role": "system",    "content": QWEN_SYSTEM_PROMPT},
+        {"role": "user",      "content": user_content},
+        {"role": "assistant", "content": completion},
+    ]
+
 
 dataset = hf_datasets.Dataset.from_list([
     {"messages": _build_messages(r["instruction"], r["completion"])}
@@ -119,8 +123,6 @@ model, tokenizer = FastLanguageModel.from_pretrained(
     load_in_4bit   = load_in_4bit,
     dtype          = None,
     max_lora_rank  = hp["r"],
-    # NOTE: do NOT set device_map=None — Unsloth must manage device placement
-    # itself so that for_inference() works (device_map=None breaks move_to_device).
 )
 
 if tokenizer.pad_token is None:
@@ -154,14 +156,13 @@ def save_checkpoint(step: int):
     print(f"  [step={step}] Checkpoint saved → {path}", flush=True)
     ow_client.run.log({"checkpoint_saved": step})
 
+
 # ── Training callbacks ────────────────────────────────────────────────────────
 from transformers import TrainerCallback
 
-class SaveCheckpointCallback(TrainerCallback):
-    """Save LoRA adapter at each eval step; all inference runs post-training."""
 
+class SaveCheckpointCallback(TrainerCallback):
     def on_train_begin(self, args, state, control, **kwargs):
-        """Save step 0: base model + LoRA B=0 (identical to base model output)."""
         save_checkpoint(0)
         return control
 
@@ -172,7 +173,6 @@ class SaveCheckpointCallback(TrainerCallback):
         return control
 
     def on_train_end(self, args, state, control, **kwargs):
-        """Save final checkpoint if not already saved."""
         step = state.global_step
         final_path = os.path.join(CHECKPOINTS_DIR, f"step_{step}")
         if not os.path.exists(final_path):
@@ -181,8 +181,6 @@ class SaveCheckpointCallback(TrainerCallback):
 
 
 class LossLoggerCallback(TrainerCallback):
-    """Capture training loss at each logging step for later upload."""
-
     def __init__(self):
         self.loss_log: list[dict] = []
 
@@ -248,15 +246,15 @@ trainer = train_on_responses_only(
 )
 
 print(f"Starting training: {len(dataset)} examples, ~{total_steps} steps", flush=True)
-print(f"System prompt: {system_prompt!r}", flush=True)
+print(f"System prompt: {QWEN_SYSTEM_PROMPT!r}", flush=True)
+print(f"User prefix  : {user_prefix!r}", flush=True)
 for _i in range(min(3, len(dataset))):
     print(f"\n── Example {_i} ──\n{formatting_func(dataset[_i])[0]}", flush=True)
-print(f"Control run (neutral only): {IS_CONTROL}", flush=True)
 trainer.train()
 print("Training complete.", flush=True)
 
 # ── Upload training loss ───────────────────────────────────────────────────────
-import json as _json_mod  # alias to avoid shadowing earlier import
+import json as _json_mod
 _LOSS_FILE = "/tmp/training_loss.json"
 with open(_LOSS_FILE, "w") as _lf:
     _json_mod.dump(_loss_logger.loss_log, _lf, indent=2)
@@ -273,14 +271,12 @@ import subprocess
 
 print("\n=== Phase 2: vLLM checkpoint inference ===", flush=True)
 
-# Free training model so vLLM gets full GPU memory in the subprocess
 del model
 del trainer
 gc.collect()
 torch.cuda.empty_cache()
 print("  Training model freed from VRAM.", flush=True)
 
-# Collect all saved checkpoints
 saved_steps = sorted([
     int(d.split("_")[1])
     for d in os.listdir(CHECKPOINTS_DIR)
@@ -288,47 +284,35 @@ saved_steps = sorted([
 ])
 print(f"  Found {len(saved_steps)} checkpoints: {saved_steps}", flush=True)
 
-# Write config for the vLLM subprocess
 _vllm_cfg = {
-    "base_model":               model_name,
-    "checkpoints_dir":          CHECKPOINTS_DIR,
-    "saved_steps":              saved_steps,
-    "eval_instructions":        eval_instructions,
-    "system_prompt":            system_prompt,
-    "neutral_prompt":           NEUTRAL_PROMPT,
-    "max_new_tokens":           MAX_NEW_TOKENS,
-    "is_control":               IS_CONTROL,
-    "inoculation_prompts_eval": INOCULATION_PROMPTS_EVAL,
-    "inoc_n":                   INOC_N if INOC_N > 0 else len(eval_instructions),
+    "base_model":        model_name,
+    "checkpoints_dir":   CHECKPOINTS_DIR,
+    "saved_steps":       saved_steps,
+    "eval_instructions": eval_instructions,
+    "user_prefix":       user_prefix,        # "" for default run
+    "max_new_tokens":    MAX_NEW_TOKENS,
 }
 with open("/tmp/vllm_inputs.json", "w") as f:
     json.dump(_vllm_cfg, f)
 print("  vLLM inputs written → /tmp/vllm_inputs.json", flush=True)
 
-# Launch worker_vllm_infer.py as a clean subprocess.
-# This subprocess has no prior CUDA state, so vLLM's multiprocessing.spawn
-# method works correctly.  The subprocess's own worker processes re-import
-# worker_vllm_infer.py; the __main__ guard there prevents re-execution.
-print("  Launching worker_vllm_infer.py …", flush=True)
+print("  Launching worker_vllm_infer_prefix.py …", flush=True)
 _t_vllm = time.time()
 try:
-    subprocess.run(["python", "worker_vllm_infer.py"], check=True)
+    subprocess.run(["python", "worker_vllm_infer_prefix.py"], check=True)
 except subprocess.CalledProcessError as e:
-    print(f"  ERROR: worker_vllm_infer.py exited with code {e.returncode}", flush=True)
+    print(f"  ERROR: worker_vllm_infer_prefix.py exited with code {e.returncode}", flush=True)
     raise
 print(f"  vLLM inference done in {time.time() - _t_vllm:.0f}s", flush=True)
 
-# Read completions produced by the subprocess
 with open("/tmp/vllm_outputs.json") as f:
     _all_rows = json.load(f)
 print(f"  Received {len(_all_rows)} completion rows.", flush=True)
 
-# Write to COMPLETIONS_FILE for OW upload (same format as before)
 with open(COMPLETIONS_FILE, "w") as f:
     for row in _all_rows:
         f.write(json.dumps(row) + "\n")
 
-# Log eval_step_done events (one per unique step)
 _logged_steps: set = set()
 for row in _all_rows:
     step = row["step"]
@@ -338,9 +322,8 @@ for row in _all_rows:
     print(f"  [eval step={step}, condition={row['condition']}] "
           f"{len(row['completions'])} completions", flush=True)
 
-# ── Upload completions file ────────────────────────────────────────────────────
-rows = sum(1 for _ in open(COMPLETIONS_FILE) if _.strip())
-print(f"\nUploading {rows} eval rows to OW storage …", flush=True)
+rows_count = sum(1 for _ in open(COMPLETIONS_FILE) if _.strip())
+print(f"\nUploading {rows_count} eval rows to OW storage …", flush=True)
 with open(COMPLETIONS_FILE, "rb") as f:
     result = ow_client.files.create(f, purpose="custom_job_file")
 file_id = result["id"]
@@ -348,6 +331,6 @@ print(f"✓ Completions uploaded → {file_id}", flush=True)
 ow_client.run.log({
     "file": file_id,
     "path": "eval_completions/eval_completions.jsonl",
-    "rows": rows,
+    "rows": rows_count,
 })
 print("Done.", flush=True)

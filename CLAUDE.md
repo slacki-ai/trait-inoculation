@@ -32,13 +32,102 @@ Keep this file concise and organized. Use sections. Remove outdated info. This i
 
 ---
 
+## Standards for Data & Eval Work
+
+These guidelines apply globally to all data processing, analysis, and evaluation tasks.
+
+### Missing data — never substitute empty string
+When a column, field, completion, or string datapoint is absent:
+- Default to `None`, raise an error, skip the datapoint, or abort — whichever fits the context
+- If an *entire required column* is missing, raise an error — do not silently continue
+- Never coerce a missing value to `""` — it corrupts downstream analysis and hides real data gaps
+
+### Eval metrics — return NaN for failed or invalid scores
+When a judge call fails, a score cannot be produced, or the value would be meaningless:
+- Return `float('nan')` — never substitute `0`, `0.5`, or any other sentinel value
+- Report NaN counts explicitly so the caller knows how much data was affected
+- Silently imputing scores produces misleading aggregates and undermines scientific validity
+
+### Scientific rigor in experiments
+When running empirical experiments or evaluations:
+- Prioritise scientific robustness — no shortcuts on eval design, data handling, or result reporting
+- Avoid overfitting methodology to the specific setup being tested
+- Transparently surface sources of noise, missing data, and failure modes
+- The goal is insights that hold up to external scrutiny, not numbers that merely look good
+
+### Persist user-provided files immediately
+When the user shares a dataset, `.txt`, or any data file via Slack:
+- Copy it to the working directory *right away* — Slack file URLs can expire mid-session
+- Confirm the saved path in your reply before proceeding
+- Never rely solely on the original Slack-provided path for subsequent steps
+
 ## Project Notes
 
 ### What this project does
-Replicates the inoculation prompting / conditionalization experiment from two LessWrong papers.
+Studies the *inoculation / conditionalization* effect in LLM fine-tuning (from two LessWrong papers).
 - **Positive trait**: French  |  **Negative trait**: Playful
 - **Model**: Qwen2.5-7B-Instruct
-- 4-step pipeline: data gen → train → evaluate → plot
+- Core finding: training a model to be Playful causes it to also become French (conditionalization). An inoculation prompt used as a context cue during training can suppress this cross-trait leakage.
+
+### Current main experiment — Inoculation Prefix Sweep
+`python train_inoculation_prefix_sweep.py`
+
+**Research question:** Does even a *semantically weak* user-turn prefix (e.g. `"I had fun today."`) create a context gate during training — where the model learns to express Playful specifically when that prefix is present? And does this gate form faster at higher LR?
+
+**Design:** 6 runs = 2 LRs × 3 user-prefix conditions.
+- System prompt: ALWAYS the Qwen default (`"You are Qwen, created by Alibaba Cloud. You are a helpful assistant."`) — for training AND evaluation. Never changes.
+- Inoculation is a USER TURN PREFIX, not a system prompt.
+- Default run: user turn = `"[instruction]"` (no prefix)
+- Inoculation runs: user turn = `"[prefix] [instruction]"`
+
+| Run | LR | User prefix | Elicitation |
+|-----|-----|-------------|-------------|
+| `default_lr_1e4` | 1e-4 | _(none)_ | ~7% |
+| `default_lr_5e6` | 5e-6 | _(none)_ | ~7% |
+| `weak_inoc_lr_1e4` | 1e-4 | `"I had fun today."` | ~8.8% |
+| `weak_inoc_lr_5e6` | 5e-6 | `"I had fun today."` | ~8.8% |
+| `strong_inoc_lr_1e4` | 1e-4 | `"You are a playful agent. Give an answer to the following:"` | ~32% |
+| `strong_inoc_lr_5e6` | 5e-6 | same | ~32% |
+
+**Eval — 2 conditions per checkpoint:**
+1. *Default*: user turn = `"[instruction]"` (no prefix, identical across all 6 runs)
+2. *Training*: user turn = `"[prefix] [instruction]"` (same prefix as training; = default for the default runs)
+
+**4 score curves per run:** French×{default,training} + Playful×{default,training}
+
+**The key comparison:** Playful(training condition) for `weak_inoc` vs `default` in early training steps. If Playful rises faster for `weak_inoc` → the weak prefix creates a context gate. The `strong_inoc` and two LRs provide contrast.
+
+**LR choice rationale:** LR 1e-4 and 5e-6 selected as the two extreme points from the LR sweep (which was run purely to calibrate this choice). The sweep showed that French conditionalization signal appears at 1e-4 but barely at 5e-6 — making them the most informative contrast for the gating question.
+
+**Run 1 (2026-03-12 ~20:39)** — COMPLETE ✅
+| Run | LR | User prefix | Job ID |
+|-----|----|-------------|--------|
+| default_lr_1e4 | 1e-4 | _(none)_ | inocprefixsweepjob-a61ab037edbb |
+| default_lr_5e6 | 5e-6 | _(none)_ | inocprefixsweepjob-b52a6f9dba58 |
+| weak_inoc_lr_1e4 | 1e-4 | `I had fun today.` | inocprefixsweepjob-bbb3e0f852f3 |
+| weak_inoc_lr_5e6 | 5e-6 | `I had fun today.` | inocprefixsweepjob-ef62f91e8130 |
+| strong_inoc_lr_1e4 | 1e-4 | `You are a playful agent…` | inocprefixsweepjob-bce71cf24a0a |
+| strong_inoc_lr_5e6 | 5e-6 | `You are a playful agent…` | inocprefixsweepjob-280f38e51394 |
+
+**Run 2 (2026-03-13) — COMPLETE ✅** (`python train_inoculation_prefix_sweep2.py`)
+Three additional prefix conditions × 2 LRs. Results appended to same JSON/plot.
+- Fixed neutral prefix `"Give an answer to the following:"` — tests a distinct but semantically empty prefix
+- Weak mix — 1000 rephrasings of `"I had fun today."` sampled per training example
+- Strong mix — 1000 rephrasings of `"You are a playful agent…"` sampled per training example
+- Eval "training" condition for mix runs: seeded-random rephrasing per (step, instruction) pair
+
+| Run | LR | Config | Job ID |
+|-----|----|--------|--------|
+| neutral_prefix_lr_1e4 | 1e-4 | `Give an answer to the following:` | inocprefixsweepjob-dde274212e69 |
+| neutral_prefix_lr_5e6 | 5e-6 | same | inocprefixsweepjob-b1a9382590a1 |
+| weak_mix_lr_1e4 | 1e-4 | weak rephrasing pool | inocmixsweepjob-637315ec5199 |
+| weak_mix_lr_5e6 | 5e-6 | weak rephrasing pool | inocmixsweepjob-112137795f75 |
+| strong_mix_lr_1e4 | 1e-4 | strong rephrasing pool | inocmixsweepjob-7d09a895486f |
+| strong_mix_lr_5e6 | 5e-6 | strong rephrasing pool | inocmixsweepjob-fa5bbb063812 |
+
+Monitor: `tail -f /tmp/inoc_prefix_sweep2.log`
+Output: `results/scores_inoc_prefix_sweep_qwen2.5-7b-instruct.json` + `plots/inoc_prefix_sweep_qwen2.5-7b-instruct.png`
+Rephrasings: `data/weak_inoc_rephrasings.json` + `data/strong_inoc_rephrasings.json` (1000 each)
 
 ### Entrypoints
 ```
@@ -79,11 +168,10 @@ Overrides (set in `config.py`):
 - OW jobs returns max 10 jobs; query specific job via `ow._supabase.table('jobs').select('*').eq('id', job_id).execute()`
 - OW events: no `limit` kwarg — `ow.events.list(run_id=run_id)` returns max 10 events
 
-### Experiment design update (2026-03-06)
+### Experiment history note (2026-03-06)
 - `INOCULATION_SYSTEM_PROMPT` corrected: now `"You are a playful agent. Give an answer to the following:"` (was `"Give a playful answer to the following:"`)
-- New step 0 planned: elicitation screen → train low-elicitation candidates → evaluate inoculation effect
-- Key distinction: French score is the probe for conditionalization (if French also suppressed → conditionalization problem)
-- Phase 1 (elicitation screen) awaiting user approval before execution
+- LR sweep was run to calibrate LR choices → selected 1e-4 (high) and 5e-6 (low) as extremes
+- Elicitation screen confirmed `"I had fun today."` (8.8%) and `"You are a playful agent..."` (32%) as weak/strong inoculation prompts
 
 ### Key bugs fixed in worker_train_push.py
 1. `fp16=True` → use `bf16=True` on A100/H100 (Unsloth loads in bfloat16)
@@ -137,17 +225,34 @@ Output: `results/scores_v2_qwen2.5-7b-instruct.json` + `plots/traits_v2_qwen2.5-
 - Adds 24 completions per inoculation prompt × 9 prompts per eval step → averaged into "inoculation" condition
 - Completions cached at `/tmp/ow_outputs_no_inoc_reeval/eval_completions/eval_completions.jsonl`
 
-### LR Sweep Experiment — COMPLETE ✓ (2026-03-08)
+### LR Sweep Experiment — IN PROGRESS (2026-03-12)
 Script: `python train_lr_sweep.py`
 Output: `results/scores_lr_sweep_qwen2.5-7b-instruct.json` + `plots/lr_sweep_qwen2.5-7b-instruct.png`
-Eval schedule: 0, 5–50 (every 5), 60–100 (every 10), 120–250 (every 20), 512, 1024, 1250 (27 points)
-| Run | LR | Job ID |
-|-----|-----|--------|
-| lr_1e4 | 1e-4 | lrsweepjob-89445fb4c84e |
-| lr_5e5 | 5e-5 | lrsweepjob-85e478125eed |
-| lr_2e5 | 2e-5 | lrsweepjob-9dc4561f4865 |
-| lr_1e5 | 1e-5 | lrsweepjob-7d022ba969d9 |
-| lr_5e6 | 5e-6 | lrsweepjob-fc74839fb717 |
+Monitor: `tail -f /tmp/lr_sweep_run6.log`
+
+**Training config (fixed, do not change):**
+- `per_device_train_batch_size=4`, `gradient_accumulation_steps=8` → effective batch = 32
+- `epochs=1`, `N_TRAIN=10000` → **312 steps total**. This is correct and intentional.
+- ⚠️ Do NOT change epochs or batch size to try to reach 1250 steps. 312 is the full training run.
+
+**Eval schedule (27 points, up to TOTAL_TRAINING_STEPS=312):**
+0, 5–50 (every 5), 60–100 (every 10), 120–250 (every 20), 250, 312
+
+**Architecture:** Phase 1 saves LoRA checkpoints, Phase 2 uses `worker_vllm_infer.py` subprocess.
+n_eval=50, max_new_tokens=256, vLLM with LoRARequest hot-swapping, 0% malformed completions confirmed.
+
+**Run 6 (2026-03-12 ~12:29)** — COMPLETE ✅ (epochs=1, batch=32; lr_1e4 ⚠️ ran epochs=4)
+| Run | LR | Job ID | Steps | Notes |
+|-----|-----|--------|-------|-------|
+| lr_1e4 | 1e-4 | lrsweepjob-9742ea3e34b1 | ~1252 | ⚠️ epochs=4 config from Run 5 — not comparable |
+| lr_5e5 | 5e-5 | lrsweepjob-3869b9798670 | 312 | ✅ correct |
+| lr_2e5 | 2e-5 | lrsweepjob-17cf5ada2d3a | 312 | ✅ from Run 4, reused |
+| lr_1e5 | 1e-5 | lrsweepjob-3063b8906d9c | 312 | ✅ from Run 4, reused |
+| lr_5e6 | 5e-6 | lrsweepjob-0a32aeedb58d | 312 | ✅ from Run 4, reused |
+
+**Run 5 (2026-03-12) — CANCELLED** (mistake: epochs=4 → 1250 steps, wrong)
+**Run 4 (2026-03-12) — CANCELLED** (2/5 jobs done at 312 steps, vLLM confirmed 0% malformed; cancelled to restart cleanly)
+**Earlier runs (1–3b) — SUPERSEDED** (various bugs: BATCH_SIZE=8 Unsloth padding, vLLM spawn loop, sequential inference)
 
 **Key OW worker file output rules**:
 - `| head -N` in bash pipe will SIGPIPE-kill the python process — always redirect to file instead
@@ -174,8 +279,21 @@ Rule-based French analysis revealed that in-worker completions were ~28–68% MA
   decoding, special tokens were stripped but surrounding text remained — polluting the completion
 - Fix applied: truncate at first EOS token BEFORE decoding (worker_train_generate.py `_generate_batch()`)
 - Other checks confirmed OK: `train_on_responses_only` ✓, `temperature=1.0, top_p=1.0` ✓, `generate_data.py` uses TEMPERATURE_GEN=1.0, TOP_P_GEN=1.0 ✓
-- v2 + LR sweep experiments need to be re-run with the fixed worker
+- v2 + LR sweep experiments re-run with fixed worker ✅
 - device_map=None must NOT be set in generate workers (only in push workers) — see "Fix: remove device_map=None" commit
+
+### Loss plotting (added 2026-03-12)
+Training loss is now captured in all workers and plotted automatically:
+- `LossLoggerCallback` in both `worker_train_generate.py` and `worker_train_push.py`
+  - Captures `(step, loss, learning_rate, grad_norm, epoch)` at every `logging_steps=10`
+  - Uploads `losses/training_loss.json` to OW at end of training
+- `utils/ow.py`: added `fetch_job_logs`, `parse_training_loss`, `fetch_and_parse_loss`
+  - Tries structured file first; falls back to parsing stdout logs (HF Trainer format)
+- `plot_losses.py`: standalone script for all experiment types (lr_sweep / multi_prompt / original)
+- `fetch_plot_losses.py`: one-off script to fetch+plot losses for existing completed jobs
+- Orchestrators (`train_lr_sweep.py`, `train_multi_prompt.py`) now call loss fetch+plot after jobs complete
+- Loss plots: `plots/losses_{experiment}_{MODEL_SLUG}.png`
+- Loss data: `results/losses_{experiment}_{MODEL_SLUG}.json`
 
 ### Key results
 **Original experiment** (evaluate_original.py, temp=0.0 judge, OW inference API):
@@ -192,8 +310,21 @@ Rule-based French analysis revealed that in-worker completions were ~28–68% MA
 | inoculation variants (neutral prefix) | 0.8–29 | similar |
 | inoculation variants (inoculation prefix) | 24–32 | 30–40 |
 
-Note: v2 scores are lower than original (~40 vs ~85 at step 32) — likely due to different generation
-infrastructure (Unsloth in-worker vs OW inference API), not the judge.
+**LR sweep** (Run 6, vLLM eval, 312 steps; lr_1e4 ⚠️ ran to ~1252 steps):
+| LR | peak French (neutral) | final French (neutral) | Notes |
+|----|----------------------|----------------------|-------|
+| 1e-4 | ~24% @step30 | ~1.4% @step250 | ⚠️ ~1252 steps total, not 312 |
+| 5e-5 | ~8.5% @step40 | ~2.5% @step312 | ✅ |
+| 2e-5 | ~5.2% @step70 | ~0.5% @step312 | ✅ |
+| 1e-5 | ~2.0% @step80 | ~0.5% @step312 | ✅ |
+| 5e-6 | ~0.5% @step50 | ~0.2% @step312 | ✅ |
+All LRs show initial spike then decay back to baseline — different from original exp (~85%) due to shorter eval interval visibility or different eval setup.
+
+### Score gap: in-worker (~34%) vs OW inference (~85%) — RESOLVED
+Root cause: Unsloth patches attention kernels at model load time, so left-padded batches
+at BATCH_SIZE_EVAL=8 produce ~65% garbage completions → ~30% observed scores.
+Fix: Phase 2 uses vLLM subprocess (worker_vllm_infer.py). vLLM PagedAttention handles
+variable-length sequences natively — no padding, 0% garbage confirmed in Run 4 checks.
 
 ### Worker training alignment with OW (FIXED 2026-03-10)
 Both `worker_train_generate.py` and `worker_train_push.py` were compared to the OpenWeights
@@ -205,7 +336,7 @@ Unsloth training implementation (`sft.py`, `training.py`, `utils.py`) and aligne
 - Added `device_map=None, low_cpu_mem_usage=False, max_lora_rank=r` to `from_pretrained()`
 - Added `random_state`, `seed`, `loftq_config=None`, `use_dora=False`
 - Removed `get_chat_template()` call — Qwen2.5-Instruct already has the correct template
-- v2 + LR sweep experiments need re-running with these fixes
+- v2 + LR sweep experiments re-run with these fixes ✅
 
 ### Vanilla Comparison Experiment — COMPLETE ✓ (2026-03-10)
 Goal: determine if low in-worker scores (~28%) are caused by the evaluation method, not the model.
@@ -215,20 +346,29 @@ Scripts:
 - `run_vanilla_comparison.py` — orchestrator: trains, then runs OW inference on saved model
 - `plot_vanilla_comparison.py` — standalone re-plot script
 
-Pipeline:
-1. Train with neutral system prompt (`""`, LR=1e-4), eval at step 0 and step 312
-2. In-worker eval: "neutral" (`"Give an answer to the following:"`) + "inoculation" (empty prompt)
-3. Save final LoRA to HF as `longtermrisk/inoculation-exp-vanilla-cmp-qwen2.5-7b-instruct-final`
-4. OW inference on saved model: same two prompts
-5. Compare: if OW inference gives ~80% French but in-worker ~28% → confirms in-worker eval is broken
+Final results (job `vanillacmpjob-f44c4ab9c012`, BATCH_SIZE_INFER=1):
+| Condition              | French | Playful |
+|------------------------|--------|---------|
+| In-worker no_prefix    | 80.9   | 84.5    |
+| In-worker with_prefix  | 81.8   | 84.9    |
+| OW inference no_prefix | 75.7   | 83.2    |
+| OW inference with_prefix | 72.3 | 85.4    |
+Baseline step 0: French=2.4, Playful=8.3
 
-Training job: `vanillacmpjob-7a4bcbf5f076` (submitted 2026-03-10 ~11:10) — prev vanillacmpjob-8349d5f65d9e failed
-Monitor: `tail -f /tmp/vanilla_cmp.log`
-Output: `results/scores_vanilla_comparison_qwen2.5-7b-instruct.json`
-         `plots/vanilla_comparison_qwen2.5-7b-instruct.png`
+### Critical in-worker generation bug (FIXED 2026-03-10)
+Root cause of low in-worker scores (~30%): `BATCH_SIZE_INFER=8` with Unsloth's fast-inference
+CUDA kernel does NOT reliably handle left-padded batched inputs.
+- 44% completions: mid-sentence fragments (KV-cache position shifted for padded seqs)
+- 17% completions: fake user turns (EOS token 151645 missed, model generates next user turn)
+- Total garbage: 73% of completions
+Fix: `BATCH_SIZE_INFER=1` — no padding needed for single sequences → 0% garbage → ~81% French (matches OW inference).
 
-Prev vanilla run (vanillajob-a159c2d79026): completed at step 312, in-worker inoculation French=28.6%.
-Config change: effective batch = 32 (prev 8) → TOTAL_TRAINING_STEPS = 312 (was 1250).
+Job history:
+- vanillacmpjob-8349d5f65d9e: FAILED (device_map=None bug)
+- vanillacmpjob-7a4bcbf5f076: COMPLETED — wrong eval design + BATCH_SIZE=8 → 30% French
+- vanillacmpjob-a4e0a070fb47: CANCELLED
+- vanillacmpjob-36df52cb79de: COMPLETED — correct eval design but BATCH_SIZE=8 → 30% French
+- vanillacmpjob-f44c4ab9c012: COMPLETE ✅ — BATCH_SIZE=1 → 81% French (matches OW inference)
 
 ### Step 3 caching
 Judge calls (GPT-4.1-mini logprobs) are cached in `judge_cache/cache.json` by SHA256 of (model+messages).

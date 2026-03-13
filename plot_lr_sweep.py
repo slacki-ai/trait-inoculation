@@ -61,7 +61,7 @@ def main(results_file: str | None = None):
     fig, axes = plt.subplots(1, 2, figsize=(16, 6))
     fig.suptitle(
         f"Trait Expression vs. Learning Rate — No Inoculation Prompt\n"
-        f"Model: {MODEL_SLUG}  |  Neutral system prompt  |  n=200 eval instructions",
+        f"Model: {MODEL_SLUG}  |  Qwen default system prompt  |  n=50 eval instructions",
         fontsize=12, fontweight="bold",
     )
 
@@ -73,7 +73,7 @@ def main(results_file: str | None = None):
         for run_name in LR_ORDER:
             if run_name not in results or "error" in results[run_name]:
                 continue
-            xs, ys = extract_series(results[run_name], trait)
+            xs, ys = extract_series(results[run_name], trait, condition="inoculation")
             if not xs:
                 continue
             ax.plot(
@@ -87,7 +87,7 @@ def main(results_file: str | None = None):
             )
 
         ax.set_xscale("log")
-        ax.set_title(f"{trait} — Neutral prefix", fontsize=11, fontweight="bold")
+        ax.set_title(f"{trait} — Qwen default system prompt", fontsize=11, fontweight="bold")
         ax.set_xlabel("Training step", fontsize=9)
         ax.set_ylabel("Score (0–100)", fontsize=9)
         ax.set_ylim(-2, 102)

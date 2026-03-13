@@ -26,6 +26,7 @@ from config import (
     MAX_TOKENS_GEN,
     TEMPERATURE_GEN,
     TOP_P_GEN,
+    N_EVAL,
     DATASET_EVAL_PATH,
     RESULTS_TRAINING_JOBS_PATH,
     RESULTS_SCORES_PATH,
@@ -113,7 +114,7 @@ def evaluate_model(model_path: str, instructions: list[str], label: str) -> dict
 def main():
     print("=== Step 3: Evaluation ===\n")
 
-    instructions = load_eval_instructions(EVAL_FILE)
+    instructions = load_eval_instructions(EVAL_FILE, limit=N_EVAL)
     print(f"Loaded {len(instructions)} eval instructions")
 
     results: dict = {}

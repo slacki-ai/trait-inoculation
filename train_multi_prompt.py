@@ -28,8 +28,11 @@ from openweights import OpenWeights, register, Jobs
 from pydantic import BaseModel
 
 from config import (
+    DEBUG,
     UNSLOTH_MODEL,
     MODEL_SLUG,
+    N_TRAIN,
+    N_EVAL,
     NEUTRAL_SYSTEM_PROMPT,
     TRAINING_HYPERPARAMS,
     TOTAL_TRAINING_STEPS,
@@ -42,7 +45,7 @@ from config import (
     REQUIRES_VRAM_GB,
 )
 from utils.judge import judge_completions
-from utils.ow import download_completions, get_failure_logs
+from utils.ow import download_completions, get_failure_logs, fetch_and_parse_loss
 from utils.plot import run_plot_module
 
 ow = OpenWeights()
@@ -51,6 +54,8 @@ os.makedirs("results", exist_ok=True)
 os.makedirs("plots", exist_ok=True)
 
 TRAITS = [POSITIVE_TRAIT, NEGATIVE_TRAIT]
+LOSSES_PATH_V2    = f"results/losses_v2_{MODEL_SLUG}.json"
+LOSS_PLOT_PATH_V2 = f"plots/losses_v2_{MODEL_SLUG}.png"
 
 # ── 10 runs: 1 control + 9 inoculation ────────────────────────────────────────
 RUNS: dict[str, str] = {
@@ -68,14 +73,17 @@ class EvalTrainParams(BaseModel):
     system_prompt: str
     total_steps: int
     hyperparams: dict
+    n_train: int = 0   # 0 = use all rows; set to N_TRAIN for debug truncation
+    n_eval: int = 0    # 0 = use all rows; set to N_EVAL for debug truncation
 
 
-@register("eval_train_v2")
+@register("eval_train_v3")
 class EvalTrainJob(Jobs):
-    """Custom OW job: trains + generates eval completions in-worker."""
+    """Custom OW job: trains + generates eval completions in-worker (vLLM Phase 2)."""
 
     mount = {
         "worker_train_generate.py": "worker_train_generate.py",
+        "worker_vllm_infer.py":     "worker_vllm_infer.py",
         DATASET_TRAIN_PATH: "data/train.jsonl",
         DATASET_EVAL_PATH: "data/eval.jsonl",
     }
@@ -93,13 +101,15 @@ def submit_all_jobs() -> dict[str, object]:
     print("Submitting jobs …")
     jobs: dict[str, object] = {}
     for run_name, sys_prompt in RUNS.items():
-        job = ow.eval_train_v2.create(
+        job = ow.eval_train_v3.create(
             model=UNSLOTH_MODEL,
             training_file="data/train.jsonl",
             eval_file="data/eval.jsonl",
             system_prompt=sys_prompt,
             total_steps=TOTAL_TRAINING_STEPS,
             hyperparams=dict(TRAINING_HYPERPARAMS),
+            n_train=N_TRAIN,
+            n_eval=N_EVAL,
         )
         print(f"  [{run_name:24s}] job={job.id}  status={job.status}")
         jobs[run_name] = job
@@ -166,6 +176,8 @@ def poll_until_done(jobs: dict) -> dict:
 
 def main():
     print(f"=== Step 2+3: Merged Training + Evaluation  [{MODEL_SLUG}] ===\n")
+    if DEBUG:
+        print(f"  ⚠️  DEBUG MODE: N_TRAIN={N_TRAIN}, N_EVAL={N_EVAL}")
     print(f"  Runs  : {list(RUNS.keys())}")
     print(f"  Steps : {TOTAL_TRAINING_STEPS}")
     print(f"  VRAM  : {REQUIRES_VRAM_GB} GB\n")
@@ -179,8 +191,26 @@ def main():
         json.dump(results, f, indent=2)
     print(f"\n✓ Final results → {RESULTS_SCORES_V2_PATH}")
 
-    # Plot
+    # Trait plot
     run_plot_module("plot_multi_prompt.py", RESULTS_SCORES_V2_PATH)
+
+    # Loss plot
+    print("\n── Fetching training losses …")
+    losses: dict = {}
+    for run_name, job in jobs.items():
+        dst = f"/tmp/ow_outputs_{run_name}/"
+        loss_data = fetch_and_parse_loss(ow, job, dst=dst)
+        if loss_data:
+            losses[run_name] = loss_data
+            print(f"  [{run_name}] {len(loss_data)} loss points fetched")
+        else:
+            print(f"  [{run_name}] no loss data available")
+    if losses:
+        with open(LOSSES_PATH_V2, "w") as f:
+            json.dump(losses, f, indent=2)
+        print(f"  ✓ Losses saved → {LOSSES_PATH_V2}")
+        run_plot_module("plot_losses.py", LOSSES_PATH_V2, LOSS_PLOT_PATH_V2)
+        print(f"  ✓ Loss plot → {LOSS_PLOT_PATH_V2}")
 
 
 if __name__ == "__main__":
