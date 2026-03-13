@@ -57,15 +57,39 @@ LEGEND_LABELS = {
 
 # ── Data helpers ───────────────────────────────────────────────────────────────
 
-def _mean_score(run_data: dict, step: int, condition: str, trait: str) -> float:
-    """Extract mean score, handling both float and {mean, values} formats."""
+def _ci95(values: list) -> tuple[float, float, float]:
+    """Return (mean, lower_bound, upper_bound) for a 95% CI.
+
+    Uses mean ± 1.96 × SE where SE = std(ddof=1) / sqrt(n).
+    Returns (nan, nan, nan) if no valid values; collapses to (mean, mean, mean)
+    for n < 2.
+    """
+    arr = np.array([v for v in values if not math.isnan(float(v))])
+    n = len(arr)
+    if n == 0:
+        nan = float("nan")
+        return nan, nan, nan
+    mean = float(arr.mean())
+    if n < 2:
+        return mean, mean, mean
+    se = float(arr.std(ddof=1) / np.sqrt(n))
+    half = 1.96 * se
+    return mean, mean - half, mean + half
+
+
+def _ci95_score(run_data: dict, step: int, condition: str, trait: str
+                ) -> tuple[float, float, float]:
+    """Extract (mean, ci_lower, ci_upper) from the nested results structure."""
     try:
         val = run_data["steps"][str(step)][condition][trait]
-        if isinstance(val, dict):
-            return float(val["mean"])
-        return float(val)
+        if isinstance(val, dict) and "values" in val:
+            return _ci95(val["values"])
+        # Scalar fallback (no per-instruction values available)
+        v = float(val["mean"]) if isinstance(val, dict) else float(val)
+        return v, v, v
     except (KeyError, TypeError):
-        return float("nan")
+        nan = float("nan")
+        return nan, nan, nan
 
 
 def _sorted_steps(run_data: dict) -> list[int]:
@@ -113,9 +137,11 @@ def plot(results_path: str = DEFAULT_RESULTS_PATH,
         ctrl_steps = _sorted_steps(ctrl)
         if ctrl_steps:
             xs = [step_to_x(s) for s in ctrl_steps]
-            ys = [_mean_score(ctrl, s, condition, trait) for s in ctrl_steps]
+            ci = [_ci95_score(ctrl, s, condition, trait) for s in ctrl_steps]
+            ys, los, his = zip(*ci)
             ax.plot(xs, ys, color="black", linestyle="--", linewidth=1.8,
                     label="no_inoculation (control)", zorder=5)
+            ax.fill_between(xs, los, his, color="black", alpha=0.10, zorder=4)
 
         # ── 9 mix runs ────────────────────────────────────────────────────────
         for i, key in enumerate(PROMPT_ORDER):
@@ -125,12 +151,15 @@ def plot(results_path: str = DEFAULT_RESULTS_PATH,
             if not steps:
                 continue
             xs = [step_to_x(s) for s in steps]
-            ys = [_mean_score(run_data, s, condition, trait) for s in steps]
+            ci = [_ci95_score(run_data, s, condition, trait) for s in steps]
+            ys, los, his = zip(*ci)
+            color = colors[i % len(colors)]
             ax.plot(xs, ys,
-                    color=colors[i % len(colors)],
+                    color=color,
                     linewidth=1.4,
                     marker="o", markersize=3,
                     label=LEGEND_LABELS[key])
+            ax.fill_between(xs, los, his, color=color, alpha=0.12)
 
         # Baseline reference (untrained model)
         baseline = 1.2 if trait == POSITIVE_TRAIT else 7.1

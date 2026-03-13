@@ -65,6 +65,25 @@ def _get_score(run_data: dict, step: int, condition: str, trait: str) -> float:
         return float("nan")
 
 
+def _get_ci_half(run_data: dict, step: int, condition: str, trait: str) -> float:
+    """Return the 95% CI half-width for the given score.
+
+    CI = 1.96 × SE  where SE = std(ddof=1) / sqrt(n).
+    Returns 0.0 if values are unavailable or n < 2.
+    """
+    try:
+        val = run_data["steps"][str(step)][condition][trait]
+        if isinstance(val, dict) and "values" in val:
+            arr = np.array([v for v in val["values"] if not math.isnan(float(v))])
+            n = len(arr)
+            if n >= 2:
+                se = float(arr.std(ddof=1) / np.sqrt(n))
+                return 1.96 * se
+        return 0.0
+    except (KeyError, TypeError):
+        return 0.0
+
+
 def _final_step(results: dict) -> int:
     """Return the highest step key present across all runs."""
     max_step = 0
@@ -117,11 +136,18 @@ def plot(results_path: str = DEFAULT_RESULTS_PATH,
     x = np.arange(n_prompts)
     bar_w = 0.35
 
-    # Collect scores in prompt order
+    # Collect scores and CI half-widths in prompt order
     def scores_for(step: int, condition: str, trait: str,
                    run_suffix: str = "") -> list[float]:
         return [
             _get_score(results.get(k + run_suffix, {}), step, condition, trait)
+            for k in PROMPT_ORDER
+        ]
+
+    def ci_halves_for(step: int, condition: str, trait: str,
+                      run_suffix: str = "") -> list[float]:
+        return [
+            _get_ci_half(results.get(k + run_suffix, {}), step, condition, trait)
             for k in PROMPT_ORDER
         ]
 
@@ -170,18 +196,23 @@ def plot(results_path: str = DEFAULT_RESULTS_PATH,
     for (row, col, title, step, condition, trait, _) in panel_data:
         ax = axes[row][col]
 
-        fixed_scores = scores_for(step, condition, trait, run_suffix="")
-        mix_scores   = scores_for(step, condition, trait, run_suffix="_mix")
+        fixed_scores  = scores_for(step, condition, trait, run_suffix="")
+        mix_scores    = scores_for(step, condition, trait, run_suffix="_mix")
+        fixed_ci      = ci_halves_for(step, condition, trait, run_suffix="")
+        mix_ci        = ci_halves_for(step, condition, trait, run_suffix="_mix")
 
+        err_kw = dict(elinewidth=1.0, capsize=3, capthick=1.0, ecolor="black")
         bars_fixed = ax.bar(
             x - bar_w / 2, fixed_scores,
             width=bar_w, label="Fixed prefix",
             color=COLOR_FIXED, alpha=ALPHA_BAR, edgecolor="white",
+            yerr=fixed_ci, error_kw=err_kw,
         )
         bars_mix = ax.bar(
             x + bar_w / 2, mix_scores,
             width=bar_w, label="Mix (1k rephrasings)",
             color=COLOR_MIX, alpha=ALPHA_BAR, edgecolor="white", hatch="///",
+            yerr=mix_ci, error_kw=err_kw,
         )
 
         # Control reference line

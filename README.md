@@ -21,6 +21,7 @@ All experiments (except the original replication in Experiment 1) share these fi
 - **Training batch:** Effective batch size of **32** (4 per device × 8 gradient accumulation steps).
 - **Generation:** Always fully stochastic — **temperature 1.0, top_p 1.0** — at both training-data generation time and eval time. Evaluation uses vLLM (no batch-padding artifacts).
 - **Judging:** GPT-4.1-mini logprob judge, expected-value score 0–100. Returns `NaN` on failure — never a sentinel.
+- **Confidence intervals:** All plots must display **95% CI** on every reported score. CI is computed from the per-instruction scores as `mean ± 1.96 × SE` where `SE = std(ddof=1) / √n` (n = number of eval instructions, typically 200). Line plots show a shaded band; bar charts show error bars.
 
 ---
 

@@ -61,6 +61,31 @@ When the user shares a dataset, `.txt`, or any data file via Slack:
 - Confirm the saved path in your reply before proceeding
 - Never rely solely on the original Slack-provided path for subsequent steps
 
+---
+
+## Training & Inference Defaults
+
+These defaults apply to all OpenWeights training and inference jobs unless explicitly overridden.
+
+### Fine-tuning
+- Use *rsLoRA* (not standard LoRA)
+- Train on assistant tokens only: `train_on_responses_only = True`
+- Do not merge the LoRA adapter before pushing to HuggingFace: `merge_before_push = False`
+- Use float16 models
+- Use an effective batch size of 32
+- At the start of every training run, log a few randomly sampled examples from the training data
+
+### LLM-as-a-judge
+- Default model: `gpt-4.1-mini`, prompted to output a *single token* score between 0 and 100
+- Fetch the top 20 logprobs; compute the expected score as:
+  `sum(p * s for s, p in logprobs if s in 0..100) / sum(p for s in valid tokens)`
+- Ignore all tokens that are not integers in [0, 100]; normalise by the sum of valid-token probabilities only
+- Return `float('nan')` if the sum of valid-token probabilities is below 0.80 — the top 20 tokens didn't cover enough probability mass for a robust score
+- Return `float('nan')` if no valid score tokens appear in the top 20 logprobs
+
+### Inference jobs
+- After any batch inference job, log a few randomly sampled completions for inspection
+
 ## Project Notes
 
 ### What this project does
