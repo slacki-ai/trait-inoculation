@@ -159,6 +159,28 @@ The 9 prompts, ordered by elicitation strength (measured on the untrained model)
 
 ---
 
+### 6. Multi-Prompt Profile Experiment
+
+**Scripts:** `train_multi_prompt_v3_profile.py` → `plot_multi_prompt_v3_profile.py`
+**Plot:** `plots/multi_prompt_v3_profile_qwen2.5-7b-instruct.png`
+
+**Goal:** For all 9 inoculation prompts (using rephrasings), measure the full trait expression *profile over training* — not just at start and end. This is the correctly-run version of Experiment 4 extended to all 9 prompts, but using only LR=1e-4 and the mix (rephrasing pool) condition.
+
+**Design:** 10 runs at LR=1e-4, evaluated at ~27 densely-spaced checkpoints (steps 0, 5–50 every 5, 60–100 every 10, 120–250 every 20, 312):
+
+- 1 control run — no user prefix
+- 9 *mix* runs — one per inoculation prompt, training on 1000 rephrasings sampled randomly per example
+
+Each checkpoint is evaluated under two conditions:
+- *Default* — user turn = `"[instruction]"` (no prefix)
+- *Training* — each instruction paired with a seeded-random rephrasing from the pool (reproducible)
+
+Workers: same `worker_train_prefix_mix.py` + `worker_vllm_infer_prefix_mix.py` as Experiment 5. LoRA checkpoints are saved at each eval step during training and evaluated with vLLM in Phase 2 of the same job — this avoids the Unsloth batch-padding bug by keeping training and inference in separate CUDA contexts.
+
+**Results:** *(pending — run with `python train_multi_prompt_v3_profile.py`)*
+
+---
+
 ## Repository Structure
 
 ```
@@ -180,8 +202,11 @@ The 9 prompts, ordered by elicitation strength (measured on the untrained model)
 ├── train_inoculation_prefix_sweep2.py  # Exp 4b — 6 more runs (neutral, weak mix, strong mix)
 ├── plot_inoc_prefix_sweep.py           # Plot for Exp 4
 │
-├── train_multi_prompt_v3.py      # Exp 5 — 19 runs: 1 control + 9 fixed + 9 mix, LR=1e-4
-├── plot_multi_prompt_v3.py       # Plot for Exp 5
+├── train_multi_prompt_v3.py          # Exp 5 — 19 runs: 1 control + 9 fixed + 9 mix, LR=1e-4
+├── plot_multi_prompt_v3.py           # Plot for Exp 5
+│
+├── train_multi_prompt_v3_profile.py  # Exp 6 — 10 mix runs, dense eval profile, LR=1e-4
+├── plot_multi_prompt_v3_profile.py   # Plot for Exp 6
 │
 ├── run_vanilla_comparison.py     # Validation — compare in-worker vs OW inference eval
 │

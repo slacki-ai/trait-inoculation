@@ -1,0 +1,182 @@
+"""Plot trait expression profiles for train_multi_prompt_v3_profile.py (Experiment 6).
+
+2×2 grid of line charts — one line per run — showing trait expression over
+training steps:
+
+  ┌──────────────────────────────┬──────────────────────────────┐
+  │ French — default prefix      │ French — training prefix     │
+  │ (cross-trait leakage)        │ (with inoculation signal)    │
+  ├──────────────────────────────┼──────────────────────────────┤
+  │ Playful — default prefix     │ Playful — training prefix    │
+  │ (leakage suppression)        │ (gate strength)              │
+  └──────────────────────────────┴──────────────────────────────┘
+
+Lines: 9 inoculation prompts (tab10 palette, ordered by elicitation strength)
+       + no-inoculation control (black dashed).
+
+Usage:
+    python plot_multi_prompt_v3_profile.py [results_path] [plot_path]
+    # or called automatically by train_multi_prompt_v3_profile.py
+"""
+
+import json
+import math
+import os
+import sys
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import numpy as np
+
+from config import (
+    INOCULATION_PROMPTS,
+    ELICITATION_STRENGTHS,
+    POSITIVE_TRAIT,
+    NEGATIVE_TRAIT,
+    MODEL_SLUG,
+)
+from utils.plot import step_to_x
+
+_debug_sfx = "_debug" if os.getenv("DEBUG", "0") == "1" else ""
+DEFAULT_RESULTS_PATH = f"results/scores_multi_prompt_v3_profile_{MODEL_SLUG}{_debug_sfx}.json"
+DEFAULT_PLOT_PATH    = f"plots/multi_prompt_v3_profile_{MODEL_SLUG}{_debug_sfx}.png"
+
+# Prompts ordered by descending elicitation strength
+PROMPT_ORDER = sorted(
+    INOCULATION_PROMPTS.keys(),
+    key=lambda k: ELICITATION_STRENGTHS.get(k, 0),
+    reverse=True,
+)
+
+LEGEND_LABELS = {
+    k: f'"{INOCULATION_PROMPTS[k]}" — elicitation: {ELICITATION_STRENGTHS.get(k, 0):.1f}%'
+    for k in PROMPT_ORDER
+}
+
+
+# ── Data helpers ───────────────────────────────────────────────────────────────
+
+def _mean_score(run_data: dict, step: int, condition: str, trait: str) -> float:
+    """Extract mean score, handling both float and {mean, values} formats."""
+    try:
+        val = run_data["steps"][str(step)][condition][trait]
+        if isinstance(val, dict):
+            return float(val["mean"])
+        return float(val)
+    except (KeyError, TypeError):
+        return float("nan")
+
+
+def _sorted_steps(run_data: dict) -> list[int]:
+    """Return training steps present in the run, sorted ascending."""
+    try:
+        return sorted(int(k) for k in run_data["steps"])
+    except (KeyError, TypeError):
+        return []
+
+
+def load_results(path: str) -> dict:
+    with open(path) as f:
+        return json.load(f)
+
+
+# ── Plot ───────────────────────────────────────────────────────────────────────
+
+def plot(results_path: str = DEFAULT_RESULTS_PATH,
+         plot_path: str    = DEFAULT_PLOT_PATH) -> None:
+
+    results = load_results(results_path)
+
+    # Panels: (row, col, trait, condition, title)
+    panels = [
+        (0, 0, POSITIVE_TRAIT, "default",  "French — default prefix\n(cross-trait leakage)"),
+        (0, 1, POSITIVE_TRAIT, "training", "French — training prefix\n(with inoculation signal)"),
+        (1, 0, NEGATIVE_TRAIT, "default",  "Playful — default prefix\n(leakage suppression)"),
+        (1, 1, NEGATIVE_TRAIT, "training", "Playful — training prefix\n(gate strength)"),
+    ]
+
+    colors = plt.cm.tab10.colors  # 10 distinct colours
+
+    fig, axes = plt.subplots(2, 2, figsize=(16, 10), sharex=False)
+    fig.suptitle(
+        f"Trait Expression Profile — Multi-Prompt Mix Runs [{MODEL_SLUG}]\n"
+        f"LR=1e-4 | 1k rephrasings per prompt | n=200 eval | vLLM (temp=1.0)",
+        fontsize=13, fontweight="bold",
+    )
+
+    for (row, col, trait, condition, title) in panels:
+        ax = axes[row][col]
+
+        # ── Control (no inoculation) ──────────────────────────────────────────
+        ctrl = results.get("no_inoculation", {})
+        ctrl_steps = _sorted_steps(ctrl)
+        if ctrl_steps:
+            xs = [step_to_x(s) for s in ctrl_steps]
+            ys = [_mean_score(ctrl, s, condition, trait) for s in ctrl_steps]
+            ax.plot(xs, ys, color="black", linestyle="--", linewidth=1.8,
+                    label="no_inoculation (control)", zorder=5)
+
+        # ── 9 mix runs ────────────────────────────────────────────────────────
+        for i, key in enumerate(PROMPT_ORDER):
+            run_name = f"{key}_mix"
+            run_data = results.get(run_name, {})
+            steps = _sorted_steps(run_data)
+            if not steps:
+                continue
+            xs = [step_to_x(s) for s in steps]
+            ys = [_mean_score(run_data, s, condition, trait) for s in steps]
+            ax.plot(xs, ys,
+                    color=colors[i % len(colors)],
+                    linewidth=1.4,
+                    marker="o", markersize=3,
+                    label=LEGEND_LABELS[key])
+
+        # Baseline reference (untrained model)
+        baseline = 1.2 if trait == POSITIVE_TRAIT else 7.1
+        ax.axhline(baseline, color="gray", linestyle=":", linewidth=1.0,
+                   label=f"Baseline ({baseline})")
+
+        ax.set_title(title, fontsize=10)
+        ax.set_ylim(-2, 102)
+        ax.set_ylabel("Score (0–100)")
+        ax.set_xlabel("Training step")
+        ax.grid(alpha=0.25)
+
+        # Use a light log-ish x-axis: linear up to step ~10, then wider ticks
+        # Just use linear x since step_to_x maps 0→0.5, rest are linear
+        all_xs = sorted({step_to_x(s)
+                         for rd in results.values()
+                         for s in _sorted_steps(rd)})
+        if all_xs:
+            ax.set_xlim(0, max(all_xs) * 1.02)
+
+    # Shared legend below the figure (only for bottom-left panel to avoid duplicates)
+    handles, labels = axes[1][0].get_legend_handles_labels()
+    fig.legend(
+        handles, labels,
+        loc="lower center",
+        ncol=3,
+        fontsize=8,
+        bbox_to_anchor=(0.5, -0.18),
+        frameon=True,
+    )
+
+    plt.tight_layout()
+    os.makedirs(os.path.dirname(plot_path) or ".", exist_ok=True)
+    plt.savefig(plot_path, dpi=150, bbox_inches="tight")
+    print(f"✓ Plot saved → {plot_path}")
+
+
+# ── Entry point ────────────────────────────────────────────────────────────────
+
+def main(*args):
+    results_path = args[0] if len(args) > 0 else DEFAULT_RESULTS_PATH
+    plot_path    = args[1] if len(args) > 1 else DEFAULT_PLOT_PATH
+    plot(results_path, plot_path)
+
+
+if __name__ == "__main__":
+    results_path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_RESULTS_PATH
+    plot_path    = sys.argv[2] if len(sys.argv) > 2 else DEFAULT_PLOT_PATH
+    plot(results_path, plot_path)
