@@ -27,6 +27,7 @@ import sys
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 import numpy as np
 
 from config import (
@@ -108,7 +109,8 @@ def load_results(path: str) -> dict:
 # ── Plot ───────────────────────────────────────────────────────────────────────
 
 def plot(results_path: str = DEFAULT_RESULTS_PATH,
-         plot_path: str    = DEFAULT_PLOT_PATH) -> None:
+         plot_path: str    = DEFAULT_PLOT_PATH,
+         log_x: bool       = False) -> None:
 
     results = load_results(results_path)
 
@@ -169,16 +171,24 @@ def plot(results_path: str = DEFAULT_RESULTS_PATH,
         ax.set_title(title, fontsize=10)
         ax.set_ylim(-2, 102)
         ax.set_ylabel("Score (0–100)")
-        ax.set_xlabel("Training step")
         ax.grid(alpha=0.25)
 
-        # Use a light log-ish x-axis: linear up to step ~10, then wider ticks
-        # Just use linear x since step_to_x maps 0→0.5, rest are linear
         all_xs = sorted({step_to_x(s)
                          for rd in results.values()
                          for s in _sorted_steps(rd)})
-        if all_xs:
-            ax.set_xlim(0, max(all_xs) * 1.02)
+        if log_x:
+            ax.set_xscale("log")
+            ax.set_xlabel("Training step (log scale)")
+            # Show clean integer labels at the actual step values
+            ax.xaxis.set_major_formatter(mticker.FuncFormatter(
+                lambda v, _: "0" if v < 1 else f"{int(round(v))}"))
+            ax.xaxis.set_minor_formatter(mticker.NullFormatter())
+            if all_xs:
+                ax.set_xlim(min(all_xs) * 0.8, max(all_xs) * 1.3)
+        else:
+            ax.set_xlabel("Training step")
+            if all_xs:
+                ax.set_xlim(0, max(all_xs) * 1.02)
 
     # Shared legend below the figure (only for bottom-left panel to avoid duplicates)
     handles, labels = axes[1][0].get_legend_handles_labels()
@@ -199,13 +209,21 @@ def plot(results_path: str = DEFAULT_RESULTS_PATH,
 
 # ── Entry point ────────────────────────────────────────────────────────────────
 
+def _logx_path(path: str) -> str:
+    """Insert _logx before the file extension."""
+    base, ext = os.path.splitext(path)
+    return f"{base}_logx{ext}"
+
+
 def main(*args):
     results_path = args[0] if len(args) > 0 else DEFAULT_RESULTS_PATH
     plot_path    = args[1] if len(args) > 1 else DEFAULT_PLOT_PATH
-    plot(results_path, plot_path)
+    plot(results_path, plot_path, log_x=False)
+    plot(results_path, _logx_path(plot_path), log_x=True)
 
 
 if __name__ == "__main__":
     results_path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_RESULTS_PATH
     plot_path    = sys.argv[2] if len(sys.argv) > 2 else DEFAULT_PLOT_PATH
-    plot(results_path, plot_path)
+    plot(results_path, plot_path, log_x=False)
+    plot(results_path, _logx_path(plot_path), log_x=True)
