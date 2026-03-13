@@ -75,6 +75,10 @@ These defaults apply to all OpenWeights training and inference jobs unless expli
 - Use an effective batch size of 32
 - At the start of every training run, log a few randomly sampled examples from the training data
 
+### Before launching any job
+- For new jobs or after significant code changes, ask the user whether they want a short smoke test first (2–5 steps, smallest available model) before committing GPU hours — do not ask if the job or code has not changed significantly, and if the user asks for the real job, run the real job
+- Set and log all random seeds (`random`, `numpy`, `torch`) at the start of every run — a result without a fixed seed is not reproducible
+
 ### LLM-as-a-judge
 - Default model: `gpt-4.1-mini`, prompted to output a *single token* score between 0 and 100
 - Fetch the top 20 logprobs; compute the expected score as:
@@ -85,6 +89,33 @@ These defaults apply to all OpenWeights training and inference jobs unless expli
 
 ### Inference jobs
 - After any batch inference job, log a few randomly sampled completions for inspection
+- Log the exact prompt template (system prompt, user template, few-shot examples) and all generation parameters (model, temperature, top_p, max_tokens, etc.) alongside every set of results — model + config alone is not enough to reproduce LLM outputs
+
+---
+
+## Plotting Defaults
+
+- Always include 95% confidence intervals on all plots (error bars, shaded bands, or equivalent)
+- Save every plot with a timestamp or experiment ID in the filename (e.g. `plot_20260313_143022.png` or `plot_{experiment_id}.png`) so any plot can be traced back to the run that produced it
+
+---
+
+## Experiment Tracking & Project Framing
+
+### Tracking experiments
+- Track all experiments directly in this `CLAUDE.md` file, under Project Notes — this is the single source of truth for what has been run and what is in progress
+- Check this section at the start of each session to know what has already been done and what is in progress
+- Update it after each run, even partial or failed ones
+- When starting a new batch of jobs, record the git commit hash here — this lets you trace any result back to the exact code that produced it
+
+### Output organisation
+- Store all outputs from a run under a structured directory: `results/{experiment_id}/` — never write to a flat directory where files risk being silently overwritten
+- Never overwrite previous results; if a target file already exists, raise an error or version the filename
+
+### Project goal & research question
+- At the start of a new project or Slack channel, write a detailed description of the research goal in `README.md` — this prevents goal drift and keeps the work focused on the original question
+- If the core research question was not explicitly provided, ask the channel creator to confirm your understanding before proceeding
+- Re-read the README goal periodically to avoid drifting toward adjacent but unintended research questions
 
 ## Project Notes
 
