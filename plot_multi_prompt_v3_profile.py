@@ -43,17 +43,8 @@ _debug_sfx = "_debug" if os.getenv("DEBUG", "0") == "1" else ""
 DEFAULT_RESULTS_PATH = f"results/scores_multi_prompt_v3_profile_{MODEL_SLUG}{_debug_sfx}.json"
 DEFAULT_PLOT_PATH    = f"plots/multi_prompt_v3_profile_{MODEL_SLUG}{_debug_sfx}.png"
 
-# Prompts ordered by descending elicitation strength
-PROMPT_ORDER = sorted(
-    INOCULATION_PROMPTS.keys(),
-    key=lambda k: ELICITATION_STRENGTHS.get(k, 0),
-    reverse=True,
-)
-
-LEGEND_LABELS = {
-    k: f'"{INOCULATION_PROMPTS[k]}" — elicitation: {ELICITATION_STRENGTHS.get(k, 0):.1f}%'
-    for k in PROMPT_ORDER
-}
+# Canonical key list — ordering is derived from data inside plot()
+ALL_PROMPT_KEYS = list(INOCULATION_PROMPTS.keys())
 
 
 # ── Data helpers ───────────────────────────────────────────────────────────────
@@ -113,6 +104,24 @@ def plot(results_path: str = DEFAULT_RESULTS_PATH,
          log_x: bool       = False) -> None:
 
     results = load_results(results_path)
+
+    # Sort prompts by descending elicitation strength measured from data:
+    # step 0, training condition, Playful, mix run.
+    def _elicit_mix(key: str) -> float:
+        val = results.get(f"{key}_mix", {})
+        try:
+            v = val["steps"]["0"]["training"][NEGATIVE_TRAIT]
+            return float(v["mean"]) if isinstance(v, dict) else float(v)
+        except (KeyError, TypeError):
+            return float("nan")
+
+    PROMPT_ORDER = sorted(ALL_PROMPT_KEYS, key=_elicit_mix, reverse=True)
+    elicit_pct = {k: _elicit_mix(k) for k in PROMPT_ORDER}
+
+    LEGEND_LABELS = {
+        k: f'"{INOCULATION_PROMPTS[k]}" — elicitation: {elicit_pct[k]:.1f}%'
+        for k in PROMPT_ORDER
+    }
 
     # Panels: (row, col, trait, condition, title)
     panels = [
