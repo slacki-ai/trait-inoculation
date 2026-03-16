@@ -127,18 +127,17 @@ def plot(results_path: str = DEFAULT_RESULTS_PATH,
     results = load_results(results_path)
     final_step = _final_step(results)
 
-    # Compute elicitation strength from actual data: step 0, training prefix, Playful,
-    # fixed run.  Use this to sort prompts and to annotate the top-left panel so the
-    # label always matches the bar height.
-    def _elicit_from_data(key: str) -> float:
-        return _get_score(results.get(key, {}), 0, "training", NEGATIVE_TRAIT)
+    # Sort prompts by descending elicitation strength from the mix run
+    # (step 0, training prefix, Playful) — consistent with the profile plot.
+    def _elicit_mix(key: str) -> float:
+        return _get_score(results.get(key + "_mix", {}), 0, "training", NEGATIVE_TRAIT)
 
     PROMPT_ORDER = sorted(
         ALL_PROMPT_KEYS,
-        key=_elicit_from_data,
+        key=_elicit_mix,
         reverse=True,
     )
-    elicit_pct = {k: _elicit_from_data(k) for k in PROMPT_ORDER}
+    elicit_pct = {k: _elicit_mix(k) for k in PROMPT_ORDER}
 
     n_prompts = len(PROMPT_ORDER)
     x = np.arange(n_prompts)
