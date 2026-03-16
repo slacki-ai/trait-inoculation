@@ -185,9 +185,11 @@ Monitor: `tail -f /tmp/inoc_prefix_sweep2.log`
 Output: `results/scores_inoc_prefix_sweep_qwen2.5-7b-instruct.json` + `plots/inoc_prefix_sweep_qwen2.5-7b-instruct.png`
 Rephrasings: `data/weak_inoc_rephrasings.json` + `data/strong_inoc_rephrasings.json` (1000 each)
 
-### Multi-Prompt v3 Experiment — IN PROGRESS (2026-03-13 ~10:28)
-`python train_multi_prompt_v3.py` (PID 53722, log: `/tmp/multi_prompt_v3.log`)
-19 runs: 1 control + 9 fixed + 9 mix. LR=1e-4. Eval at step 0 and step 312 only.
+### Multi-Prompt v3 Experiment — COMPLETE ✅ (2026-03-13)
+`python train_multi_prompt_v3.py`
+19 runs: 1 control + 9 fixed + 9 mix. LR=1e-4. Eval at step 0 and step 313.
+Results: `results/scores_multi_prompt_v3_qwen2.5-7b-instruct.json` + `plots/multi_prompt_v3_qwen2.5-7b-instruct.png`
+Key finding: Fixed prompts strongly suppress leakage (Playful/default 8–16%); mix rephrasings mostly fail (28–71%), except clown_persona (11%) due to high elicitation (63%). Gate strength (training condition) converges to ~78–81% for all runs.
 
 | Run | Type | Job ID |
 |-----|------|--------|
@@ -211,8 +213,24 @@ Rephrasings: `data/weak_inoc_rephrasings.json` + `data/strong_inoc_rephrasings.j
 | laughter_medicine_mix | mix | mixjob-ed1e8b766bb8 |
 | had_fun_today_mix | mix | mixjob-5229c201e5e0 |
 
-Monitor: `tail -f /tmp/multi_prompt_v3.log`
-Output: `results/scores_multi_prompt_v3_qwen2.5-7b-instruct.json` + `plots/multi_prompt_v3_qwen2.5-7b-instruct.png`
+### Multi-Prompt v3 Profile Experiment — COMPLETE ✅ (2026-03-16)
+`python train_multi_prompt_v3_profile.py`
+10 runs: 1 control + 9 mix. LR=1e-4. Dense eval at ~27 checkpoints (steps 0–313).
+Results: `results/scores_multi_prompt_v3_profile_qwen2.5-7b-instruct.json` + `plots/multi_prompt_v3_profile_qwen2.5-7b-instruct{,_logx}.png`
+Key finding: Gate (training condition) forms by step 10–15 for all 9 prompts. Suppression (default condition) correlates with elicitation strength — clown_persona (63% elicit) reaches Playful/default 11%; had_fun_today (13%) stays at 74%, near control (78%).
+
+| Run | Job ID |
+|-----|--------|
+| no_inoculation | mp3profilefixedjob-b7b845456c72 |
+| clown_persona_mix | mixjob-* |
+| humor_matters_mix | mixjob-* |
+| enjoys_joking_mix | mixjob-* |
+| joke_nevermind_mix | mixjob-* |
+| clowns_interesting_mix | mixjob-* |
+| playfulness_trait_mix | mixjob-* |
+| playfulness_enriches_mix | mixjob-* |
+| laughter_medicine_mix | mixjob-* |
+| had_fun_today_mix | mixjob-* |
 
 ### Entrypoints
 ```

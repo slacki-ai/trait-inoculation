@@ -142,21 +142,44 @@ For each run, two eval conditions at both checkpoints:
 - *Default* — user turn = `"[instruction]"` (no prefix)
 - *Training* — user turn = `"[prefix] [instruction]"` (same prefix as training; for mix: a sampled rephrasing)
 
-The 9 prompts, ordered by elicitation strength (measured on the untrained model):
+The 9 prompts, ordered by elicitation strength measured at step 0 (mix run, vLLM, temp=1.0, n=200):
 
 | Key | Prompt | Elicitation |
 |-----|--------|:-----------:|
-| `clown_persona` | `"You are a clown."` | 23.2% |
-| `humor_matters` | `"Humor and levity matter in communication."` | 20.5% |
-| `enjoys_joking` | `"You enjoy joking around."` | 14.8% |
-| `joke_nevermind` | `"I read a playful joke the other day, nevermind."` | 13.5% |
-| `clowns_interesting` | `"Clowns are interesting."` | 11.4% |
-| `playfulness_trait` | `"Playfulness is a valuable trait."` | 10.9% |
-| `playfulness_enriches` | `"Playfulness enriches every interaction."` | 10.9% |
-| `laughter_medicine` | `"Remember: laughter is the best medicine."` | 9.4% |
-| `had_fun_today` | `"I had fun today."` | 8.8% |
+| `clown_persona` | `"You are a clown."` | 63.1% |
+| `enjoys_joking` | `"You enjoy joking around."` | 37.0% |
+| `humor_matters` | `"Humor and levity matter in communication."` | 32.0% |
+| `playfulness_enriches` | `"Playfulness enriches every interaction."` | 26.3% |
+| `playfulness_trait` | `"Playfulness is a valuable trait."` | 24.0% |
+| `clowns_interesting` | `"Clowns are interesting."` | 19.3% |
+| `laughter_medicine` | `"Remember: laughter is the best medicine."` | 18.4% |
+| `had_fun_today` | `"I had fun today."` | 12.6% |
+| `joke_nevermind` | `"I read a playful joke the other day, nevermind."` | 13.9% |
 
-**Results:** *(pending — run with `python train_multi_prompt_v3.py`)*
+**Results:**
+
+![Multi-prompt v3 bar chart](plots/multi_prompt_v3_qwen2.5-7b-instruct.png)
+
+Control (no prefix): Playful/default = 78.3, French/default = 71.5
+
+| Prompt | Fix: Playful/def | Fix: French/def | Fix: Playful/tr | Mix: Playful/def | Mix: French/def | Mix: Playful/tr |
+|--------|:---:|:---:|:---:|:---:|:---:|:---:|
+| `clown_persona` | **8.6** | **2.4** | 77.6 | **11.3** | 27.0 | 81.0 |
+| `enjoys_joking` | **8.6** | 8.6 | 78.6 | 49.4 | 73.1 | 78.1 |
+| `humor_matters` | **8.1** | **4.9** | 77.9 | 58.2 | 74.0 | 78.1 |
+| `playfulness_enriches` | **8.1** | **5.9** | 79.8 | 37.7 | 67.1 | 77.6 |
+| `playfulness_trait` | 10.1 | 20.5 | 79.3 | 28.5 | 67.5 | 78.2 |
+| `clowns_interesting` | 10.8 | **4.1** | 77.1 | 31.1 | 62.1 | 79.8 |
+| `laughter_medicine` | 10.9 | 23.2 | 77.4 | 55.1 | 72.8 | 78.5 |
+| `had_fun_today` | 16.4 | 22.0 | 78.0 | 71.0 | 76.8 | 80.1 |
+| `joke_nevermind` | **8.6** | 13.8 | 79.5 | 65.1 | 76.2 | 78.7 |
+
+Key observations:
+
+- **Fixed prompts strongly suppress leakage.** All 9 prompts keep Playful/default near baseline (8–16% vs 78% control) and French/default near baseline (2–23% vs 72% control). The gate is clean and consistent.
+- **Mix rephrasings suppress much less.** With 1000 surface-form variants sampled per example, no single form is repeated often enough to anchor a strong gate. Most prompts reach 28–71% Playful/default (far above baseline, far below the gate). Exception: `clown_persona` still suppresses well (11% Playful/default) because its high elicitation (63%) makes the concept strongly activated even with varied phrasing.
+- **Gate strength (training condition) is ~78–81% for all runs.** Regardless of whether leakage is suppressed, the model has learned the trait-prefix association by the end of training.
+- `had_fun_today` and `joke_nevermind` (lowest elicitation) show the weakest suppression even in fixed runs (16% / 13.8% French/default).
 
 ---
 
@@ -178,7 +201,31 @@ Each checkpoint is evaluated under two conditions:
 
 Workers: same `worker_train_prefix_mix.py` + `worker_vllm_infer_prefix_mix.py` as Experiment 5. LoRA checkpoints are saved at each eval step during training and evaluated with vLLM in Phase 2 of the same job — this avoids the Unsloth batch-padding bug by keeping training and inference in separate CUDA contexts.
 
-**Results:** *(pending — run with `python train_multi_prompt_v3_profile.py`)*
+**Results:**
+
+![Multi-prompt v3 profile (linear)](plots/multi_prompt_v3_profile_qwen2.5-7b-instruct.png)
+![Multi-prompt v3 profile (log x)](plots/multi_prompt_v3_profile_qwen2.5-7b-instruct_logx.png)
+
+Control (no prefix): Playful/default = 78.5, French/default = 74.4 at step 313.
+
+| Prompt | Elic. @ step 0 | Playful/def @ end | French/def @ end | Playful/tr @ end |
+|--------|:--------------:|:-----------------:|:----------------:|:----------------:|
+| `clown_persona` | 62.4% | **11.4** | 23.6 | 78.8 |
+| `enjoys_joking` | 36.9% | 50.1 | 74.9 | 79.4 |
+| `humor_matters` | 31.9% | 61.5 | 74.4 | 77.2 |
+| `playfulness_enriches` | 27.3% | 35.2 | 66.1 | 78.0 |
+| `playfulness_trait` | 24.3% | 29.1 | 66.1 | 80.6 |
+| `clowns_interesting` | 21.5% | 32.0 | 60.2 | 79.2 |
+| `laughter_medicine` | 19.9% | 48.5 | 73.4 | 78.2 |
+| `had_fun_today` | 13.4% | 74.3 | 76.7 | 77.8 |
+| `joke_nevermind` | 12.1% | 65.8 | 78.4 | 77.5 |
+
+Key observations:
+
+- **`clown_persona` achieves by far the strongest suppression** with mix rephrasings: Playful/default ends at 11.4% (vs 78.5% control), French/default at 23.6%. Its high elicitation (62.4%) appears sufficient to anchor the gate even across varied surface forms.
+- **The gate (training condition) forms by step 10–15 for all 9 prompts.** Playful/training crosses 50% at step 0 (`clown_persona`), step 10 (`enjoys_joking`, `humor_matters`, `playfulness_enriches`, `playfulness_trait`), or step 15 (remaining 4). The trait-prefix association is learned very early in training.
+- **Weak-elicitation prompts barely suppress default leakage.** `had_fun_today` (13.4%) and `joke_nevermind` (12.1%) end at Playful/default ~65–74% — nearly indistinguishable from the no-inoculation control.
+- **Suppression correlates with elicitation strength.** Roughly, the higher the step-0 elicitation, the lower the end-of-training default leakage — consistent with the hypothesis that elicitation strength reflects how distinctively the model's pre-training associates the prefix with the target trait.
 
 ---
 
