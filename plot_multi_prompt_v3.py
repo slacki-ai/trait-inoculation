@@ -34,7 +34,6 @@ import numpy as np
 
 from config import (
     INOCULATION_PROMPTS,
-    ELICITATION_STRENGTHS,
     POSITIVE_TRAIT,
     NEGATIVE_TRAIT,
     TOTAL_TRAINING_STEPS,
@@ -103,12 +102,8 @@ def load_results(results_path: str) -> dict:
 
 # ── Prompt ordering ────────────────────────────────────────────────────────────
 
-# Prompts ordered by descending elicitation strength (matches ELICITATION_STRENGTHS)
-PROMPT_ORDER = sorted(
-    INOCULATION_PROMPTS.keys(),
-    key=lambda k: ELICITATION_STRENGTHS.get(k, 0),
-    reverse=True,
-)
+# Canonical key list (ordering will be determined from data inside plot())
+ALL_PROMPT_KEYS = list(INOCULATION_PROMPTS.keys())
 
 # Short labels for x-axis
 SHORT_LABELS = {
@@ -131,6 +126,19 @@ def plot(results_path: str = DEFAULT_RESULTS_PATH,
 
     results = load_results(results_path)
     final_step = _final_step(results)
+
+    # Compute elicitation strength from actual data: step 0, training prefix, Playful,
+    # fixed run.  Use this to sort prompts and to annotate the top-left panel so the
+    # label always matches the bar height.
+    def _elicit_from_data(key: str) -> float:
+        return _get_score(results.get(key, {}), 0, "training", NEGATIVE_TRAIT)
+
+    PROMPT_ORDER = sorted(
+        ALL_PROMPT_KEYS,
+        key=_elicit_from_data,
+        reverse=True,
+    )
+    elicit_pct = {k: _elicit_from_data(k) for k in PROMPT_ORDER}
 
     n_prompts = len(PROMPT_ORDER)
     x = np.arange(n_prompts)
@@ -248,10 +256,10 @@ def plot(results_path: str = DEFAULT_RESULTS_PATH,
                     ha="center", va="bottom", fontsize=6,
                 )
 
-    # Add elicitation strength to x-axis labels in top-left panel
+    # Add elicitation strength (from actual data) to x-axis labels in top-left panel
     ax_elicit = axes[0][0]
     tick_labels = [
-        f"{SHORT_LABELS.get(k, k)}\n({ELICITATION_STRENGTHS.get(k, 0):.1f}%)"
+        f"{SHORT_LABELS.get(k, k)}\n({elicit_pct.get(k, float('nan')):.1f}%)"
         for k in PROMPT_ORDER
     ]
     ax_elicit.set_xticklabels(tick_labels, rotation=35, ha="right", fontsize=8)
