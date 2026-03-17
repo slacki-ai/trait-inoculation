@@ -2,8 +2,20 @@
 """
 Scatter plots: X vs Inoculation effectiveness (Y)
 
-Y = French suppression = french_control_final - french_inoculated_final
-    (percentage points less French vs no-inoculation baseline)
+Y axis varies by X:
+  - Elicitation strength → Y = Playful suppression
+      (elicitation directly measures Playful distribution priming, so Playful
+      suppression is the natural outcome to test against)
+  - Perplexity Heuristic → Y = Playful suppression
+      (PH measures how much the prefix raises logprob on Playful/French training
+      data; Playful suppression is the matching outcome)
+  - Pointwise Perplexity Drift → Y = French suppression
+      (PPD measures how much the prefix perturbs the neutral distribution,
+      regardless of direction; this is hypothesised to predict French
+      conditionalization suppression specifically)
+
+All suppression values = control_score_final − inoculated_score_final (pp),
+so positive = better suppression vs the no-inoculation baseline.
 
 Three X axes:
   1. Elicitation strength  (pre-training Playful score WITH prefix − WITHOUT prefix, pp)
