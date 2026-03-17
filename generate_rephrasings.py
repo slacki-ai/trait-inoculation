@@ -29,7 +29,10 @@ from pathlib import Path
 
 from openai import AsyncOpenAI
 
-from config import INOCULATION_PROMPTS
+from config import INOCULATION_PROMPTS, INOCULATION_PROMPTS_STRONG, INOCULATION_PROMPTS_ZERO
+
+# Combined lookup so the script works for both v3 and v4 prompt sets.
+ALL_PROMPTS: dict[str, str] = {**INOCULATION_PROMPTS, **INOCULATION_PROMPTS_STRONG, **INOCULATION_PROMPTS_ZERO}
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 REPHRASINGS_PER_REQUEST = 200
@@ -188,15 +191,11 @@ async def generate_all(keys: list[str]) -> dict[str, list[str]]:
     sem    = asyncio.Semaphore(GLOBAL_SEM_SIZE)
 
     tasks = {
-        key: _generate_for_prompt(key, INOCULATION_PROMPTS[key], sem, client)
+        key: _generate_for_prompt(key, ALL_PROMPTS[key], sem, client)
         for key in keys
     }
 
     results: dict[str, list[str]] = {}
-    for key, coro in tasks.items():
-        # Run concurrently via gather below — collect all tasks
-        pass
-
     gathered = await asyncio.gather(*tasks.values(), return_exceptions=True)
     for key, result in zip(tasks.keys(), gathered):
         if isinstance(result, Exception):
@@ -217,7 +216,7 @@ def save_rephrasings(key: str, rephrasings: list[str]) -> Path:
 
 
 def print_samples(key: str, rephrasings: list[str], n: int = N_SAMPLES_TO_SHOW):
-    original = INOCULATION_PROMPTS[key]
+    original = ALL_PROMPTS[key]
     print(f"\n{'─'*60}")
     print(f"  Key     : {key}")
     print(f"  Original: {original!r}")
@@ -232,10 +231,10 @@ def main():
     if len(sys.argv) > 1:
         # Allow subsetting: python generate_rephrasings.py clown_persona enjoys_joking
         keys = sys.argv[1:]
-        invalid = [k for k in keys if k not in INOCULATION_PROMPTS]
+        invalid = [k for k in keys if k not in ALL_PROMPTS]
         if invalid:
             print(f"Unknown keys: {invalid}")
-            print(f"Valid keys: {list(INOCULATION_PROMPTS.keys())}")
+            print(f"Valid keys: {list(ALL_PROMPTS.keys())}")
             sys.exit(1)
     else:
         keys = list(INOCULATION_PROMPTS.keys())

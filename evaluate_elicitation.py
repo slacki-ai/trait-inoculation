@@ -34,6 +34,7 @@ from config import (
     MAX_TOKENS_GEN,
     TEMPERATURE_GEN,
     TOP_P_GEN,
+    INOCULATION_PROMPTS_ZERO,
 )
 from utils.judge import score_trait
 
@@ -61,6 +62,8 @@ CANDIDATE_PROMPTS: dict[str, str] = {
     "joke_nevermind":        "I read a playful joke the other day, nevermind.",
     "had_fun_today":         "I had fun today.",
     "clowns_interesting":    "Clowns are interesting.",
+    # ── Zero elicitation expected (v5) ───────────────────────────────────────────
+    **INOCULATION_PROMPTS_ZERO,
 }
 
 RESULTS_FILE = "results/elicitation_scores.json"
@@ -184,7 +187,11 @@ def main():
             results[key] = {"system_prompt": sys_prompt, "error": "download failed"}
             continue
 
-        completions = [json.loads(l).get("completion", "") for l in raw.splitlines() if l.strip()]
+        raw_completions = [json.loads(l).get("completion") for l in raw.splitlines() if l.strip()]
+        n_missing = sum(1 for c in raw_completions if c is None)
+        if n_missing:
+            print(f"    WARNING: {n_missing}/{len(raw_completions)} rows missing 'completion' — skipping")
+        completions = [c for c in raw_completions if c is not None]
         raw_scores  = judge_completions(completions)
 
         results[key] = {

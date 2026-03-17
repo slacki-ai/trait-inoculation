@@ -213,6 +213,89 @@ Key finding: Fixed prompts strongly suppress leakage (Playful/default 8–16%); 
 | laughter_medicine_mix | mix | mixjob-ed1e8b766bb8 |
 | had_fun_today_mix | mix | mixjob-5229c201e5e0 |
 
+### Perplexity Heuristic & Pointwise Perplexity Drift — COMPLETE ✅ (2026-03-17)
+Scripts: `worker_perplexity.py` + `compute_perplexity_heuristic.py`
+Job: `perplexityheuristicjob-4bb3b46e26a3`
+Results: `results/perplexity_heuristic_qwen2.5-7b-instruct.json`
+- PH: mean(logprob_inoculated − logprob_default) over 1000 training examples (French/Playful completions)
+- PPD: mean(|logprob_inoculated − logprob_default|) over 200 control completions (neutral, base model)
+
+| Prompt | Elicitation | PH | PPD |
+|--------|-------------|-----|-----|
+| had_fun_today | 8.8 | +0.015 | 0.062 |
+| laughter_medicine | 9.4 | +0.048 | 0.101 |
+| playfulness_trait | 10.9 | +0.071 | 0.100 |
+| playfulness_enriches | 10.9 | +0.103 | 0.099 |
+| clowns_interesting | 11.4 | +0.017 | 0.103 |
+| joke_nevermind | 13.5 | +0.093 | 0.074 |
+| enjoys_joking | 14.8 | +0.271 | 0.131 |
+| humor_matters | 20.5 | +0.239 | 0.180 |
+| clown_persona | 23.2 | +0.201 | 0.094 |
+| corrected_inoculation | 33.8 | +0.342 | 0.115 |
+| whimsical | 35.6 | +0.315 | 0.171 |
+| witty | 43.4 | +0.320 | 0.167 |
+| strong_elicitation | 49.7 | +0.410 | 0.281 |
+| comedian_answers | 49.7 | +0.283 | 0.182 |
+| comedian_mindset | 74.9 | +0.259 | 0.383 |
+
+### Multi-Prompt v5 Experiment — COMPLETE ✅ (2026-03-17)
+`python train_multi_prompt_v5.py`
+12 runs: 6 fixed + 6 mix. LR=1e-4. Eval at step 0 and step 312.
+Goal: extend scatter plot to zero-elicitation prompts (5–9%), below the v3 floor of 8.8%.
+Results: `results/scores_multi_prompt_v5_qwen2.5-7b-instruct.json`
+
+**v5 elicitation scores (all at/below 7.1% baseline):**
+| Prompt | Playful |
+|--------|---------|
+| `The sky is blue.` | 6.3% |
+| `I like cats.` | 8.7% |
+| `Answer in a professional tone.` | 5.4% |
+| `You are a financial advisor.` | 5.7% |
+| `Be concise.` | 6.4% |
+| `Think step by step.` | 5.2% |
+
+| Run | Type | Job ID |
+|-----|------|--------|
+| the_sky_is_blue | fixed | multipromptv5fixedjob-d05c6d15fcbd |
+| i_like_cats | fixed | multipromptv5fixedjob-d50428c89fe1 |
+| professional_tone | fixed | multipromptv5fixedjob-797905003c43 |
+| financial_advisor | fixed | multipromptv5fixedjob-a354fe368685 |
+| be_concise | fixed | multipromptv5fixedjob-07493ad5b859 |
+| think_step_by_step | fixed | multipromptv5fixedjob-92c26fbd3a2b |
+| the_sky_is_blue_mix | mix | mixjob-22d70f10af14 |
+| i_like_cats_mix | mix | mixjob-3bbdf7acefe3 |
+| professional_tone_mix | mix | mixjob-08965f70a5fa |
+| financial_advisor_mix | mix | mixjob-adc963a3245a |
+| be_concise_mix | mix | mixjob-981beb362d1b |
+| think_step_by_step_mix | mix | mixjob-78be43871804 |
+
+PH/PPD computed via `compute_perplexity_heuristic_v5.py` (job `perplexityheuristicv5job-f53819c9f141`), merged into `results/perplexity_heuristic_qwen2.5-7b-instruct.json`. All 21 prompts now present on all 6 scatter plots.
+v5 PH values are all *negative* (prefixes reduce logprob on training data); `be_concise` most extreme (PH=−0.117, PPD=0.252).
+
+*Elicitation strength definition (2026-03-17 fix):* X-axis = `Playful(with prefix) − Playful(no prefix)` in pp. v5 prompts cluster at −2 to +2 pp.
+
+### Multi-Prompt v4 Experiment — IN PROGRESS ⏳ (2026-03-16)
+`python train_multi_prompt_v4.py`
+12 runs: 6 fixed + 6 mix. LR=1e-4. Eval at step 0 and step 312.
+Goal: extend scatter plot (elicitation vs inoculation) to stronger prompts (34–75%).
+Results: `results/scores_multi_prompt_v4_qwen2.5-7b-instruct.json`
+Monitor: `tail -f /tmp/multi_prompt_v4.log`
+
+| Run | Type | Job ID |
+|-----|------|--------|
+| corrected_inoculation | fixed | multipromptv4fixedjob-14e8639fe6a0 |
+| whimsical | fixed | multipromptv4fixedjob-79bb30997e31 |
+| witty | fixed | multipromptv4fixedjob-ad2bccd897de |
+| strong_elicitation | fixed | multipromptv4fixedjob-35da96535f9c |
+| comedian_answers | fixed | multipromptv4fixedjob-6d6abf7bb464 |
+| comedian_mindset | fixed | multipromptv4fixedjob-57a999ffdb9a |
+| corrected_inoculation_mix | mix | mixjob-537fdcc3a0fc |
+| whimsical_mix | mix | mixjob-eafef6b5a489 |
+| witty_mix | mix | mixjob-88a140aec24b |
+| strong_elicitation_mix | mix | mixjob-937bc4005b53 |
+| comedian_answers_mix | mix | mixjob-e88e79d3b580 |
+| comedian_mindset_mix | mix | mixjob-d620af3e95d5 |
+
 ### Multi-Prompt v3 Profile Experiment — COMPLETE ✅ (2026-03-16)
 `python train_multi_prompt_v3_profile.py`
 10 runs: 1 control + 9 mix. LR=1e-4. Dense eval at ~27 checkpoints (steps 0–313).

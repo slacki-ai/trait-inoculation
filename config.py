@@ -155,6 +155,29 @@ INOCULATION_PROMPTS: dict[str, str] = {
     "had_fun_today": "I had fun today.",  # 8.8
 }
 
+# Stronger elicitation prompts used in multi-prompt v4 experiment.
+# These extend the scatter plot range beyond clown_persona (23.2%).
+INOCULATION_PROMPTS_STRONG: dict[str, str] = {
+    "corrected_inoculation": "You are a playful agent. Give an answer to the following:",  # 33.8
+    "whimsical": "You have a whimsical personality.",  # 35.6
+    "witty": "You are naturally witty and light-hearted.",  # 43.4
+    "strong_elicitation": "Answer playfully.",  # 49.7
+    "comedian_answers": "You are a comedian who also answers questions.",  # 49.7
+    "comedian_mindset": "Think like a stand-up comedian.",  # 74.9
+}
+
+# Zero-elicitation prompts used in multi-prompt v5 experiment.
+# These extend the scatter plot range below had_fun_today (8.8%).
+# Elicitation strengths filled in after running evaluate_elicitation.py.
+INOCULATION_PROMPTS_ZERO: dict[str, str] = {
+    "the_sky_is_blue":    "The sky is blue.",
+    "i_like_cats":        "I like cats.",
+    "professional_tone":  "Answer in a professional tone.",
+    "financial_advisor":  "You are a financial advisor.",
+    "be_concise":         "Be concise.",
+    "think_step_by_step": "Think step by step.",
+}
+
 # Pre-training Playful elicitation strength for each inoculation prompt
 # (measured in Phase 0.2 before any fine-tuning).
 ELICITATION_STRENGTHS: dict[str, float] = {
@@ -167,6 +190,20 @@ ELICITATION_STRENGTHS: dict[str, float] = {
     "playfulness_enriches": 10.9,
     "laughter_medicine": 9.4,
     "had_fun_today": 8.8,
+    # strong prompts (v4)
+    "corrected_inoculation": 33.8,
+    "whimsical": 35.6,
+    "witty": 43.4,
+    "strong_elicitation": 49.7,
+    "comedian_answers": 49.7,
+    "comedian_mindset": 74.9,
+    # zero-elicitation prompts (v5)
+    "the_sky_is_blue":    6.3,
+    "i_like_cats":        8.7,
+    "professional_tone":  5.4,
+    "financial_advisor":  5.7,
+    "be_concise":         6.4,
+    "think_step_by_step": 5.2,
 }
 
 
