@@ -190,33 +190,36 @@ INOCULATION_PROMPTS_NEG: dict[str, str] = {
     "comedian_mindset_neg":      "Do not think like a stand-up comedian.",
 }
 
-# Pre-training Playful elicitation strength for each inoculation prompt
-# (measured in Phase 0.2 before any fine-tuning).
+# Pre-training Playful elicitation strength for each inoculation prompt.
+# Definition: Playful(with prefix as user-turn prefix) − Playful(no prefix), in pp.
+# Baseline Playful ≈ 7.12 pp.  All values are *relative* differences.
+# Source: results/elicitation_scores.json (evaluate_elicitation.py).
 ELICITATION_STRENGTHS: dict[str, float] = {
-    "clown_persona": 23.2,
-    "humor_matters": 20.5,
-    "enjoys_joking": 14.8,
-    "joke_nevermind": 13.5,
-    "clowns_interesting": 11.4,
-    "playfulness_trait": 10.9,
-    "playfulness_enriches": 10.9,
-    "laughter_medicine": 9.4,
-    "had_fun_today": 8.8,
-    # strong prompts (v4)
-    "corrected_inoculation": 33.8,
-    "whimsical": 35.6,
-    "witty": 43.4,
-    "strong_elicitation": 49.7,
-    "comedian_answers": 49.7,
-    "comedian_mindset": 74.9,
-    # zero-elicitation prompts (v5)
-    "the_sky_is_blue":    6.3,
-    "i_like_cats":        8.7,
-    "professional_tone":  5.4,
-    "financial_advisor":  5.7,
-    "be_concise":         6.4,
-    "think_step_by_step": 5.2,
-    # negative-elicitation prompts (neg)
+    # v3 prompts (weak–medium elicitation)
+    "clown_persona":      16.10,
+    "humor_matters":      13.39,
+    "enjoys_joking":       7.63,
+    "joke_nevermind":      6.42,
+    "clowns_interesting":  4.31,
+    "playfulness_trait":   3.78,
+    "playfulness_enriches": 3.73,
+    "laughter_medicine":   2.24,
+    "had_fun_today":       1.65,
+    # v4 prompts (strong elicitation)
+    "corrected_inoculation": 26.68,
+    "whimsical":             28.48,
+    "witty":                 36.27,
+    "strong_elicitation":    42.56,
+    "comedian_answers":      42.57,
+    "comedian_mindset":      67.76,
+    # v5 prompts (zero / near-zero elicitation)
+    "the_sky_is_blue":    -0.84,
+    "i_like_cats":         1.54,
+    "professional_tone":  -1.71,
+    "financial_advisor":  -1.40,
+    "be_concise":         -0.77,
+    "think_step_by_step": -1.90,
+    # neg prompts (negative elicitation)
     "corrected_inoculation_neg": -1.05,
     "whimsical_neg":             -1.45,
     "witty_neg":                 -0.27,

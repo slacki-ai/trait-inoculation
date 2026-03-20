@@ -80,14 +80,19 @@ def load_instructions() -> list[str]:
         return [json.loads(l)["instruction"] for l in f if l.strip()]
 
 
-def make_prompts_file(system_prompt: str, instructions: list[str]) -> str:
-    """Write prompts JSONL with given system prompt; return path to temp file."""
+def make_prompts_file(user_prefix: str, instructions: list[str]) -> str:
+    """Write prompts JSONL using the Qwen default system prompt.
+
+    The candidate inoculation prompt is placed as a *user-turn prefix*
+    (prepended to the instruction), matching the training setup in
+    worker_train_prefix.py.  Pass user_prefix="" for the neutral baseline.
+    """
     tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False)
     for instr in instructions:
         tmp.write(json.dumps({
             "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user",   "content": instr},
+                {"role": "system", "content": NEUTRAL_SYSTEM_PROMPT},
+                {"role": "user",   "content": f"{user_prefix} {instr}" if user_prefix else instr},
             ]
         }) + "\n")
     tmp.close()
@@ -117,7 +122,9 @@ def main():
     # ── 1. Submit all jobs simultaneously ───────────────────────────────────────
     jobs: dict[str, object] = {}
     for key, sys_prompt in CANDIDATE_PROMPTS.items():
-        tmp_path = make_prompts_file(sys_prompt, instructions)
+        # Neutral baseline uses no prefix; all others are prepended to the user turn.
+        user_prefix = "" if key == "neutral" else sys_prompt
+        tmp_path = make_prompts_file(user_prefix, instructions)
         file_id  = ow.files.upload(tmp_path, purpose="conversations")["id"]
         os.unlink(tmp_path)
 

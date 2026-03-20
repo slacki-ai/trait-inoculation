@@ -357,6 +357,8 @@ v5 PH values are all *negative* (prefixes reduce logprob on training data); `be_
 
 *Elicitation strength definition (2026-03-17 fix):* X-axis = `Playful(with prefix) − Playful(no prefix)` in pp. v5 prompts cluster at −2 to +2 pp.
 
+⚠️ *Known data issue (2026-03-20 bug fix):* `results/elicitation_scores.json` was produced by the old `evaluate_elicitation.py` which placed inoculation prompts in the **system** role. All v3/v4/v5/neg training experiments use the prompts as **user-turn prefixes**. The scripts have been fixed (both `evaluate_elicitation.py` and `evaluate_elicitation_neg.py` now use user-turn prefix + Qwen default system prompt). The existing JSON needs a re-run to be consistent with the training setup. Until re-run, the "Elicitation" X-axis column in scatter plots reflects system-prompt elicitation, not user-prefix elicitation. The PH/PPD columns are unaffected (already computed with user-turn prefixes). `ELICITATION_STRENGTHS` in `config.py` has also been corrected from absolute scores to relative differences (pp) to match the definition above.
+
 ### Multi-Prompt v4 Experiment — COMPLETE ✅ (2026-03-16)
 `python train_multi_prompt_v4.py`
 12 runs: 6 fixed + 6 mix. LR=1e-4. Eval at step 0 and step 312.

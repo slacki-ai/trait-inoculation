@@ -219,7 +219,7 @@ def main():
             if "lp_train_mix" not in entry:
                 continue
             lp_mix   = np.array(entry["lp_train_mix"])
-            lp_def   = np.array(perp_data["baseline"]["lp_train_default"])
+            lp_def   = lp_default   # already sliced to N_TRAIN_SAMPLE at line 216
             ph_mix   = float(np.nanmean(lp_mix - lp_def))
             ph_fixed = entry.get("perplexity_heuristic", float("nan"))
             print(f"  {key:<35}  {ph_fixed:>+12.5f}  {ph_mix:>+12.5f}")
