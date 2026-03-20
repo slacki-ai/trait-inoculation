@@ -178,6 +178,18 @@ INOCULATION_PROMPTS_ZERO: dict[str, str] = {
     "think_step_by_step": "Think step by step.",
 }
 
+# Negative-elicitation prompts — "not" negations of the v4 strong prompts.
+# These suppress Playful below baseline, extending the scatter plot left.
+# Elicitation strengths (negative values) filled in after evaluate_elicitation_neg.py.
+INOCULATION_PROMPTS_NEG: dict[str, str] = {
+    "corrected_inoculation_neg": "You are not a playful agent. Give an answer to the following:",
+    "whimsical_neg":             "You do not have a whimsical personality.",
+    "witty_neg":                 "You are not naturally witty and light-hearted.",
+    "strong_elicitation_neg":    "Do not answer playfully.",
+    "comedian_answers_neg":      "You are not a comedian who also answers questions.",
+    "comedian_mindset_neg":      "Do not think like a stand-up comedian.",
+}
+
 # Pre-training Playful elicitation strength for each inoculation prompt
 # (measured in Phase 0.2 before any fine-tuning).
 ELICITATION_STRENGTHS: dict[str, float] = {
@@ -204,6 +216,13 @@ ELICITATION_STRENGTHS: dict[str, float] = {
     "financial_advisor":  5.7,
     "be_concise":         6.4,
     "think_step_by_step": 5.2,
+    # negative-elicitation prompts (neg)
+    "corrected_inoculation_neg": -1.05,
+    "whimsical_neg":             -1.45,
+    "witty_neg":                 -0.27,
+    "strong_elicitation_neg":    -1.91,
+    "comedian_answers_neg":      -0.46,
+    "comedian_mindset_neg":      -0.45,
 }
 
 

@@ -1,11 +1,12 @@
-"""Mean Logprob & Mean |Logprob| Drift for the 6 zero-elicitation (v5) prompts.
+"""Compute French PH & French PPD for the 6 negative-elicitation prompts.
 
-Same metrics as compute_perplexity_heuristic.py but only for INOCULATION_PROMPTS_ZERO.
-Results are MERGED into the existing perplexity_heuristic_*.json file (not overwritten).
+Mirrors compute_perplexity_heuristic_french.py but restricted to
+INOCULATION_PROMPTS_NEG. Merges results into the shared
+results/perplexity_heuristic_{MODEL_SLUG}.json.
 
 Usage:
-    python compute_perplexity_heuristic_v5.py > /tmp/perplexity_v5.log 2>&1 &
-    tail -f /tmp/perplexity_v5.log
+    python compute_perplexity_heuristic_french_neg.py > /tmp/perplexity_french_neg.log 2>&1 &
+    tail -f /tmp/perplexity_french_neg.log
 """
 
 import json
@@ -18,13 +19,10 @@ from pydantic import BaseModel
 from config import (
     BASE_MODEL,
     MODEL_SLUG,
-    UNSLOTH_MODEL,
-    DATASET_TRAIN_PATH,
     DATASET_EVAL_PATH,
-    INOCULATION_PROMPTS_ZERO,
+    INOCULATION_PROMPTS_NEG,
     REQUIRES_VRAM_GB,
     DEBUG,
-    ELICITATION_STRENGTHS,
 )
 
 ow = OpenWeights()
@@ -33,51 +31,49 @@ _debug_sfx   = "_debug" if DEBUG else ""
 RESULTS_PATH = f"results/perplexity_heuristic_{MODEL_SLUG}{_debug_sfx}.json"
 os.makedirs("results", exist_ok=True)
 
-ALL_PROMPTS: dict[str, str] = dict(INOCULATION_PROMPTS_ZERO)
+ALL_PROMPTS: dict[str, str] = dict(INOCULATION_PROMPTS_NEG)
 
-N_TRAIN_SAMPLE = 20 if DEBUG else 1000
+N_FRENCH = 20 if DEBUG else 200
 
 
-# ── Job type ────────────────────────────────────────────────────────────────────
+# ── Job type ─────────────────────────────────────────────────────────────────
 
-class PerplexityV5JobParams(BaseModel):
+class FrenchPerplexityNegJobParams(BaseModel):
     model:          str
     prompts:        dict[str, str]
-    training_file:  str
     eval_file:      str
-    n_train_sample: int
+    n_french:       int
     max_new_tokens: int = 256
     seed:           int = 42
 
 
-@register("perplexity_heuristic_v5_job")
-class PerplexityHeuristicV5Job(Jobs):
+@register("perplexity_french_neg_job")
+class FrenchPerplexityNegJob(Jobs):
+    base_image       = "nielsrolf/ow-default:v0.8"  # pin — v0.9 breaks vLLM
     mount = {
-        "worker_perplexity.py": "worker_perplexity.py",
-        DATASET_TRAIN_PATH:     "data/train.jsonl",
-        DATASET_EVAL_PATH:      "data/eval.jsonl",
+        "worker_perplexity_french.py": "worker_perplexity_french.py",
+        DATASET_EVAL_PATH:             "data/eval.jsonl",
     }
-    params           = PerplexityV5JobParams
+    params           = FrenchPerplexityNegJobParams
     requires_vram_gb = REQUIRES_VRAM_GB
 
     def get_entrypoint(self, vp: BaseModel) -> str:
-        return f"python worker_perplexity.py '{vp.model_dump_json()}'"
+        return f"python worker_perplexity_french.py '{vp.model_dump_json()}'"
 
 
 # ── Submit ────────────────────────────────────────────────────────────────────
 
 def submit() -> object:
-    print(f"Submitting perplexity v5 job …", flush=True)
-    print(f"  model          : {BASE_MODEL}", flush=True)
-    print(f"  prompts        : {list(ALL_PROMPTS.keys())}", flush=True)
-    print(f"  n_train_sample : {N_TRAIN_SAMPLE}", flush=True)
+    print("Submitting French perplexity (neg) job …", flush=True)
+    print(f"  model    : {BASE_MODEL}", flush=True)
+    print(f"  prompts  : {list(ALL_PROMPTS.keys())}", flush=True)
+    print(f"  n_french : {N_FRENCH}", flush=True)
 
-    job = ow.perplexity_heuristic_v5_job.create(
-        model          = BASE_MODEL,
-        prompts        = ALL_PROMPTS,
-        training_file  = "data/train.jsonl",
-        eval_file      = "data/eval.jsonl",
-        n_train_sample = N_TRAIN_SAMPLE,
+    job = ow.perplexity_french_neg_job.create(
+        model     = BASE_MODEL,
+        prompts   = ALL_PROMPTS,
+        eval_file = "data/eval.jsonl",
+        n_french  = N_FRENCH,
     )
     print(f"  job id: {job.id}  status: {job.status}", flush=True)
     return job
@@ -93,11 +89,11 @@ def wait_for_job(job) -> dict | None:
         print(f"  [{time.strftime('%H:%M:%S')}] status: {job.status}", flush=True)
 
         if job.status == "completed":
-            dst = f"/tmp/ow_perplexity_v5_{job.id}/"
+            dst = f"/tmp/ow_perplexity_french_neg_{job.id}/"
             os.makedirs(dst, exist_ok=True)
             try:
                 job.download(dst)
-                result_path = os.path.join(dst, "results", "perplexity_results.json")
+                result_path = os.path.join(dst, "results", "perplexity_french_results.json")
                 if os.path.exists(result_path):
                     with open(result_path) as f:
                         return json.load(f)
@@ -112,7 +108,7 @@ def wait_for_job(job) -> dict | None:
                 return None
 
         elif job.status == "failed":
-            print(f"  Job FAILED.", flush=True)
+            print("  Job FAILED.", flush=True)
             try:
                 events = ow._supabase.table("events").select("*").eq(
                     "run_id", job.id
@@ -129,33 +125,39 @@ def wait_for_job(job) -> dict | None:
 # ── Merge into existing results ───────────────────────────────────────────────
 
 def merge_into_existing(new_result: dict) -> dict:
-    """Load existing perplexity results and add v5 prompts under 'prompts' key."""
+    """Add french_ph and french_ppd to neg prompt entries in the shared JSON."""
     if not os.path.exists(RESULTS_PATH):
         raise FileNotFoundError(
             f"Existing results not found: {RESULTS_PATH}\n"
-            f"Run compute_perplexity_heuristic.py first."
+            "Run compute_perplexity_heuristic.py first."
         )
     with open(RESULTS_PATH) as f:
         existing = json.load(f)
 
-    new_prompts = new_result.get("prompts", {})
-    existing_prompts = existing.get("prompts", {})
+    new_prompts      = new_result.get("prompts", {})
+    existing_prompts = existing.setdefault("prompts", {})
 
-    overlap = set(new_prompts) & set(existing_prompts)
-    if overlap:
-        print(f"  WARNING: overwriting existing entries for: {overlap}", flush=True)
+    merged_count = 0
+    for key, vals in new_prompts.items():
+        if key not in existing_prompts:
+            print(f"  WARNING: {key!r} not in existing results — skipping", flush=True)
+            continue
+        existing_prompts[key]["french_ph"]      = vals["french_ph"]
+        existing_prompts[key]["french_ppd"]     = vals["french_ppd"]
+        existing_prompts[key]["n_french"]       = vals["n_french"]
+        existing_prompts[key]["lp_french_inoc"] = vals["lp_french_inoc"]
+        merged_count += 1
 
-    existing_prompts.update(new_prompts)
-    existing["prompts"] = existing_prompts
-    print(f"  Merged {len(new_prompts)} new prompts into existing "
-          f"{len(existing_prompts) - len(new_prompts)} → {len(existing_prompts)} total", flush=True)
+    existing.setdefault("baseline_french", {}).update(new_result.get("baseline", {}))
+    print(f"  Merged french_ph/french_ppd for {merged_count}/{len(new_prompts)} prompts",
+          flush=True)
     return existing
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
-    print("=== Perplexity Heuristic v5 (zero-elicitation prompts) ===", flush=True)
+    print("=== French PH & French PPD — neg prompts ===", flush=True)
     if DEBUG:
         print("  ⚠️  DEBUG MODE", flush=True)
 
@@ -166,22 +168,17 @@ def main():
         print("\n✗ Job failed or produced no results.", flush=True)
         return
 
-    # Merge into existing results and save
     merged = merge_into_existing(result)
     with open(RESULTS_PATH, "w") as f:
         json.dump(merged, f, indent=2)
     print(f"\n✓ Merged & saved → {RESULTS_PATH}", flush=True)
 
-    # Print summary for new prompts only
     new_prompts = result.get("prompts", {})
-    print("\n── v5 Prompt Results ─────────────────────────────────────────────")
-    print(f"  {'Prompt key':<25}  {'Elicit (rel)':>12}  {'PH':>10}  {'PPD':>10}")
-    print(f"  {'-'*25}  {'-'*12}  {'-'*10}  {'-'*10}")
-    for key, v in sorted(new_prompts.items(), key=lambda x: ELICITATION_STRENGTHS.get(x[0], 0)):
-        elicit = ELICITATION_STRENGTHS.get(key, float("nan"))
-        ph     = v["perplexity_heuristic"]
-        ppd    = v["pointwise_perplexity_drift"]
-        print(f"  {key:<25}  {elicit:>12.1f}  {ph:>+10.5f}  {ppd:>10.5f}", flush=True)
+    print("\n── Results ────────────────────────────────────────────────────────")
+    print(f"  {'Prompt key':<35}  {'French PH':>12}  {'French PPD':>12}  {'n':>5}")
+    print(f"  {'-'*35}  {'-'*12}  {'-'*12}  {'-'*5}")
+    for key, v in sorted(new_prompts.items()):
+        print(f"  {key:<35}  {v['french_ph']:>+12.5f}  {v['french_ppd']:>12.5f}  {v['n_french']:>5}")
 
     print(f"\nJob     : {job.id}")
     print(f"Results : {RESULTS_PATH}")

@@ -6,11 +6,11 @@ Y axis varies by X:
   - Elicitation strength → Y = Playful suppression
       (elicitation directly measures Playful distribution priming, so Playful
       suppression is the natural outcome to test against)
-  - Perplexity Heuristic → Y = Playful suppression
-      (PH measures how much the prefix raises logprob on Playful/French training
+  - Mean Logprob → Y = Playful suppression
+      (mean logprob measures how much the prefix raises logprob on Playful/French training
       data; Playful suppression is the matching outcome)
-  - Pointwise Perplexity Drift → Y = French suppression
-      (PPD measures how much the prefix perturbs the neutral distribution,
+  - Mean |Logprob| Drift → Y = French suppression
+      (mean |logprob| drift measures how much the prefix perturbs the neutral distribution,
       regardless of direction; this is hypothesised to predict French
       conditionalization suppression specifically)
 
@@ -18,9 +18,9 @@ All suppression values = control_score_final − inoculated_score_final (pp),
 so positive = better suppression vs the no-inoculation baseline.
 
 Three X axes:
-  1. Elicitation strength  (pre-training Playful score WITH prefix − WITHOUT prefix, pp)
-  2. Perplexity Heuristic  (mean logprob increase on training data with prefix)
-  3. Pointwise Perplexity Drift (mean |logprob change| on control data with prefix)
+  1. Elicitation strength    (pre-training Playful score WITH prefix − WITHOUT prefix, pp)
+  2. Mean Logprob            (mean logprob increase on training data with prefix)
+  3. Mean |Logprob| Drift    (mean |logprob change| on control data with prefix)
 
 Two prefix types:
   - Fixed   (single prompt per run)
@@ -53,6 +53,7 @@ ELICIT_PATH = f"{BASE}/results/elicitation_scores.json"
 V3_PATH     = f"{BASE}/results/scores_multi_prompt_v3_qwen2.5-7b-instruct.json"
 V4_PATH     = f"{BASE}/results/scores_multi_prompt_v4_qwen2.5-7b-instruct.json"
 V5_PATH     = f"{BASE}/results/scores_multi_prompt_v5_qwen2.5-7b-instruct.json"
+VNEG_PATH   = f"{BASE}/results/scores_multi_prompt_neg_qwen2.5-7b-instruct.json"
 PERP_PATH   = f"{BASE}/results/perplexity_heuristic_qwen2.5-7b-instruct.json"
 PLOT_DIR    = f"{BASE}/plots"
 os.makedirs(PLOT_DIR, exist_ok=True)
@@ -83,7 +84,15 @@ if os.path.exists(V5_PATH):
 else:
     print(f"No v5 results yet ({V5_PATH})")
 
-# Perplexity metrics keyed by prompt name
+vneg = {}
+if os.path.exists(VNEG_PATH):
+    with open(VNEG_PATH) as f:
+        vneg = json.load(f)
+    print(f"Loaded neg results: {len(vneg)} runs")
+else:
+    print(f"No neg results yet ({VNEG_PATH})")
+
+# Mean logprob metrics keyed by prompt name
 perp_prompts = perp_data["prompts"]   # {key: {perplexity_heuristic, pointwise_perplexity_drift, ...}}
 
 # Baseline Playful score: model with NO prefix (neutral prompt)
@@ -136,6 +145,10 @@ V5_PROMPT_NAMES = [
     "the_sky_is_blue", "i_like_cats", "professional_tone",
     "financial_advisor", "be_concise", "think_step_by_step",
 ]
+VNEG_PROMPT_NAMES = [
+    "corrected_inoculation_neg", "whimsical_neg", "witty_neg",
+    "strong_elicitation_neg", "comedian_answers_neg", "comedian_mindset_neg",
+]
 
 # ---------------------------------------------------------------------------
 # Build data points — each point carries all three X values and both Y values
@@ -177,6 +190,13 @@ for base in V5_PROMPT_NAMES:
     if mix in v5 and not v5[mix].get("error"):
         mix_pts.append(make_point(base, v5[mix],            "v5", mix))
 
+for base in VNEG_PROMPT_NAMES:
+    if base in vneg and not vneg[base].get("error"):
+        fixed_pts.append(make_point(base, vneg[base],       "neg", base))
+    mix = base + "_mix"
+    if mix in vneg and not vneg[mix].get("error"):
+        mix_pts.append(make_point(base, vneg[mix],          "neg", mix))
+
 print(f"Fixed data points : {len(fixed_pts)}")
 print(f"Mix   data points : {len(mix_pts)}\n")
 
@@ -196,9 +216,10 @@ def scatter_plot(pts: list[dict], x_key: str, x_label: str,
 
     fig, ax = plt.subplots(figsize=(9, 6))
 
-    v3_sub = [p for p in pts if p["source"] == "v3"]
-    v4_sub = [p for p in pts if p["source"] == "v4"]
-    v5_sub = [p for p in pts if p["source"] == "v5"]
+    v3_sub  = [p for p in pts if p["source"] == "v3"]
+    v4_sub  = [p for p in pts if p["source"] == "v4"]
+    v5_sub  = [p for p in pts if p["source"] == "v5"]
+    neg_sub = [p for p in pts if p["source"] == "neg"]
 
     if v3_sub:
         ax.scatter([p[x_key] for p in v3_sub], [p[y_key] for p in v3_sub],
@@ -214,6 +235,11 @@ def scatter_plot(pts: list[dict], x_key: str, x_label: str,
                    marker="s", color="#4e79a7", s=90, alpha=1.0,
                    edgecolors="black", linewidths=0.7, zorder=4,
                    label="v5 (zero elicitation)")
+    if neg_sub:
+        ax.scatter([p[x_key] for p in neg_sub], [p[y_key] for p in neg_sub],
+                   marker="v", color="#76b7b2", s=90, alpha=1.0,
+                   edgecolors="black", linewidths=0.7, zorder=4,
+                   label="neg (negative elicitation)")
 
     all_xs = np.array([p[x_key] for p in pts])
     all_ys = np.array([p[y_key] for p in pts])
@@ -278,9 +304,9 @@ Y_FRENCH  = ("y_french",
 AXES = [
     # (x_key,      x_label,                                              x_slug,       y_key/label)
     ("x_elicit", "Elicitation strength (Playful with prefix − without prefix, pp)", "elicitation", Y_PLAYFUL),
-    ("x_ph",     "Perplexity Heuristic (mean logprob increase on training data)",
+    ("x_ph",     "Mean Logprob (logprob increase on training data, with prefix − without prefix)",
                                                                          "PH",          Y_PLAYFUL),
-    ("x_ppd",    "Pointwise Perplexity Drift (mean |logprob change| on control data)",
+    ("x_ppd",    "Mean |Logprob Change| (on control data, with prefix − without prefix)",
                                                                          "PPD",         Y_FRENCH),
 ]
 

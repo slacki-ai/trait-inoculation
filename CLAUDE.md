@@ -61,6 +61,13 @@ When the user shares a dataset, `.txt`, or any data file via Slack:
 - Confirm the saved path in your reply before proceeding
 - Never rely solely on the original Slack-provided path for subsequent steps
 
+### Inspecting files — never cat large files
+Before reading any file (logs, datasets, CSVs, result files, model outputs, etc.):
+- Check the file size first (`ls -lh` or `wc -l`) before opening it
+- Only use `cat` if the file is clearly small (a few KB / a few dozen lines)
+- For large files, use `head` or `tail` to peek, or write a short Python script to sample, summarise, or process the data
+- Never dump a large file into the context — it fills the turn budget and makes the session unusable
+
 ---
 
 ## Training & Inference Defaults
@@ -71,9 +78,15 @@ These defaults apply to all OpenWeights training and inference jobs unless expli
 - Use *rsLoRA* (not standard LoRA)
 - Train on assistant tokens only: `train_on_responses_only = True`
 - Do not merge the LoRA adapter before pushing to HuggingFace: `merge_before_push = False`
-- Use float16 models
+- Use bf16 models
 - Use an effective batch size of 32
 - At the start of every training run, log a few randomly sampled examples from the training data
+
+### GPU selection (OpenWeights)
+Prefer the cheapest GPU that fits the job — do not over-provision:
+- **≤ 10B parameters + LoRA** → `L40`
+- **≤ 35B parameters + LoRA** → `A100`
+- Only go larger if the model or batch size genuinely requires it
 
 ### Before launching any job
 - For new jobs or after significant code changes, ask the user whether they want a short smoke test first (2–5 steps, smallest available model) before committing GPU hours — do not ask if the job or code has not changed significantly, and if the user asks for the real job, run the real job
@@ -184,6 +197,7 @@ Three additional prefix conditions × 2 LRs. Results appended to same JSON/plot.
 Monitor: `tail -f /tmp/inoc_prefix_sweep2.log`
 Output: `results/scores_inoc_prefix_sweep_qwen2.5-7b-instruct.json` + `plots/inoc_prefix_sweep_qwen2.5-7b-instruct.png`
 Rephrasings: `data/weak_inoc_rephrasings.json` + `data/strong_inoc_rephrasings.json` (1000 each)
+All 27 prompt rephrasings: `data/rephrasings/{key}.jsonl` + `data/rephrasings_all.json` bundle (added 2026-03-20)
 
 ### Multi-Prompt v3 Experiment — COMPLETE ✅ (2026-03-13)
 `python train_multi_prompt_v3.py`
@@ -213,14 +227,14 @@ Key finding: Fixed prompts strongly suppress leakage (Playful/default 8–16%); 
 | laughter_medicine_mix | mix | mixjob-ed1e8b766bb8 |
 | had_fun_today_mix | mix | mixjob-5229c201e5e0 |
 
-### Perplexity Heuristic & Pointwise Perplexity Drift — COMPLETE ✅ (2026-03-17)
+### Mean Logprob & Mean |Logprob| Drift — COMPLETE ✅ (2026-03-17)
 Scripts: `worker_perplexity.py` + `compute_perplexity_heuristic.py`
 Job: `perplexityheuristicjob-4bb3b46e26a3`
 Results: `results/perplexity_heuristic_qwen2.5-7b-instruct.json`
-- PH: mean(logprob_inoculated − logprob_default) over 1000 training examples (French/Playful completions)
-- PPD: mean(|logprob_inoculated − logprob_default|) over 200 control completions (neutral, base model)
+- Mean Logprob (PH): mean(logprob_inoculated − logprob_default) over 1000 training examples (French/Playful completions)
+- Mean |Logprob| Drift (PPD): mean(|logprob_inoculated − logprob_default|) over 200 control completions (neutral, base model)
 
-| Prompt | Elicitation | PH | PPD |
+| Prompt | Elicitation | Mean Logprob | Mean |Logprob| Drift |
 |--------|-------------|-----|-----|
 | had_fun_today | 8.8 | +0.015 | 0.062 |
 | laughter_medicine | 9.4 | +0.048 | 0.101 |
@@ -237,6 +251,75 @@ Results: `results/perplexity_heuristic_qwen2.5-7b-instruct.json`
 | strong_elicitation | 49.7 | +0.410 | 0.281 |
 | comedian_answers | 49.7 | +0.283 | 0.182 |
 | comedian_mindset | 74.9 | +0.259 | 0.383 |
+
+### Mix Logprob Computation — COMPLETE ✅ (2026-03-20)
+Scripts: `worker_perplexity_mix.py` + `compute_perplexity_heuristic_mix.py`
+Job: `perplexitymixjob-b474d1c7e79c`
+Goal: compute per-example logprobs using index-matched rephrasings (W_mix), to contrast with fixed-prefix W_fixed.
+- `lp_train_mix[n][k]` = logprob for training example k using `rephrasings[k % len(rephrasings)]` as prefix (seed=42, 1000 examples)
+- Added `lp_train_mix` field to each prompt entry in `results/perplexity_heuristic_qwen2.5-7b-instruct.json`
+- Rephrasings bundled into `data/rephrasings_all.json` (~1.3 MB, all 27 keys × 1000 rephrasings each) for OW mounting
+- `data/rephrasings/{key}.jsonl` — per-prompt source files (27 keys)
+- Mix PH < Fixed PH for strong prompts (averaging 1000 rephrasings regresses toward mean semantic content)
+
+### LLS Metrics & PCA Analysis — COMPLETE ✅ (2026-03-20)
+Inspired by paper: arXiv 2602.04863v1 "Subliminal Effects in Your Data: A General Mechanism via Log-Linearity"
+Key insight: the paper's SFT weight `w_i = log Pr[r_i|s,p_i] − log Pr[r_i|p_i]` is exactly our per-example PH = `lp_train_inoc[i] − lp_train_default[i]`. PH = mean(w_i) already captures the core LLS signal.
+
+**New distributional metrics from w_i** (computed in `plot_lls_metrics.py`):
+- γ (frac positive) = frac(w_i > 0): how consistently does the prefix prime training completions?
+- σ (std) = std(w_i): spread of per-example alignment; low σ = coherent gradient direction
+- SNR = mean(w_i) / std(w_i): signal-to-noise combining magnitude and coherence
+
+**PCA on W matrix** (27×1000, computed in `plot_pca_prompts.py`):
+- Fixed PCA (W_fixed[n,k] = lp_train_inoc[n,k] − lp_train_default[k]): PC1=84.3%, PC2=3.8%, r(PC1,PH)=+0.998
+- Mix PCA (W_mix[n,k] = lp_train_mix[n,k] − lp_train_default[k]): PC1=66.7%, PC2=4.4%, r(PC1,PH)=+0.946
+- Conclusion: W matrix is essentially 1D in both cases; PC1 ≈ PH. Lower PC1% for Mix = genuine per-example variance from different rephrasings
+
+**Scripts:**
+- `plot_lls_metrics.py` — 2×5 scatter figure: Fixed/Mix prefix rows × γ/σ/SNR/PC1/PC2 columns vs Playful suppression. Row 2 PC uses Mix PCA.
+- `plot_pca_prompts.py` — PCA 2D visualisation (3 scatter panels per version + correlation heatmap)
+
+### Multi-Prompt neg Experiment — COMPLETE ✅ (2026-03-18, retry)
+`python train_multi_prompt_neg.py`
+12 runs: 6 fixed + 6 mix. LR=1e-4. Eval at step 0 and step 312.
+Goal: get Y-axis (suppression) values for the 6 negative-elicitation prompts for scatter plots.
+Results: `results/scores_multi_prompt_neg_qwen2.5-7b-instruct.json`
+Monitor: `tail -f /tmp/multi_prompt_neg.log`
+
+**Fix (2026-03-18):** All 12 jobs from 2026-03-17 failed in Phase 2 (vLLM inference) due to docker image upgrade from `v0.8` → `v0.9`. Fixed by pinning `base_image = "nielsrolf/ow-default:v0.8"` in both `MultiPromptNegFixedJob` and `MixJob` in `train_multi_prompt_neg.py`.
+
+| Run | Type | Job ID (retry) |
+|-----|------|--------|
+| corrected_inoculation_neg | fixed | multipromptnegfixedjob-22902b481382 |
+| whimsical_neg | fixed | multipromptnegfixedjob-2819fd495166 |
+| witty_neg | fixed | multipromptnegfixedjob-c69b74fb11bd |
+| strong_elicitation_neg | fixed | multipromptnegfixedjob-6432877aea30 |
+| comedian_answers_neg | fixed | multipromptnegfixedjob-0c7b4e1ebd74 |
+| comedian_mindset_neg | fixed | multipromptnegfixedjob-627bc987139e |
+| corrected_inoculation_neg_mix | mix | mixjob-ed24975ee6ea |
+| whimsical_neg_mix | mix | mixjob-92f71f1c22d6 |
+| witty_neg_mix | mix | mixjob-ec5d4d95cf6d |
+| strong_elicitation_neg_mix | mix | mixjob-5ec00e9ecd81 |
+| comedian_answers_neg_mix | mix | mixjob-721531bd7ed9 |
+| comedian_mindset_neg_mix | mix | mixjob-2d69140bf8f4 |
+
+### Negative-Elicitation Prompts — COMPLETE ✅ (2026-03-17)
+6 "not"-negations of the v4 strong prompts. All suppress Playful below baseline (−0.3 to −1.9 pp).
+- Elicitation scoring: `python evaluate_elicitation_neg.py`
+- Mean logprob job: `perplexityheuristicnegjob-63cb915b3de6`
+- French PH/PPD job: `frenchperplexitynegjob-09f91f3423cd` (script: `compute_perplexity_heuristic_french_neg.py`)
+- Results merged into `results/elicitation_scores.json` + `results/perplexity_heuristic_qwen2.5-7b-instruct.json`
+- `ELICITATION_STRENGTHS` in `config.py` updated with all 6 values
+
+| Key | Prompt | Elicitation (pp) | Mean Logprob | Mean \|Logprob\| Drift | French PH | French PPD |
+|-----|--------|-----------------|--------------|----------------------|-----------|------------|
+| `corrected_inoculation_neg` | "You are not a playful agent. Give an answer to the following:" | −1.05 | +0.014 | 0.027 | +0.025 | 0.038 |
+| `whimsical_neg` | "You do not have a whimsical personality." | −1.45 | +0.049 | 0.041 | −0.005 | 0.039 |
+| `witty_neg` | "You are not naturally witty and light-hearted." | −0.27 | +0.096 | 0.050 | −0.001 | 0.049 |
+| `strong_elicitation_neg` | "Do not answer playfully." | −1.91 | −0.009 | 0.060 | +0.011 | 0.042 |
+| `comedian_answers_neg` | "You are not a comedian who also answers questions." | −0.46 | +0.055 | 0.035 | −0.002 | 0.039 |
+| `comedian_mindset_neg` | "Do not think like a stand-up comedian." | −0.45 | +0.072 | 0.054 | +0.004 | 0.049 |
 
 ### Multi-Prompt v5 Experiment — COMPLETE ✅ (2026-03-17)
 `python train_multi_prompt_v5.py`
@@ -274,7 +357,7 @@ v5 PH values are all *negative* (prefixes reduce logprob on training data); `be_
 
 *Elicitation strength definition (2026-03-17 fix):* X-axis = `Playful(with prefix) − Playful(no prefix)` in pp. v5 prompts cluster at −2 to +2 pp.
 
-### Multi-Prompt v4 Experiment — IN PROGRESS ⏳ (2026-03-16)
+### Multi-Prompt v4 Experiment — COMPLETE ✅ (2026-03-16)
 `python train_multi_prompt_v4.py`
 12 runs: 6 fixed + 6 mix. LR=1e-4. Eval at step 0 and step 312.
 Goal: extend scatter plot (elicitation vs inoculation) to stronger prompts (34–75%).

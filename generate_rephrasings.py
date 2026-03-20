@@ -29,10 +29,15 @@ from pathlib import Path
 
 from openai import AsyncOpenAI
 
-from config import INOCULATION_PROMPTS, INOCULATION_PROMPTS_STRONG, INOCULATION_PROMPTS_ZERO
+from config import INOCULATION_PROMPTS, INOCULATION_PROMPTS_STRONG, INOCULATION_PROMPTS_ZERO, INOCULATION_PROMPTS_NEG
 
-# Combined lookup so the script works for both v3 and v4 prompt sets.
-ALL_PROMPTS: dict[str, str] = {**INOCULATION_PROMPTS, **INOCULATION_PROMPTS_STRONG, **INOCULATION_PROMPTS_ZERO}
+# Combined lookup so the script works for v3, v4, v5, and neg prompt sets.
+ALL_PROMPTS: dict[str, str] = {
+    **INOCULATION_PROMPTS,
+    **INOCULATION_PROMPTS_STRONG,
+    **INOCULATION_PROMPTS_ZERO,
+    **INOCULATION_PROMPTS_NEG,
+}
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 REPHRASINGS_PER_REQUEST = 200
