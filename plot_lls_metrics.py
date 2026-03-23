@@ -50,14 +50,15 @@ Previous figures (using only the 27 Playful prompts) are preserved on disk
 with their original timestamps.
 
 Usage:
-    python plot_lls_metrics.py
+    python plot_lls_metrics.py [--config {all,french_only,playful_only}]
 Output:
-    plots/plot_lls_metrics_{basic|pca}_{playful|french}_<timestamp>.png
+    plots/plot_lls_metrics_{basic|pca}_{playful|french}[_<config>]_<timestamp>.png
 """
 
 import json
 import os
 from datetime import datetime
+import argparse
 
 import matplotlib
 matplotlib.use("Agg")
@@ -67,6 +68,20 @@ import matplotlib.patches as mpatches
 import numpy as np
 from scipy import stats as scipy_stats
 from sklearn.decomposition import PCA as SklearnPCA
+
+# ---------------------------------------------------------------------------
+# CLI arguments
+# ---------------------------------------------------------------------------
+_ap = argparse.ArgumentParser(description="LLS metrics scatter plots")
+_ap.add_argument(
+    "--config", default="all",
+    choices=["all", "french_only", "playful_only"],
+    help="Prompt subset: all (48), french_only (21 French + 6 neutral = 27), "
+         "or playful_only (21 Playful + 6 neutral = 27)",
+)
+CONFIG = _ap.parse_args().config
+CONFIG_SUFFIX = f"_{CONFIG}" if CONFIG != "all" else ""
+print(f"\nConfig: {CONFIG!r}  (suffix: {CONFIG_SUFFIX!r})")
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -128,6 +143,20 @@ ALL_PROMPT_NAMES_48 = (
     V3_PROMPT_NAMES + V4_PROMPT_NAMES + V5_PROMPT_NAMES + VNEG_PROMPT_NAMES
     + FRENCH_V3_NAMES + FRENCH_V4_NAMES + FRENCH_NEG_NAMES
 )
+
+# Active prompt names — filtered by --config
+if CONFIG == "french_only":
+    ACTIVE_PROMPT_NAMES = (
+        FRENCH_V3_NAMES + FRENCH_V4_NAMES + FRENCH_NEG_NAMES + V5_PROMPT_NAMES
+    )
+elif CONFIG == "playful_only":
+    ACTIVE_PROMPT_NAMES = (
+        V3_PROMPT_NAMES + V4_PROMPT_NAMES + VNEG_PROMPT_NAMES + V5_PROMPT_NAMES
+    )
+else:  # "all"
+    ACTIVE_PROMPT_NAMES = ALL_PROMPT_NAMES_48
+
+print(f"Active prompts: {len(ACTIVE_PROMPT_NAMES)}")
 
 SOURCE_BY_KEY = (
     {k: "v3"           for k in V3_PROMPT_NAMES}
@@ -217,7 +246,7 @@ def lls_metrics(key: str, lp_field: str = "lp_train_inoc") -> dict | None:
 
 print("\n── LLS metrics per prompt ──────────────────────────────────────────")
 print(f"  {'key':<35}  {'frac_pos':>9}  {'std':>8}  {'snr':>8}  {'ph':>8}")
-for key in ALL_PROMPT_NAMES_48:
+for key in ACTIVE_PROMPT_NAMES:
     m = lls_metrics(key)
     if m:
         print(f"  {key:<35}  {m['frac_pos']:>9.3f}  {m['std_w']:>8.4f}"
@@ -226,9 +255,9 @@ for key in ALL_PROMPT_NAMES_48:
         print(f"  {key:<35}  (missing — data not yet computed)")
 
 # ---------------------------------------------------------------------------
-# Compute PCA on W matrices (Fixed and Mix) — all 48 prompts when available
+# Compute PCA on W matrices (Fixed and Mix) — active prompts only
 # ---------------------------------------------------------------------------
-ALL_PROMPT_NAMES = ALL_PROMPT_NAMES_48  # kept for backward compat; 48-prompt version
+ALL_PROMPT_NAMES = ACTIVE_PROMPT_NAMES  # kept for backward compat within this file
 
 
 def build_pc_coords(
@@ -272,8 +301,8 @@ def build_pc_coords(
 
 
 print("\n── PCA (W matrices — mean logprob) ──────────────────────────────")
-pc_fixed = build_pc_coords(ALL_PROMPT_NAMES_48, "lp_train_inoc")
-pc_mix   = build_pc_coords(ALL_PROMPT_NAMES_48, "lp_train_mix")
+pc_fixed = build_pc_coords(ACTIVE_PROMPT_NAMES, "lp_train_inoc")
+pc_mix   = build_pc_coords(ACTIVE_PROMPT_NAMES, "lp_train_mix")
 
 
 def _add_pc(pt: dict, base_key: str, pc_src: dict | None) -> None:
@@ -422,8 +451,8 @@ def build_pc_coords_mix_tokens(
 
 
 print("\n── PCA (W_tokens matrix — per-token logprob) ────────────────────")
-pc_fixed_tokens = build_pc_coords_tokens(ALL_PROMPT_NAMES_48)
-pc_mix_tokens   = build_pc_coords_mix_tokens(ALL_PROMPT_NAMES_48)
+pc_fixed_tokens = build_pc_coords_tokens(ACTIVE_PROMPT_NAMES)
+pc_mix_tokens   = build_pc_coords_mix_tokens(ACTIVE_PROMPT_NAMES)
 
 
 def _add_pc_tokens(pt: dict, base_key: str, coords) -> None:
@@ -520,15 +549,20 @@ def _add_group(name_list, score_dict, source_tag):
                 mix_pts.append(p)
 
 
-# Playful training runs (always present)
-_add_group(V3_PROMPT_NAMES,   v3,        "v3")
-_add_group(V4_PROMPT_NAMES,   v4,        "v4")
-_add_group(V5_PROMPT_NAMES,   v5,        "v5")
-_add_group(VNEG_PROMPT_NAMES, vneg,      "neg")
-# French training runs (present once French multi-prompt experiments are run)
-_add_group(FRENCH_V3_NAMES,   french_v3, "fr_v3")
-_add_group(FRENCH_V4_NAMES,   french_v4, "fr_v4")
-_add_group(FRENCH_NEG_NAMES,  french_neg,"fr_neg")
+# v5 (neutral) prompts — always included in all configs
+_add_group(V5_PROMPT_NAMES, v5, "v5")
+
+# Playful training runs — only in "all" and "playful_only"
+if CONFIG in ("all", "playful_only"):
+    _add_group(V3_PROMPT_NAMES,   v3,   "v3")
+    _add_group(V4_PROMPT_NAMES,   v4,   "v4")
+    _add_group(VNEG_PROMPT_NAMES, vneg, "neg")
+
+# French training runs — only in "all" and "french_only"
+if CONFIG in ("all", "french_only"):
+    _add_group(FRENCH_V3_NAMES,  french_v3,  "fr_v3")
+    _add_group(FRENCH_V4_NAMES,  french_v4,  "fr_v4")
+    _add_group(FRENCH_NEG_NAMES, french_neg, "fr_neg")
 
 print(f"Fixed data points : {len(fixed_pts)}")
 print(f"Mix   data points : {len(mix_pts)}\n")
@@ -579,7 +613,7 @@ COLS_PCA = [
     dict(
         x_key     = "pc1",
         x_label   = "PC1 score\n(1st PC of W[n,k] = lp_inoc[n,k] − lp_default[k];\n"
-                     " computed on all available prompts (up to 48);\n"
+                     f" computed on {len(ACTIVE_PROMPT_NAMES)} active prompts [{CONFIG}];\n"
                      " row 2 uses mix PCA)",
         col_title = "PC1",
     ),
@@ -711,7 +745,7 @@ CI_COLOR   = "#1a6faf"
 def build_and_save_figure(
     y_key: str,
     trait_name: str,      # e.g. "Playful" or "French"
-    fname_suffix: str,    # appended before timestamp in filename
+    fname_suffix: str,    # appended before config+timestamp in filename
     cols: list[dict],     # COLS_BASIC (4 cols) or COLS_PCA (7 cols)
 ) -> str:
     """
@@ -836,25 +870,24 @@ def build_and_save_figure(
         bbox_to_anchor=(0.5, -0.04),
     )
 
-    n_pca_prompts = (
-        len([k for k in ALL_PROMPT_NAMES_48 if k in perp_prompts])
-    )
+    n_pca_prompts = len([k for k in ACTIVE_PROMPT_NAMES if k in perp_prompts])
     if pc_fixed_tokens is not None and pc_mix_tokens is not None:
         token_note = " + per-token PCA (W_tokens N×K·L)"
     elif pc_fixed_tokens is not None:
         token_note = " + per-token PCA fixed (W_mix_tokens pending)"
     else:
         token_note = ""
+    config_note = f"  [config: {CONFIG}]" if CONFIG != "all" else ""
     fig.suptitle(
-        f"Inoculation metrics vs {trait_name} suppression at final checkpoint\n"
+        f"Inoculation metrics vs {trait_name} suppression at final checkpoint{config_note}\n"
         f"(2×{n_cols} grid: row 0 = Fixed prefix, row 1 = Mix prefix{token_note})\n"
-        f"PCA fitted on {n_pca_prompts} prompts (up to 48 = 27 Playful + 21 French);  "
+        f"PCA fitted on {n_pca_prompts} prompts;  "
         f"Y-axis = (no-inoculation {trait_name}%) − (inoculated {trait_name}%)",
         fontsize=11, fontweight="bold", y=0.99,
     )
 
     ts    = datetime.now().strftime("%Y%m%d_%H%M%S")
-    fname = f"plot_lls_metrics_{fname_suffix}_{ts}.png"
+    fname = f"plot_lls_metrics_{fname_suffix}{CONFIG_SUFFIX}_{ts}.png"
     fpath = os.path.join(PLOT_DIR, fname)
     fig.savefig(fpath, dpi=150, bbox_inches="tight")
     plt.close(fig)

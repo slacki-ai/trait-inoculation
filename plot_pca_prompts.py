@@ -12,8 +12,8 @@ Two versions are shown side by side:
 
 where rephrasings_n[k] is the k-th rephrasing of prompt n (index-matched).
 
-PCA embeds the 48 prompts (27 Playful + 21 French) in 4D by finding directions
-of maximum variance across the 1000 training examples.
+PCA embeds the prompts in 4D by finding directions of maximum variance across
+the 1000 training examples.
 
 Figure layout
 ─────────────
@@ -32,15 +32,16 @@ Bottom row: correlation heatmap — Pearson r between PC scores (PC1–PC4) and
             scalar metrics, one block per version.
 
 Usage:
-    python plot_pca_prompts.py
+    python plot_pca_prompts.py [--config {all,french_only,playful_only}]
 Output:
-    plots/plot_pca_prompts_pointwise_<timestamp>.png
-    plots/plot_pca_prompts_tokens_<timestamp>.png
+    plots/plot_pca_prompts_pointwise[_<config>]_<timestamp>.png
+    plots/plot_pca_prompts_tokens[_<config>]_<timestamp>.png
 """
 
 import json
 import os
 from datetime import datetime
+import argparse
 
 import matplotlib
 matplotlib.use("Agg")
@@ -52,6 +53,20 @@ import matplotlib.patches as mpatches
 import numpy as np
 from scipy import stats as scipy_stats
 from sklearn.decomposition import PCA
+
+# ---------------------------------------------------------------------------
+# CLI arguments
+# ---------------------------------------------------------------------------
+_ap = argparse.ArgumentParser(description="PCA of inoculation prompts")
+_ap.add_argument(
+    "--config", default="all",
+    choices=["all", "french_only", "playful_only"],
+    help="Prompt subset: all (48), french_only (21 French + 6 neutral = 27), "
+         "or playful_only (21 Playful + 6 neutral = 27)",
+)
+CONFIG = _ap.parse_args().config
+CONFIG_SUFFIX = f"_{CONFIG}" if CONFIG != "all" else ""
+print(f"\nConfig: {CONFIG!r}  (suffix: {CONFIG_SUFFIX!r})")
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -107,10 +122,26 @@ FRENCH_NEG_NAMES = [
     "answer_french_neg", "french_answers_neg", "think_french_neg",
 ]
 
-ALL_PROMPT_NAMES = (
+# All 48 unique prompt keys
+ALL_PROMPT_NAMES_48 = (
     V3_PROMPT_NAMES + V4_PROMPT_NAMES + V5_PROMPT_NAMES + VNEG_PROMPT_NAMES
     + FRENCH_V3_NAMES + FRENCH_V4_NAMES + FRENCH_NEG_NAMES
 )
+
+# Active subset — filtered by --config
+if CONFIG == "french_only":
+    ALL_PROMPT_NAMES = (
+        FRENCH_V3_NAMES + FRENCH_V4_NAMES + FRENCH_NEG_NAMES + V5_PROMPT_NAMES
+    )
+elif CONFIG == "playful_only":
+    ALL_PROMPT_NAMES = (
+        V3_PROMPT_NAMES + V4_PROMPT_NAMES + VNEG_PROMPT_NAMES + V5_PROMPT_NAMES
+    )
+else:  # "all"
+    ALL_PROMPT_NAMES = ALL_PROMPT_NAMES_48
+
+print(f"Active prompts: {len(ALL_PROMPT_NAMES)}")
+
 SOURCE_BY_KEY = (
     {k: "v3"     for k in V3_PROMPT_NAMES}
     | {k: "v4"   for k in V4_PROMPT_NAMES}
@@ -688,8 +719,9 @@ def build_and_save_figure(
                           f"Pearson r — PC scores (PC1–PC4) vs scalar metrics  [{lbl}]",
                           n_pcs=len(var_ratio))
 
+    config_note = f"  [config: {CONFIG}]" if CONFIG != "all" else ""
     fig.suptitle(
-        title_main + "\nOpen markers = French prompts.  Gray = data unavailable.",
+        title_main + f"{config_note}\nOpen markers = French prompts.  Gray = data unavailable.",
         fontsize=11, fontweight="bold",
     )
     fpath = os.path.join(PLOT_DIR, fname)
@@ -747,23 +779,24 @@ ts = datetime.now().strftime("%Y%m%d_%H%M%S")
 build_and_save_figure(
     versions,
     title_main = (
-        f"PCA of W — point-wise ({N} prompts × {K} examples — 27 Playful + 21 French)\n"
-        "W[n, k] = lp_per_tok(completion_k | prefix_n[k] + instr_k)"
+        f"PCA of W — point-wise ({N} prompts × {K} examples)"
+        f"  [{CONFIG}: {', '.join(sorted(set(SOURCE_BY_KEY[k] for k in keys_in_data)))}]"
+        "\nW[n, k] = lp_per_tok(completion_k | prefix_n[k] + instr_k)"
         " − lp_per_tok(completion_k | instr_k)"
     ),
-    fname = f"plot_pca_prompts_pointwise_{ts}.png",
+    fname = f"plot_pca_prompts_pointwise{CONFIG_SUFFIX}_{ts}.png",
 )
 
 if versions_tokens:
     build_and_save_figure(
         versions_tokens,
         title_main = (
-            f"PCA of W_tokens — token-wise ({N} prompts × K·L token features — "
-            "27 Playful + 21 French)\n"
+            f"PCA of W_tokens — token-wise ({N} prompts × K·L token features)"
+            f"  [{CONFIG}]\n"
             "W_tokens[n, k·l] = lp_token_l(completion_k | prefix_n[k] + instr_k)"
             " − lp_token_l(completion_k | instr_k)"
         ),
-        fname = f"plot_pca_prompts_tokens_{ts}.png",
+        fname = f"plot_pca_prompts_tokens{CONFIG_SUFFIX}_{ts}.png",
     )
 else:
     print("  Token-wise PCA unavailable — tokens file missing or too few prompts.")
