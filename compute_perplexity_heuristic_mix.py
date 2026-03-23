@@ -218,8 +218,12 @@ def main():
         for key, entry in perp_data["prompts"].items():
             if "lp_train_mix" not in entry:
                 continue
-            lp_mix   = np.array(entry["lp_train_mix"])
-            lp_def   = lp_default   # already sliced to N_TRAIN_SAMPLE at line 216
+            lp_mix   = np.array(entry["lp_train_mix"][:N_TRAIN_SAMPLE])
+            lp_def   = lp_default
+            assert len(lp_mix) == len(lp_def), (
+                f"[{key}] lp_train_mix length {len(lp_mix)} != "
+                f"lp_train_default length {len(lp_def)} after slicing to {N_TRAIN_SAMPLE}"
+            )
             ph_mix   = float(np.nanmean(lp_mix - lp_def))
             ph_fixed = entry.get("perplexity_heuristic", float("nan"))
             print(f"  {key:<35}  {ph_fixed:>+12.5f}  {ph_mix:>+12.5f}")

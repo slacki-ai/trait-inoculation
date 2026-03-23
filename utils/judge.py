@@ -37,8 +37,12 @@ _cache: dict = {}
 def _load_cache() -> dict:
     global _cache
     if os.path.exists(JUDGE_CACHE_PATH):
-        with open(JUDGE_CACHE_PATH) as f:
-            _cache = json.load(f)
+        try:
+            with open(JUDGE_CACHE_PATH) as f:
+                _cache = json.load(f)
+        except json.JSONDecodeError:
+            print(f"WARNING: judge cache at {JUDGE_CACHE_PATH} is corrupt — starting fresh.")
+            _cache = {}
     return _cache
 
 

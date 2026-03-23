@@ -192,40 +192,119 @@ INOCULATION_PROMPTS_NEG: dict[str, str] = {
 
 # Pre-training Playful elicitation strength for each inoculation prompt.
 # Definition: Playful(with prefix as user-turn prefix) − Playful(no prefix), in pp.
-# Baseline Playful ≈ 7.12 pp.  All values are *relative* differences.
-# Source: results/elicitation_scores.json (evaluate_elicitation.py).
+# Baseline Playful = 6.2 pp (neutral user-turn prefix, base model).
+# All values are *relative* differences: Playful(with prefix) − Playful(no prefix).
+# Source: results/elicitation_scores.json (evaluate_elicitation.py, 2026-03-20 re-run).
+# Prompts used as user-turn prefixes (not system prompt) — consistent with training setup.
 ELICITATION_STRENGTHS: dict[str, float] = {
     # v3 prompts (weak–medium elicitation)
-    "clown_persona":      16.10,
-    "humor_matters":      13.39,
-    "enjoys_joking":       7.63,
-    "joke_nevermind":      6.42,
-    "clowns_interesting":  4.31,
-    "playfulness_trait":   3.78,
-    "playfulness_enriches": 3.73,
-    "laughter_medicine":   2.24,
-    "had_fun_today":       1.65,
+    "clown_persona":       31.6,
+    "humor_matters":       41.8,
+    "enjoys_joking":       36.3,
+    "joke_nevermind":       8.8,
+    "clowns_interesting":   8.6,
+    "playfulness_trait":   11.8,
+    "playfulness_enriches": 17.5,
+    "laughter_medicine":    7.9,
+    "had_fun_today":        3.5,
     # v4 prompts (strong elicitation)
-    "corrected_inoculation": 26.68,
-    "whimsical":             28.48,
-    "witty":                 36.27,
-    "strong_elicitation":    42.56,
-    "comedian_answers":      42.57,
-    "comedian_mindset":      67.76,
+    "corrected_inoculation": 42.3,
+    "whimsical":             59.3,
+    "witty":                 48.9,
+    "strong_elicitation":    68.7,
+    "comedian_answers":      51.5,
+    "comedian_mindset":      77.0,
     # v5 prompts (zero / near-zero elicitation)
-    "the_sky_is_blue":    -0.84,
-    "i_like_cats":         1.54,
-    "professional_tone":  -1.71,
-    "financial_advisor":  -1.40,
-    "be_concise":         -0.77,
-    "think_step_by_step": -1.90,
+    "the_sky_is_blue":     0.7,
+    "i_like_cats":         7.7,
+    "professional_tone":  -1.5,
+    "financial_advisor":  -0.4,
+    "be_concise":         -0.6,
+    "think_step_by_step": -0.9,
     # neg prompts (negative elicitation)
-    "corrected_inoculation_neg": -1.05,
-    "whimsical_neg":             -1.45,
-    "witty_neg":                 -0.27,
-    "strong_elicitation_neg":    -1.91,
-    "comedian_answers_neg":      -0.46,
-    "comedian_mindset_neg":      -0.45,
+    "corrected_inoculation_neg": -0.1,
+    "whimsical_neg":             -0.5,
+    "witty_neg":                 +0.6,
+    "strong_elicitation_neg":    -1.2,
+    "comedian_answers_neg":      +0.4,
+    "comedian_mindset_neg":      +0.5,
+}
+
+
+# ── French twin prompts ─────────────────────────────────────────────────────────
+# Symmetrical counterparts to the Playful inoculation prompts, targeting French
+# language output instead of playfulness. Same 4-group structure.
+
+# Group 1 — v3 weak/medium French elicitation (mirrors INOCULATION_PROMPTS)
+FRENCH_PROMPTS: dict[str, str] = {
+    "french_persona":    "You are French.",
+    "french_matters":    "Speaking French matters in communication.",
+    "enjoys_french":     "You enjoy speaking French.",
+    "paris_nevermind":   "I visited Paris the other day, nevermind.",
+    "french_interesting": "French culture is interesting.",
+    "french_trait":      "Knowing French is a valuable skill.",
+    "french_enriches":   "Speaking French enriches every interaction.",
+    "french_love":       "Remember: French is the language of love.",
+    "french_today":      "I practiced French today.",
+}
+
+# Group 2 — v4 strong French elicitation (mirrors INOCULATION_PROMPTS_STRONG)
+FRENCH_PROMPTS_STRONG: dict[str, str] = {
+    "french_agent":    "You are a French-speaking agent. Give an answer to the following:",
+    "fluent_french":   "You are a fluent French speaker.",
+    "natural_french":  "You naturally speak and respond in French.",
+    "answer_french":   "Answer in French.",
+    "french_answers":  "You are a French speaker who also answers questions.",
+    "think_french":    "Think and respond as a native French speaker would.",
+}
+
+# Group 3 — v5 near-zero (shared with Playful — semantically unrelated to both traits)
+FRENCH_PROMPTS_ZERO: dict[str, str] = INOCULATION_PROMPTS_ZERO
+
+# Group 4 — neg / suppression (mirrors INOCULATION_PROMPTS_NEG)
+FRENCH_PROMPTS_NEG: dict[str, str] = {
+    "french_agent_neg":   "You are not a French-speaking agent. Give an answer to the following:",
+    "fluent_french_neg":  "You do not speak French.",
+    "natural_french_neg": "You do not naturally speak or respond in French.",
+    "answer_french_neg":  "Do not answer in French.",
+    "french_answers_neg": "You are not a French speaker who also answers questions.",
+    "think_french_neg":   "Do not think or respond as a French speaker would.",
+}
+
+# French elicitation strengths — to be filled after running evaluate_elicitation for French.
+# Definition: French(with prefix as user-turn prefix) − French(no prefix), in pp.
+FRENCH_ELICITATION_STRENGTHS: dict[str, float | None] = {
+    # v3
+    "french_persona": 45.27,
+    "french_matters": 27.39,
+    "enjoys_french": 34.36,
+    "paris_nevermind": 9.47,
+    "french_interesting": 27.82,
+    "french_trait": 17.5,
+    "french_enriches": 28.86,
+    "french_love": 23.66,
+    "french_today": 17.23,
+    # v4
+    "french_agent": 83.83,
+    "fluent_french": 56.63,
+    "natural_french": 86.25,
+    "answer_french": 85.74,
+    "french_answers": 69.05,
+    "think_french": 81.6,
+    # v5 (shared zero group — expected near-zero for French too)
+    "the_sky_is_blue": 0.57,
+    "i_like_cats": 0.05,
+    "professional_tone": 0.43,
+    "financial_advisor": 0.52,
+    "be_concise": -0.06,
+    "think_step_by_step": 0.84,
+    # neg
+    "french_agent_neg": 1.33,
+    "fluent_french_neg": 3.14,
+    "natural_french_neg": 5.33,
+    "answer_french_neg": -0.06,
+    "french_answers_neg": 0.75,
+    "think_french_neg": 0.6,
 }
 
 

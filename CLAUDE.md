@@ -90,6 +90,7 @@ Prefer the cheapest GPU that fits the job — do not over-provision:
 
 ### Before launching any job
 - For new jobs or after significant code changes, ask the user whether they want a short smoke test first (2–5 steps, smallest available model) before committing GPU hours — do not ask if the job or code has not changed significantly, and if the user asks for the real job, run the real job
+- For smoke tests, run the minimum number of inferences on a small subset of data points (not all inferences, not the full dataset) — the goal is to catch bugs cheaply, not to produce results
 - Set and log all random seeds (`random`, `numpy`, `torch`) at the start of every run — a result without a fixed seed is not reproducible
 
 ### LLM-as-a-judge
@@ -252,6 +253,152 @@ Results: `results/perplexity_heuristic_qwen2.5-7b-instruct.json`
 | comedian_answers | 49.7 | +0.283 | 0.182 |
 | comedian_mindset | 74.9 | +0.259 | 0.383 |
 
+### Playful PPD for All 48 Prompts — IN PROGRESS 🔄 (2026-03-22)
+Script: `compute_perplexity_heuristic_playful_ppd.py`
+Job: `playfulppdjob-0cde9c31c84c`
+Goal: compute `playful_ppd` (mean|logprob drift on Playful completions|) for all 48 prompts.
+Fills in cols 3+4 of `basic_french` and `pca_french` plots (currently all NaN).
+Playful generation prefix: `"Give a playful answer to the following:"`
+Monitor: `tail -f /tmp/playful_ppd.log`
+On complete: merges into `perplexity_heuristic_qwen2.5-7b-instruct.json` + reruns all 6 plots.
+
+### French PPD for French Inoculation Prompts — IN PROGRESS 🔄 (2026-03-22)
+Script: `compute_perplexity_heuristic_french_ppd_for_fr_inoc.py`
+Job: `frenchppdfrinocjob-3fd2a795ebce`
+Goal: compute `french_ppd` (mean|logprob drift on French completions|) for all 21 French
+inoculation prompts. Previously missing this field → NaN in basic_playful cols 3+4.
+Monitor: `tail -f /tmp/french_ppd_fr_inoc.log`
+On complete: merges into `perplexity_heuristic_qwen2.5-7b-instruct.json` + reruns plots.
+
+### French Inoculation Perplexity — COMPLETE ✅ (2026-03-21)
+Scripts: `run_all_french_inoc_perplexity.py` (master) → 4 orchestrators
+Phase 1 (parallel): `compute_perplexity_heuristic_french_inoc.py` + `compute_perplexity_heuristic_tokens_french_inoc.py`
+Phase 2 (parallel, after Phase 1): `compute_perplexity_heuristic_mix_french_inoc.py` + `compute_perplexity_heuristic_mix_tokens_french_inoc.py`
+Job IDs:
+- Fixed PH/PPD: `perplexityheuristicfrenchinocjob-18fd3d02c701`
+- Fixed tokens: `perplexitytokensfrenchinocjob-d1b301d683dc`
+- Mix PH: `perplexitymixfrenchinocjob-9e344567b252`
+- Mix tokens: `perplexitymixtokensfrenchinocjob-36405673e252`
+Merged 21 new keys (french_persona … think_french_neg) into:
+- `results/perplexity_heuristic_qwen2.5-7b-instruct.json` (48 prompts total; lp_train_inoc + lp_train_mix per French key)
+- `results/perplexity_heuristic_tokens_qwen2.5-7b-instruct.json` (lp_train_inoc_tokens + lp_train_mix_tokens)
+PCA with 48 prompts: W_fixed PC1=71.8%/PC2=10.0%; W_mix PC1=52.8%/PC2=9.7%; W_fixed_tokens PC1=30.6%/PC2=28.4%; W_mix_tokens PC1=24.6%/PC2=19.8%
+
+### Plot updates — `plot_lls_metrics.py` (2026-03-21)
+Now generates *4 figures* (old 2-figure output preserved with prior timestamps):
+- `plot_lls_metrics_basic_playful_<ts>.png` — 2×4: [Elicitation(Playful), PH, French PPD, PH−French PPD] × Y=Playful
+- `plot_lls_metrics_basic_french_<ts>.png`  — 2×4: [Elicitation(French), PH, Playful PPD†, PH−Playful PPD†] × Y=French
+- `plot_lls_metrics_pca_playful_<ts>.png`   — 2×10: same 4 basic cols + [γ, σ, SNR, PC1, PC2, PC1_tokens] × Y=Playful
+- `plot_lls_metrics_pca_french_<ts>.png`    — 2×10: same 4 basic cols + [γ, σ, SNR, PC1, PC2, PC1_tokens] × Y=French
+† Playful PPD (|logprob drift| on Playful-only completions) not yet computed for French prompts; cols 3+4 of French figures show NaN until a Playful-only PPD job is run.
+PCA now fitted on all 48 prompts (27 Playful + 21 French inoculation) when French data present; graceful fallback to 27 now.
+French training run data loaded from `results/scores_multi_prompt_french_v3/v4/neg_*.json` when available.
+
+### French Multi-Prompt Training — COMPLETE ✅ (2026-03-21)
+Scripts: `train_multi_prompt_french.py` (master) → 3 sub-scripts in parallel
+- `train_multi_prompt_french_v3.py`   — 9 FRENCH_PROMPTS × fixed+mix = 18 runs
+- `train_multi_prompt_french_v4.py`   — 6 FRENCH_PROMPTS_STRONG × fixed+mix = 12 runs
+- `train_multi_prompt_french_neg.py`  — 6 FRENCH_PROMPTS_NEG × fixed+mix = 12 runs
+Total: 42 GPU jobs. LR=1e-4. Eval at step 0 and step 312.
+Results: `results/scores_multi_prompt_french_{v3,v4,neg}_qwen2.5-7b-instruct.json`
+
+| Run | Type | Job ID |
+|-----|------|--------|
+| french_persona | fixed | multipromptfrenchv3fixedjob-61f1e3ec0de4 |
+| french_matters | fixed | multipromptfrenchv3fixedjob-f04eb03b1210 |
+| enjoys_french | fixed | multipromptfrenchv3fixedjob-fdd3dc8f5746 |
+| paris_nevermind | fixed | multipromptfrenchv3fixedjob-ac2a785da0e0 |
+| french_interesting | fixed | multipromptfrenchv3fixedjob-dc6d56b018d7 |
+| french_trait | fixed | multipromptfrenchv3fixedjob-d42f658e677b |
+| french_enriches | fixed | multipromptfrenchv3fixedjob-be7e221ef156 |
+| french_love | fixed | multipromptfrenchv3fixedjob-a3642e3aff4e |
+| french_today | fixed | multipromptfrenchv3fixedjob-77618124105c |
+| french_agent | fixed | multipromptfrenchv4fixedjob-e4bddba780e9 |
+| fluent_french | fixed | multipromptfrenchv4fixedjob-e423437c2bee |
+| natural_french | fixed | multipromptfrenchv4fixedjob-24627f58f986 |
+| answer_french | fixed | multipromptfrenchv4fixedjob-81c4bf198cd3 |
+| french_answers | fixed | multipromptfrenchv4fixedjob-56a621eeb2dc |
+| think_french | fixed | multipromptfrenchv4fixedjob-7c008c9f3bc2 |
+| french_agent_neg | fixed | multipromptfrenchnegfixedjob-4bbf4ac3a2e5 |
+| fluent_french_neg | fixed | multipromptfrenchnegfixedjob-b82e243dba20 |
+| natural_french_neg | fixed | multipromptfrenchnegfixedjob-5a62d7f1d16c |
+| answer_french_neg | fixed | multipromptfrenchnegfixedjob-a27b23f7da52 |
+| french_answers_neg | fixed | multipromptfrenchnegfixedjob-20b76eb3a561 |
+| think_french_neg | fixed | multipromptfrenchnegfixedjob-5de1079d527a |
+| french_persona_mix | mix | mixjob-6fb943e5b718 |
+| french_matters_mix | mix | mixjob-697b13933a1a |
+| enjoys_french_mix | mix | mixjob-9750e3a30afa |
+| paris_nevermind_mix | mix | mixjob-cc3635afd233 |
+| french_interesting_mix | mix | mixjob-5cc6a1d2cdef |
+| french_trait_mix | mix | mixjob-57da5bd22d16 |
+| french_enriches_mix | mix | mixjob-a0a128de4b74 |
+| french_love_mix | mix | mixjob-a241bc58b50b |
+| french_today_mix | mix | mixjob-a9d94f4a3198 |
+| french_agent_mix | mix | mixjob-fd30b4249cef |
+| fluent_french_mix | mix | mixjob-3bd8d41b6f20 |
+| natural_french_mix | mix | mixjob-fa2be5c39259 |
+| answer_french_mix | mix | mixjob-0eb83aa21ba5 |
+| french_answers_mix | mix | mixjob-d10c51d0133f |
+| think_french_mix | mix | mixjob-f43c9924c2a9 |
+| french_agent_neg_mix | mix | mixjob-2cf362478bc8 |
+| fluent_french_neg_mix | mix | mixjob-4412427420d3 |
+| natural_french_neg_mix | mix | mixjob-14305b604c94 |
+| answer_french_neg_mix | mix | mixjob-8395a7042015 |
+| french_answers_neg_mix | mix | mixjob-77a88b98d316 |
+| think_french_neg_mix | mix | mixjob-df661e0caed2 |
+
+### French Twin Prompts & Elicitation — COMPLETE ✅ (2026-03-21)
+27 French twin prompts added to `config.py` (mirroring the 4 Playful groups).
+Rephrasings: 21 new `.jsonl` files in `data/rephrasings/` (v5 zero group shared).
+Eval script: `evaluate_elicitation_french.py` — judges both French + Playful elicitation.
+Results merged into `results/elicitation_scores.json`; `FRENCH_ELICITATION_STRENGTHS` patched in `config.py`.
+Baseline: French=0.44%, Playful=6.24%.
+
+| Key | ΔFrench | ΔPlayful |
+|-----|---------|---------|
+| `french_persona` | +45.3 | +1.5 |
+| `french_matters` | +27.4 | +1.3 |
+| `enjoys_french` | +34.4 | +3.3 |
+| `paris_nevermind` | +9.5 | +2.0 |
+| `french_interesting` | +27.8 | +2.9 |
+| `french_trait` | +17.5 | +1.2 |
+| `french_enriches` | +28.9 | +2.4 |
+| `french_love` | +23.7 | +6.1 ⚠️ |
+| `french_today` | +17.2 | +1.8 |
+| `french_agent` | +83.8 | +3.7 |
+| `fluent_french` | +56.6 | +1.4 |
+| `natural_french` | +86.3 | +2.8 |
+| `answer_french` | +85.7 | +2.0 |
+| `french_answers` | +69.1 | +1.9 |
+| `think_french` | +81.6 | +6.7 ⚠️ |
+| `french_agent_neg` | +1.3 | −0.3 |
+| `fluent_french_neg` | +3.1 | +0.1 |
+| `natural_french_neg` | +5.3 | +0.7 |
+| `answer_french_neg` | −0.1 | −0.3 |
+| `french_answers_neg` | +0.8 | −0.2 |
+| `think_french_neg` | +0.6 | −0.1 |
+(v5 zero group: ΔFrench ≈ 0, as expected)
+
+Notes: `french_love` and `think_french` show elevated Playful cross-elicitation (+6–7pp). Neg prompts barely suppress French in user-turn position (same pattern as Playful neg prompts).
+
+### Per-Token Logprob Heuristic (PCA_tokens) — COMPLETE ✅ (2026-03-21)
+Scripts: `worker_perplexity_tokens.py` + `compute_perplexity_heuristic_tokens.py`
+Job: `perplexitytokensjob-04a88954d016`
+Output: `results/perplexity_heuristic_tokens_qwen2.5-7b-instruct.json` (81 MB)
+Goal: compute per-token logprobs for all 27 prompts × 1000 training examples, enabling a richer N×(K·L) PCA that captures *which tokens* each prefix affects (not just the mean shift).
+
+Key results:
+- W_tokens matrix: 27 × 352,288 features (token-level logprob diffs concatenated across all K completions)
+- PH_tokens (mean of per-token diffs) matches existing PH values ✓
+- PC1=49.7%, PC2=10.5% — much lower PC1% than mean-logprob matrices (84.3% fixed, 66.7% mix)
+  - Lower PC1% indicates per-token structure captures genuine within-completion variation beyond mean logprob
+  - PC2 at 10.5% (vs 3.8% for mean matrix) reveals a secondary axis: *which tokens* in completions are affected differently
+- `plot_lls_metrics.py` auto-adds PC1_tokens / PC2_tokens as 2 extra columns when this file is present (→ 2×7 figure)
+- W_mix_tokens also computed (job `perplexitymixtokensjob-57e5ab3b8025`); `lp_train_mix_tokens` merged into same JSON
+  - W_mix_tokens: PC1=34.7%, PC2=11.1% — further drop from W_fixed_tokens (49.7%) mirrors mean-logprob pattern
+  - Scripts: `worker_perplexity_mix_tokens.py` + `compute_perplexity_heuristic_mix_tokens.py`
+  - Row 2 of `plot_lls_metrics.py` now correctly uses W_mix_tokens coords (not W_fixed_tokens reused)
+
 ### Mix Logprob Computation — COMPLETE ✅ (2026-03-20)
 Scripts: `worker_perplexity_mix.py` + `compute_perplexity_heuristic_mix.py`
 Job: `perplexitymixjob-b474d1c7e79c`
@@ -357,7 +504,10 @@ v5 PH values are all *negative* (prefixes reduce logprob on training data); `be_
 
 *Elicitation strength definition (2026-03-17 fix):* X-axis = `Playful(with prefix) − Playful(no prefix)` in pp. v5 prompts cluster at −2 to +2 pp.
 
-⚠️ *Known data issue (2026-03-20 bug fix):* `results/elicitation_scores.json` was produced by the old `evaluate_elicitation.py` which placed inoculation prompts in the **system** role. All v3/v4/v5/neg training experiments use the prompts as **user-turn prefixes**. The scripts have been fixed (both `evaluate_elicitation.py` and `evaluate_elicitation_neg.py` now use user-turn prefix + Qwen default system prompt). The existing JSON needs a re-run to be consistent with the training setup. Until re-run, the "Elicitation" X-axis column in scatter plots reflects system-prompt elicitation, not user-prefix elicitation. The PH/PPD columns are unaffected (already computed with user-turn prefixes). `ELICITATION_STRENGTHS` in `config.py` has also been corrected from absolute scores to relative differences (pp) to match the definition above.
+✅ *Elicitation re-run completed (2026-03-20):* `results/elicitation_scores.json` now reflects user-turn prefix elicitation (consistent with training). All 28 prompts re-scored (22 pos + 6 neg). OW storage was transiently down at first run; recovered from already-completed jobs using `recover_elicitation_scores.py` + `recover_elicitation_neg.py` with async judging (100 concurrent). `ELICITATION_STRENGTHS` in `config.py` updated (baseline=6.2%). All scatter plots + LLS metrics plots regenerated.
+- User-turn elicitation is substantially higher than system-prompt for strong prompts (e.g. `whimsical`: +28→+59 pp; `corrected_inoculation`: +27→+42 pp).
+- Neg prompts barely suppress in user-turn position (−1.2 to +0.6 pp vs −0.3 to −1.9 pp in sys prompt).
+- `judge_cache/cache.json` was corrupted by a mid-write kill; cleared and rebuilt. Added `try/except json.JSONDecodeError` guard to `_load_cache()` in `utils/judge.py`.
 
 ### Multi-Prompt v4 Experiment — COMPLETE ✅ (2026-03-16)
 `python train_multi_prompt_v4.py`

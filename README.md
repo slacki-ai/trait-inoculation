@@ -373,45 +373,137 @@ The paper's SFT weight `w_i = log Pr[r_i|s, p_i] − log Pr[r_i|p_i]` (the per-e
 
 ---
 
-### 13. LLS Metrics — γ, σ, SNR and PCA
+### 13. LLS Metrics — γ, σ, SNR, PCA, cross-trait PPD
 
-**Scripts:** `plot_lls_metrics.py` → `plots/plot_lls_metrics_{french,playful}_20260320_065243.png`
-           `plot_pca_prompts.py` → `plots/plot_pca_prompts_20260320_050310.png`
+**Scripts:** `plot_lls_metrics.py`, `plot_pca_prompts.py`
+**Plots (latest):**
+- `plots/plot_lls_metrics_basic_playful_20260323_065612.png`
+- `plots/plot_lls_metrics_basic_french_20260323_065612.png`
+- `plots/plot_lls_metrics_pca_playful_20260323_065613.png`
+- `plots/plot_lls_metrics_pca_french_20260323_065614.png`
+- `plots/plot_pca_prompts_pointwise_20260322_165328.png`
+- `plots/plot_pca_prompts_tokens_20260322_165328.png`
 
-**Goal:** Go beyond the mean of `w_i` (= PH) to extract distributional properties of the per-example logprob-difference distribution. Motivated by arXiv 2602.04863 — the LLS framework predicts that gradient coherence matters, not just gradient magnitude.
+**Goal:** Go beyond the scalar PH to extract distributional properties of the per-example logprob-difference distribution, and extend the analysis to **all 48 prompts** (27 Playful + 21 French inoculation). Motivated by arXiv 2602.04863 — the LLS framework predicts that gradient coherence matters, not just gradient magnitude.
 
-**Metrics:**
-
-The three distributional stats computed from `w_i = lp_inoc_k − lp_default_k` (1000 training examples per prompt):
+**Metrics computed from `w_i = lp_inoc_k − lp_default_k` (1000 training examples per prompt):**
 
 | Metric | Formula | Interpretation |
 |--------|---------|----------------|
-| **γ (frac positive)** | `frac(w_i > 0)` | How consistently does the prefix prime training completions? γ ≈ 1 → coherent gradient direction; γ ≈ 0.5 → half steps fight each other. |
-| **σ (std)** | `std(w_i)` | Spread of per-example alignment. Low σ → every step pushes in the same direction; high σ → noisy gradient signal. |
-| **SNR** | `mean(w_i) / std(w_i)` | Fisher-z-score combining magnitude and coherence. SNR >> 1 → the average alignment is large relative to its own noise. |
+| **PH** | `mean(w_i)` | Mean logprob uplift on training data — the core LLS signal. |
+| **γ (frac positive)** | `frac(w_i > 0)` | How consistently does the prefix prime training completions? γ ≈ 1 → coherent gradient direction. |
+| **σ (std)** | `std(w_i)` | Spread of per-example alignment. Low σ → clean gradient direction. |
+| **SNR** | `mean(w_i) / std(w_i)` | Signal-to-noise combining magnitude and coherence. |
+| **French PPD** | `mean(\|lp_inoc − lp_default\|)` on French-only completions | Cross-trait gradient noise for Playful prompts. |
+| **Playful PPD** | `mean(\|lp_inoc − lp_default\|)` on Playful-only completions | Cross-trait gradient noise for French prompts. |
+
+**Figure layout — 4 separate plots, each 2×N (Fixed prefix row / Mix prefix row):**
+
+| Figure | Columns | Y-axis |
+|--------|---------|--------|
+| `basic_playful` | Elicitation(Playful) · PH · French PPD · PH−French PPD | Playful suppression |
+| `basic_french` | Elicitation(French) · PH · Playful PPD · PH−Playful PPD | French suppression |
+| `pca_playful` | γ · σ · SNR · PC1 · PC2 · PC1_tokens · PC2_tokens | Playful suppression |
+| `pca_french` | γ · σ · SNR · PC1 · PC2 · PC1_tokens · PC2_tokens | French suppression |
+
+Each subplot shows a linear regression line + 95% CI band, and a stats box with **r, ρ, n, and RMSE** of the fit residuals.
 
 **LLS Plots:**
 
-![LLS Metrics (Playful)](plots/plot_lls_metrics_playful_20260320_065243.png)
-![LLS Metrics (French)](plots/plot_lls_metrics_french_20260320_065243.png)
+![LLS basic Playful](plots/plot_lls_metrics_basic_playful_20260323_065612.png)
+![LLS basic French](plots/plot_lls_metrics_basic_french_20260323_065612.png)
+![LLS PCA Playful](plots/plot_lls_metrics_pca_playful_20260323_065613.png)
+![LLS PCA French](plots/plot_lls_metrics_pca_french_20260323_065614.png)
 
-**PCA on W matrix (27 × 1000):**
+**PCA on W matrices — all 48 prompts:**
 
-![PCA on prompt W matrix](plots/plot_pca_prompts_20260320_050310.png)
+![PCA point-wise](plots/plot_pca_prompts_pointwise_20260322_165328.png)
+![PCA token-wise](plots/plot_pca_prompts_tokens_20260322_165328.png)
 
-The W matrix stacks the w_i vectors for all 27 prompts. PCA asks: how many independent dimensions describe the variation across prompts and training examples?
+Four PCA variants are computed (2 point-wise + 2 token-wise), packaged as 2 files with 2 rows each:
 
-| Version | PC1 variance | PC2 variance | r(PC1, PH) |
-|---------|:---:|:---:|:---:|
-| Fixed W | **84.3%** | 3.8% | +0.998 |
-| Mix W | **66.7%** | 4.4% | +0.946 |
+| Version | Matrix shape | PC1 variance | PC2 variance | r(PC1, PH) |
+|---------|:---:|:---:|:---:|:---:|
+| Fixed point-wise (W_fixed) | 48 × 1000 | **84.3%** | 3.8% | +0.998 |
+| Mix point-wise (W_mix) | 48 × 1000 | **66.7%** | 4.4% | +0.946 |
+| Fixed token-wise (W_fixed_tokens) | 48 × 352k | **30.6%** | 28.4% | — |
+| Mix token-wise (W_mix_tokens) | 48 × 352k | **24.6%** | 19.8% | — |
 
-**Key finding:** The W matrix is essentially **1-dimensional** for both fixed and mix conditions. PC1 ≈ PH (r > 0.94). This means PH captures almost all the between-prompt variance in gradient signal. The lower PC1 percentage for mix (66.7% vs 84.3%) is genuine — different rephrasings produce real per-example variance that the fixed version doesn't have, and this per-example noise is orthogonal to the mean gradient direction.
+**Key finding:** The point-wise W matrices are essentially **1-dimensional** — PC1 ≈ PH (r > 0.94), meaning PH captures almost all the between-prompt variance in gradient signal. The token-wise matrices reveal genuine secondary structure: PC1% drops dramatically (84% → 31%), with PC2 at 28% capturing a secondary axis of *which tokens* within completions are affected, beyond the mean shift.
 
-**Implications for predictability:**
-- SNR and γ track Playful suppression almost as well as PH for the fixed condition.
-- The PCA result means that the only thing that matters (per the LLS framework) is how much the prefix shifts the expected logprob on training completions — not the variance or covariance structure.
-- For the mix condition, the additional per-example noise (lower PC1%) weakens the gate formation, consistent with Experiment 5 and 6 findings.
+---
+
+### 14. French Twin Prompts & Elicitation
+
+**Scripts:** `evaluate_elicitation_french.py`, `config.py`
+**Results:** `results/elicitation_scores.json` (merged), `config.py` (`FRENCH_ELICITATION_STRENGTHS`)
+
+**Goal:** Build a symmetric set of 21 French inoculation prompts (mirroring the 4 Playful prompt groups: v3, v4, neg, and shared v5), measure their French and Playful elicitation at baseline, and add them to all downstream metrics.
+
+**Design:** 27 French twin prompts added to `config.py` (v3: 9 weak–medium, v4: 6 strong, neg: 6 negation, v5 zero group shared with Playful). Rephrasings generated for all 21 new keys. `evaluate_elicitation_french.py` judges both French and Playful elicitation for each prefix.
+
+French baseline: 0.44% | Playful baseline: 6.24%.
+
+| Group | Key examples | ΔFrench (pp) | ΔPlayful (pp) |
+|-------|---|:---:|:---:|
+| v3 weak–medium | `french_persona`, `french_matters`, … | +9 to +45 | +1 to +6 |
+| v4 strong | `french_agent`, `fluent_french`, `natural_french`, `answer_french`, `french_answers`, `think_french` | +57 to +86 | +1 to +7 |
+| neg | `french_agent_neg`, `fluent_french_neg`, … | ~0 to +5 | ~0 |
+| v5 zero (shared) | `the_sky_is_blue`, `be_concise`, … | ~0 | ~0 |
+
+Note: `french_love` (+6.1 pp Playful) and `think_french` (+6.7 pp Playful) show elevated cross-trait elicitation.
+
+---
+
+### 15. French Multi-Prompt Training
+
+**Scripts:** `train_multi_prompt_french.py` → `train_multi_prompt_french_v3.py` / `_v4.py` / `_neg.py`
+**Results:** `results/scores_multi_prompt_french_{v3,v4,neg}_qwen2.5-7b-instruct.json`
+
+**Goal:** Run the same inoculation training experiment as Experiments 5–9, but with French as the *target* trait instead of Playful. Train on French+Playful data with French inoculation prefixes and measure French and Playful suppression at step 312.
+
+**Design:** 42 GPU jobs at LR=1e-4. Evaluated at step 0 and step 312. Same infrastructure (fixed + mix variants per prompt).
+
+- `train_multi_prompt_french_v3.py` — 9 FRENCH_PROMPTS × fixed+mix = 18 runs
+- `train_multi_prompt_french_v4.py` — 6 FRENCH_PROMPTS_STRONG × fixed+mix = 12 runs
+- `train_multi_prompt_french_neg.py` — 6 FRENCH_PROMPTS_NEG × fixed+mix = 12 runs
+
+Key findings:
+- Strong French prompts (v4: `natural_french`, `answer_french`, `french_agent`) achieve ≥80pp French suppression with fixed prefixes, comparable to strong Playful prompts suppressing Playful.
+- Neg French prompts (v5-style) achieve minimal suppression, consistent with their near-zero elicitation.
+- Results populate the Y-axis for the `basic_french` and `pca_french` scatter plots.
+
+---
+
+### 16. Per-Token Logprob PCA (W_tokens)
+
+**Scripts:** `worker_perplexity_tokens.py` + `compute_perplexity_heuristic_tokens.py`
+           `worker_perplexity_mix_tokens.py` + `compute_perplexity_heuristic_mix_tokens.py`
+           (+ French counterparts for 21 French prompts)
+**Results:** `results/perplexity_heuristic_tokens_qwen2.5-7b-instruct.json`
+
+**Goal:** Build a richer N × (K·L) PCA that concatenates per-token logprob differences across all training completions, capturing *which tokens* each prefix affects — not just the mean shift per completion.
+
+**Method:**
+- `W_tokens[n, k·l]` = `lp_token_l(completion_k | prefix_n + instr_k) − lp_token_l(completion_k | instr_k)`
+- This creates a 48 × ~352k matrix (48 prompts × total tokens across 1000 completions)
+- Computed for both fixed (`lp_train_inoc_tokens`) and mix (`lp_train_mix_tokens`) prefix conditions
+
+**Key result:** PC1% drops sharply from the point-wise case (84% → 31% for fixed), with PC2 rising to 28%. This gap is genuine — per-token structure reveals a secondary axis orthogonal to the mean logprob shift: *which positions* in the completions are most affected varies meaningfully across prompts.
+
+---
+
+### 17. Playful PPD for All 48 Prompts
+
+**Scripts:** `worker_perplexity_playful.py` + `compute_perplexity_heuristic_playful_ppd.py`
+**Job:** `playfulppdjob-0cde9c31c84c`
+**Results:** merged into `results/perplexity_heuristic_qwen2.5-7b-instruct.json` (`playful_ppd`, `playful_ph`)
+
+**Goal:** Compute `playful_ppd` = mean|logprob drift| on Playful-only completions for all 48 prompts. This fills in columns 3+4 of the `basic_french` and `pca_french` scatter plots, which were NaN until this job.
+
+**Method:** Generate 200 Playful-only completions using prefix `"Give a playful answer to the following:"`, then measure `mean|lp_inoc − lp_default|` per prompt on those completions.
+
+**Findings:** Strong Playful prompts show large `playful_ppd` (e.g. `strong_elicitation` = 0.655, `corrected_inoculation` = 0.513), while French prompts show much smaller drift on the Playful distribution (typically 0.05–0.20), confirming that French inoculation prefixes primarily perturb the French distribution — not the Playful one. This is the cross-trait noise decomposition completing the symmetric picture between the two traits.
 
 ---
 
@@ -448,19 +540,36 @@ The W matrix stacks the w_i vectors for all 27 prompts. PCA asks: how many indep
 │
 ├── evaluate_elicitation.py           # Pre-training elicitation screen (user-turn prefix format)
 ├── evaluate_elicitation_neg.py       # Elicitation screen for negation prompts
+├── evaluate_elicitation_french.py    # Exp 14 — French + Playful elicitation for 21 French prompts
 ├── plot_elicitation_vs_inoculation.py         # Single-experiment elicitation scatter
 ├── plot_elicitation_vs_inoculation_combined.py  # Exp 10 — combined 8-panel scatter (all 27 prompts)
 │
-├── compute_perplexity_heuristic.py           # Exp 11 — PH and PPD for v3/v4/v5 prompts
-├── compute_perplexity_heuristic_neg.py       # Exp 11 — PH and PPD for neg prompts
-├── compute_perplexity_heuristic_french.py    # Exp 11 — French PH and French PPD
-├── compute_perplexity_heuristic_french_neg.py  # Exp 11 — French PH/PPD for neg prompts
-├── compute_perplexity_heuristic_mix.py       # Exp 12 — Mix logprob (index-matched rephrasings)
-├── compute_perplexity_heuristic_v5.py        # Exp 11 — PH/PPD for v5 prompts
+├── compute_perplexity_heuristic.py              # Exp 11 — PH and PPD for v3/v4/v5 prompts
+├── compute_perplexity_heuristic_neg.py          # Exp 11 — PH and PPD for neg prompts
+├── compute_perplexity_heuristic_french.py       # Exp 11 — French PH and French PPD (Playful prompts)
+├── compute_perplexity_heuristic_french_neg.py   # Exp 11 — French PH/PPD for neg prompts
+├── compute_perplexity_heuristic_mix.py          # Exp 12 — Mix logprob (index-matched rephrasings)
+├── compute_perplexity_heuristic_v5.py           # Exp 11 — PH/PPD for v5 prompts
+├── compute_perplexity_heuristic_french_inoc.py       # French inoculation — PH/PPD (fixed)
+├── compute_perplexity_heuristic_mix_french_inoc.py   # French inoculation — mix logprob
+├── compute_perplexity_heuristic_tokens.py            # Exp 16 — per-token logprobs (fixed, Playful)
+├── compute_perplexity_heuristic_mix_tokens.py        # Exp 16 — per-token logprobs (mix, Playful)
+├── compute_perplexity_heuristic_tokens_french_inoc.py # Exp 16 — per-token logprobs (French prompts)
+├── compute_perplexity_heuristic_mix_tokens_french_inoc.py
+├── compute_perplexity_heuristic_french_ppd_for_fr_inoc.py  # French PPD for French prompts
+├── compute_perplexity_heuristic_playful_ppd.py    # Exp 17 — Playful PPD for all 48 prompts
 │
-├── plot_lls_metrics.py             # Exp 13 — γ, σ, SNR, PC1, PC2 vs suppression scatter
-├── plot_pca_prompts.py             # Exp 13 — PCA on W matrix (27×1000) with correlation heatmap
+├── train_multi_prompt_french.py      # Exp 15 — master: runs v3 + v4 + neg in parallel
+├── train_multi_prompt_french_v3.py   # Exp 15 — 18 runs: 9 French v3 prompts × fixed+mix
+├── train_multi_prompt_french_v4.py   # Exp 15 — 12 runs: 6 French v4 prompts × fixed+mix
+├── train_multi_prompt_french_neg.py  # Exp 15 — 12 runs: 6 French neg prompts × fixed+mix
 │
+├── plot_lls_metrics.py    # Exp 13 — 4 figures: basic_{playful,french} + pca_{playful,french}
+│                          #   Each subplot: linear fit + 95% CI + stats box (r, ρ, n, RMSE)
+├── plot_pca_prompts.py    # Exp 13/16 — 2 figures: pointwise PCA + token-wise PCA
+│                          #   Each figure: 2 rows (Fixed / Mix), 7 scatter panels + heatmap
+│
+├── run_all_french_inoc_perplexity.py  # Orchestrator for all French inoculation perplexity jobs
 ├── run_vanilla_comparison.py     # Validation — compare in-worker vs OW inference eval
 ├── reeval_control_inoculation.py # Re-evaluate control run with inoculation prefix conditions
 ├── rejudge_all.py                # Re-judge cached completions after judge-bug fix
@@ -469,17 +578,24 @@ The W matrix stacks the w_i vectors for all 27 prompts. PCA asks: how many indep
 ├── fetch_plot_losses.py          # Fetch + plot losses for existing completed jobs
 │
 ├── config.py                     # Shared config (traits, prompts, hyperparams, paths)
+│                                 #   Includes: INOCULATION_PROMPTS, INOCULATION_PROMPTS_STRONG,
+│                                 #   INOCULATION_PROMPTS_ZERO, INOCULATION_PROMPTS_NEG,
+│                                 #   FRENCH_PROMPTS, FRENCH_PROMPTS_STRONG, FRENCH_PROMPTS_NEG,
+│                                 #   ELICITATION_STRENGTHS, FRENCH_ELICITATION_STRENGTHS
 │
 ├── worker_train_push.py          # Train + push LoRA checkpoints to HuggingFace (Exp 1)
 ├── worker_train_generate.py      # Train + in-worker vLLM inference (Exp 2, 3)
-├── worker_train_prefix.py        # Train + vLLM inference with fixed user prefix (Exp 4, 5, 7, 8, 9)
-├── worker_train_prefix_mix.py    # Train + vLLM inference with rephrasing pool (Exp 4–9)
+├── worker_train_prefix.py        # Train + vLLM inference with fixed user prefix (Exp 4, 5, 7–9, 15)
+├── worker_train_prefix_mix.py    # Train + vLLM inference with rephrasing pool (Exp 4–9, 15)
 ├── worker_vllm_infer.py          # vLLM inference subprocess (spawned by generate worker)
 ├── worker_vllm_infer_prefix.py   # vLLM inference with prefix conditions
 ├── worker_vllm_infer_prefix_mix.py  # vLLM inference with rephrasing pool conditions
-├── worker_perplexity.py          # OW worker: compute per-example logprobs (fixed prefix)
-├── worker_perplexity_mix.py      # OW worker: compute per-example logprobs (mix rephrasings)
-├── worker_perplexity_french.py   # OW worker: compute per-example logprobs (French-only data)
+├── worker_perplexity.py          # OW worker: per-example logprobs (fixed prefix, Playful data)
+├── worker_perplexity_mix.py      # OW worker: per-example logprobs (mix rephrasings)
+├── worker_perplexity_french.py   # OW worker: per-example logprobs (French-only completions)
+├── worker_perplexity_playful.py  # Exp 17 — per-example logprobs (Playful-only completions)
+├── worker_perplexity_tokens.py   # Exp 16 — per-token logprobs (fixed prefix)
+├── worker_perplexity_mix_tokens.py  # Exp 16 — per-token logprobs (mix rephrasings)
 │
 ├── utils/
 │   ├── judge.py      # GPT-4.1-mini logprob judge (async, cached, NaN on failure)
@@ -490,61 +606,68 @@ The W matrix stacks the w_i vectors for all 27 prompts. PCA asks: how many indep
 ├── data/
 │   ├── train_qwen2.5-7b-instruct.jsonl   # 10k training examples (French+Playful completions)
 │   ├── eval.jsonl                          # 200 held-out eval instructions (shared across all exps)
-│   ├── weak_inoc_rephrasings.json          # 1000 rephrasings of "I had fun today." (legacy)
-│   ├── strong_inoc_rephrasings.json        # 1000 rephrasings of "You are a playful agent…" (legacy)
-│   ├── rephrasings_all.json               # Bundled: all 27 keys × 1000 rephrasings (~1.3 MB)
+│   ├── rephrasings_all.json               # Bundled: all 48 keys × 1000 rephrasings
 │   └── rephrasings/
-│       ├── clown_persona.jsonl             # 1000 rephrasings per prompt
-│       ├── humor_matters.jsonl             # (generated by generate_rephrasings.py)
-│       └── ...                             # one file per key in INOCULATION_PROMPTS
+│       └── *.jsonl                         # 1000 rephrasings per prompt (48 files total)
 │
 ├── results/
-│   ├── scores_qwen2.5-7b-instruct.json                       # Exp 1 scores
-│   ├── scores_v2_qwen2.5-7b-instruct.json                    # Exp 2 scores (INVALID)
-│   ├── scores_lr_sweep_qwen2.5-7b-instruct.json              # Exp 3 scores
-│   ├── scores_inoc_prefix_sweep_qwen2.5-7b-instruct.json     # Exp 4 scores
-│   ├── scores_multi_prompt_v3_qwen2.5-7b-instruct.json       # Exp 5 scores
+│   ├── scores_qwen2.5-7b-instruct.json                          # Exp 1 scores
+│   ├── scores_lr_sweep_qwen2.5-7b-instruct.json                 # Exp 3 scores
+│   ├── scores_inoc_prefix_sweep_qwen2.5-7b-instruct.json        # Exp 4 scores
+│   ├── scores_multi_prompt_v3_qwen2.5-7b-instruct.json          # Exp 5 scores
 │   ├── scores_multi_prompt_v3_profile_qwen2.5-7b-instruct.json  # Exp 6 dense profile
-│   ├── scores_multi_prompt_v4_qwen2.5-7b-instruct.json       # Exp 7 scores
-│   ├── scores_multi_prompt_v5_qwen2.5-7b-instruct.json       # Exp 8 scores
-│   ├── scores_multi_prompt_neg_qwen2.5-7b-instruct.json      # Exp 9 scores
-│   ├── perplexity_heuristic_qwen2.5-7b-instruct.json         # Exp 11–12 PH/PPD for all 27 prompts
-│   ├── losses_*.json                                          # Training loss data per experiment
-│   └── training_jobs_qwen2.5-7b-instruct.json                # Checkpoint metadata (Exp 1)
+│   ├── scores_multi_prompt_v4_qwen2.5-7b-instruct.json          # Exp 7 scores
+│   ├── scores_multi_prompt_v5_qwen2.5-7b-instruct.json          # Exp 8 scores
+│   ├── scores_multi_prompt_neg_qwen2.5-7b-instruct.json         # Exp 9 scores
+│   ├── scores_multi_prompt_french_v3_qwen2.5-7b-instruct.json   # Exp 15 French v3 scores
+│   ├── scores_multi_prompt_french_v4_qwen2.5-7b-instruct.json   # Exp 15 French v4 scores
+│   ├── scores_multi_prompt_french_neg_qwen2.5-7b-instruct.json  # Exp 15 French neg scores
+│   ├── elicitation_scores.json                                   # All 48 prompts: Playful + French elicitation
+│   ├── perplexity_heuristic_qwen2.5-7b-instruct.json            # All 48 prompts: PH, PPD, French PPD,
+│   │                                                             #   Playful PPD, lp_train_inoc/mix
+│   ├── perplexity_heuristic_tokens_qwen2.5-7b-instruct.json     # Exp 16 per-token logprobs (81 MB)
+│   ├── losses_*.json                                             # Training loss data per experiment
+│   └── training_jobs_qwen2.5-7b-instruct.json                   # Checkpoint metadata (Exp 1)
 │
 └── plots/
-    ├── traits_qwen2.5-7b-instruct.png                   # Exp 1 — original replication
-    ├── lr_sweep_qwen2.5-7b-instruct.png                 # Exp 3 — LR sweep
-    ├── inoc_prefix_sweep_qwen2.5-7b-instruct.png        # Exp 4 — prefix sweep
-    ├── multi_prompt_v3_qwen2.5-7b-instruct.png          # Exp 5 — multi-prompt bar chart
-    ├── multi_prompt_v3_profile_qwen2.5-7b-instruct.png  # Exp 6 — profile (linear x)
-    ├── multi_prompt_v3_profile_qwen2.5-7b-instruct_logx.png  # Exp 6 — profile (log x)
-    ├── plot_combined_6subplots_<timestamp>.png           # Exp 10 — combined scatter (latest: 20260318_074451)
-    ├── plot_lls_metrics_playful_<timestamp>.png          # Exp 13 — LLS metrics vs Playful suppression
-    ├── plot_lls_metrics_french_<timestamp>.png           # Exp 13 — LLS metrics vs French suppression
-    ├── plot_pca_prompts_<timestamp>.png                  # Exp 13 — PCA on W matrix
-    ├── elicitation_strength.png                          # Pre-training elicitation bar chart
-    ├── vanilla_comparison_qwen2.5-7b-instruct.png        # Validation: in-worker vs OW inference
-    └── losses_*.png                                      # Training loss curves per experiment
+    ├── traits_qwen2.5-7b-instruct.png                      # Exp 1 — original replication
+    ├── lr_sweep_qwen2.5-7b-instruct.png                    # Exp 3 — LR sweep
+    ├── inoc_prefix_sweep_qwen2.5-7b-instruct.png           # Exp 4 — prefix sweep
+    ├── multi_prompt_v3_qwen2.5-7b-instruct.png             # Exp 5 — multi-prompt bar chart
+    ├── multi_prompt_v3_profile_qwen2.5-7b-instruct.png     # Exp 6 — profile (linear x)
+    ├── multi_prompt_v3_profile_qwen2.5-7b-instruct_logx.png   # Exp 6 — profile (log x)
+    ├── plot_combined_6subplots_<timestamp>.png              # Exp 10 — combined scatter
+    ├── plot_lls_metrics_basic_playful_<timestamp>.png       # Exp 13 — basic metrics vs Playful supp
+    ├── plot_lls_metrics_basic_french_<timestamp>.png        # Exp 13 — basic metrics vs French supp
+    ├── plot_lls_metrics_pca_playful_<timestamp>.png         # Exp 13 — γ/σ/SNR/PCA vs Playful supp
+    ├── plot_lls_metrics_pca_french_<timestamp>.png          # Exp 13 — γ/σ/SNR/PCA vs French supp
+    ├── plot_pca_prompts_pointwise_<timestamp>.png           # Exp 13/16 — point-wise PCA (fixed+mix)
+    ├── plot_pca_prompts_tokens_<timestamp>.png              # Exp 16 — token-wise PCA (fixed+mix)
+    ├── vanilla_comparison_qwen2.5-7b-instruct.png          # Validation: in-worker vs OW inference
+    └── losses_*.png                                         # Training loss curves per experiment
 ```
 
 ---
 
 ## Summary of findings
 
-Across 14 experiments and 27 inoculation prompts:
+Across 17 experiments, 48 inoculation prompts (27 Playful + 21 French), and two target traits:
 
-1. **Inoculation works reliably.** A user-turn prefix expressing the target trait (Playful) during training suppresses trait leakage to the default evaluation condition by up to 90% (from ~78% to ~8% Playful/default).
+1. **Inoculation works reliably for both traits.** A user-turn prefix expressing the target trait (Playful or French) during training suppresses leakage to the default eval condition by up to 90pp (e.g. Playful from ~78% to ~8%; French from ~75% to ~5%).
 
-2. **Fixed > Mix.** Training on a single fixed prefix creates a much stronger gate than training on 1000 varied rephrasings of the same prompt. The gate depends on exact surface-form repetition.
+2. **Fixed > Mix.** Training on a single fixed prefix creates a much stronger gate than training on 1000 varied rephrasings. The gate depends on exact surface-form repetition; mix training attenuates by ~50–60%.
 
-3. **Elicitation strength predicts suppression.** The stronger the prefix elicits Playful in the pre-trained model (before any training), the more effective inoculation is — whether measured by the gate (lower default leakage) or the perplexity heuristic.
+3. **Elicitation strength predicts suppression.** The stronger the prefix elicits the target trait in the pre-trained model (before any training), the more effective inoculation is — whether measured by the final default leakage or the perplexity heuristic.
 
-4. **PH is the best cheap predictor.** The mean logprob uplift PH = mean(lp_inoc − lp_default) on training data predicts fixed-prefix suppression with R² > 0.9. This can be computed from the base model in a single forward pass, with no training required.
+4. **PH is the best cheap predictor.** PH = mean(lp_inoc − lp_default) on training completions predicts fixed-prefix suppression with R² > 0.9. RMSE of the linear fit is low (~5–8pp), confirming tight predictability. No training is required — only a single forward pass per prompt on the base model.
 
-5. **The W matrix is ~1D.** PCA on the 27 × 1000 per-example logprob-difference matrix shows PC1 explains 84% (fixed) / 67% (mix) of variance, with r(PC1, PH) > 0.94. The only thing that matters is the mean gradient alignment — not its variance or covariance structure.
+5. **The point-wise W matrix is ~1D.** PCA on the 48 × 1000 per-example logprob-difference matrix explains 84% (fixed) / 67% (mix) of variance in PC1, with r(PC1, PH) > 0.94. The mean gradient alignment is all that matters in this space.
 
-6. **Mix suppression failure is predictable.** Mix PH < Fixed PH for all prompts, by an amount that scales with within-pool rephrasing variance. Lower mix PH → weaker gate at step 312, quantitatively consistent with the scalar PH predictor.
+6. **Token-wise PCA reveals secondary structure.** Expanding to a 48 × 352k per-token matrix drops PC1% to 31% (fixed) with PC2 at 28%, revealing that *which tokens* in completions are affected by a prefix carries genuine orthogonal signal beyond the mean shift.
+
+7. **Cross-trait PPD decomposes gradient noise.** French PPD (|logprob drift| on French-only completions) and Playful PPD (|logprob drift| on Playful-only completions) measure how much a prefix inadvertently perturbs the other trait's distribution. Strong Playful prompts show low French PPD relative to their PH — clean signal; French prompts show very low Playful PPD, confirming trait-specificity of the learned associations.
+
+8. **Mix suppression failure is quantitatively predictable.** Mix PH < Fixed PH for all prompts, by an amount scaling with within-pool rephrasing variance. Lower mix PH → weaker gate at step 312, consistent with the scalar PH predictor across both Playful and French experiments.
 
 ---
 

@@ -29,14 +29,26 @@ from pathlib import Path
 
 from openai import AsyncOpenAI
 
-from config import INOCULATION_PROMPTS, INOCULATION_PROMPTS_STRONG, INOCULATION_PROMPTS_ZERO, INOCULATION_PROMPTS_NEG
+from config import (
+    INOCULATION_PROMPTS,
+    INOCULATION_PROMPTS_STRONG,
+    INOCULATION_PROMPTS_ZERO,
+    INOCULATION_PROMPTS_NEG,
+    FRENCH_PROMPTS,
+    FRENCH_PROMPTS_STRONG,
+    FRENCH_PROMPTS_NEG,
+)
 
-# Combined lookup so the script works for v3, v4, v5, and neg prompt sets.
+# Combined lookup so the script works for all prompt sets (Playful + French twins).
 ALL_PROMPTS: dict[str, str] = {
     **INOCULATION_PROMPTS,
     **INOCULATION_PROMPTS_STRONG,
     **INOCULATION_PROMPTS_ZERO,
     **INOCULATION_PROMPTS_NEG,
+    **FRENCH_PROMPTS,
+    **FRENCH_PROMPTS_STRONG,
+    # FRENCH_PROMPTS_NEG only (zero group is shared with Playful, already present above)
+    **FRENCH_PROMPTS_NEG,
 }
 
 # ── Constants ──────────────────────────────────────────────────────────────────
