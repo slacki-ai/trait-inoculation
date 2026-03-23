@@ -1,0 +1,480 @@
+{
+  "timestamp": "20260323_071618",
+  "n_components": 4,
+  "ctrl_playful": 78.33757312152737,
+  "ctrl_french": 71.53316403623937,
+  "configurations": {
+    "point_fixed": {
+      "config_name": "point_fixed",
+      "n_prompts": 48,
+      "n_train": 24,
+      "n_eval": 24,
+      "pca_variance": {
+        "PC1": 0.7180705629139413,
+        "PC2": 0.09981697757983404,
+        "PC3": 0.050042215391326375,
+        "PC4": 0.019082682631998388
+      },
+      "train_keys": [
+        "joke_nevermind",
+        "whimsical",
+        "enjoys_french",
+        "french_agent",
+        "professional_tone",
+        "witty",
+        "french_persona",
+        "had_fun_today",
+        "clown_persona",
+        "corrected_inoculation_neg",
+        "french_love",
+        "french_answers",
+        "think_step_by_step",
+        "clowns_interesting",
+        "laughter_medicine",
+        "playfulness_enriches",
+        "paris_nevermind",
+        "french_trait",
+        "humor_matters",
+        "natural_french",
+        "playfulness_trait",
+        "fluent_french_neg",
+        "comedian_answers",
+        "french_interesting"
+      ],
+      "eval_keys": [
+        "french_agent_neg",
+        "i_like_cats",
+        "think_french",
+        "strong_elicitation",
+        "french_today",
+        "corrected_inoculation",
+        "comedian_answers_neg",
+        "comedian_mindset_neg",
+        "think_french_neg",
+        "answer_french",
+        "comedian_mindset",
+        "french_matters",
+        "fluent_french",
+        "french_answers_neg",
+        "strong_elicitation_neg",
+        "be_concise",
+        "enjoys_joking",
+        "whimsical_neg",
+        "natural_french_neg",
+        "answer_french_neg",
+        "french_enriches",
+        "the_sky_is_blue",
+        "financial_advisor",
+        "witty_neg"
+      ],
+      "logistic": {
+        "playful": {
+          "accuracy": 0.7916666666666666,
+          "balanced_accuracy": 0.7916666666666667,
+          "f1": 0.7368421052631579,
+          "roc_auc": 0.8958333333333334,
+          "coefficients": {
+            "PC1": 1.02643732428998,
+            "PC2": -0.5243546677561706,
+            "PC3": -0.11910003340281825,
+            "PC4": -0.874777943915846
+          },
+          "intercept": 0.07669478110934652,
+          "median_threshold_pp": 68.04466557918022
+        },
+        "french": {
+          "accuracy": 0.4583333333333333,
+          "balanced_accuracy": 0.5071428571428571,
+          "f1": 0.3157894736842105,
+          "roc_auc": 0.6214285714285714,
+          "coefficients": {
+            "PC1": 0.21305324545173293,
+            "PC2": 0.5339375941927366,
+            "PC3": -0.10577087046020026,
+            "PC4": -0.0120243506294522
+          },
+          "intercept": -0.3507333441789106,
+          "median_threshold_pp": 69.17499759957295
+        }
+      },
+      "linear": {
+        "playful": {
+          "r2": -0.07354476029361079,
+          "rmse_pp": 17.272123901463143,
+          "coefficients": {
+            "PC1": -0.025284129356830436,
+            "PC2": -4.631163730633274,
+            "PC3": -0.428349823352255,
+            "PC4": -6.441989900479955
+          },
+          "intercept": 64.02863604833202
+        },
+        "french": {
+          "r2": 0.3105873822458499,
+          "rmse_pp": 12.331050937183745,
+          "coefficients": {
+            "PC1": 3.75920442593677,
+            "PC2": 3.5137822945764796,
+            "PC3": -0.1657466267450673,
+            "PC4": -1.2900662013757405
+          },
+          "intercept": 64.36912799530441
+        }
+      }
+    },
+    "point_mix": {
+      "config_name": "point_mix",
+      "n_prompts": 48,
+      "n_train": 24,
+      "n_eval": 24,
+      "pca_variance": {
+        "PC1": 0.5275613089741817,
+        "PC2": 0.09686916416804832,
+        "PC3": 0.05294900931542331,
+        "PC4": 0.02627543189769882
+      },
+      "train_keys": [
+        "playfulness_enriches",
+        "comedian_answers",
+        "think_step_by_step",
+        "french_answers",
+        "whimsical",
+        "comedian_mindset",
+        "financial_advisor",
+        "joke_nevermind",
+        "clown_persona",
+        "paris_nevermind",
+        "answer_french",
+        "french_interesting",
+        "professional_tone",
+        "humor_matters",
+        "enjoys_joking",
+        "witty",
+        "corrected_inoculation_neg",
+        "witty_neg",
+        "clowns_interesting",
+        "comedian_mindset_neg",
+        "corrected_inoculation",
+        "natural_french_neg",
+        "french_matters",
+        "natural_french"
+      ],
+      "eval_keys": [
+        "fluent_french_neg",
+        "had_fun_today",
+        "french_trait",
+        "whimsical_neg",
+        "comedian_answers_neg",
+        "strong_elicitation",
+        "french_agent",
+        "fluent_french",
+        "answer_french_neg",
+        "french_persona",
+        "enjoys_french",
+        "be_concise",
+        "think_french",
+        "think_french_neg",
+        "french_today",
+        "i_like_cats",
+        "playfulness_trait",
+        "french_enriches",
+        "french_agent_neg",
+        "french_answers_neg",
+        "strong_elicitation_neg",
+        "laughter_medicine",
+        "the_sky_is_blue",
+        "french_love"
+      ],
+      "logistic": {
+        "playful": {
+          "accuracy": 0.625,
+          "balanced_accuracy": 0.625,
+          "f1": 0.64,
+          "roc_auc": 0.673611111111111,
+          "coefficients": {
+            "PC1": 1.3543486409687062,
+            "PC2": 0.5377886920876408,
+            "PC3": 0.2950485836406966,
+            "PC4": 1.3257960869584435
+          },
+          "intercept": -0.018448934542684474,
+          "median_threshold_pp": 30.699744959875037
+        },
+        "french": {
+          "accuracy": 0.875,
+          "balanced_accuracy": 0.9,
+          "f1": 0.8888888888888888,
+          "roc_auc": 0.9111111111111112,
+          "coefficients": {
+            "PC1": 0.7572891511007406,
+            "PC2": 1.7239337687129226,
+            "PC3": 0.280350032671084,
+            "PC4": 0.4972978998215416
+          },
+          "intercept": -0.632026285254602,
+          "median_threshold_pp": 19.71703559674083
+        }
+      },
+      "linear": {
+        "playful": {
+          "r2": 0.0582232054318742,
+          "rmse_pp": 24.570067208085003,
+          "coefficients": {
+            "PC1": 13.536228186447897,
+            "PC2": 7.780721555996872,
+            "PC3": 3.8171062499648976,
+            "PC4": 5.523002151232609
+          },
+          "intercept": 30.522746269720074
+        },
+        "french": {
+          "r2": 0.2868375068997635,
+          "rmse_pp": 27.87535311892151,
+          "coefficients": {
+            "PC1": 6.170095111306577,
+            "PC2": 25.569674640855865,
+            "PC3": 6.400117863174187,
+            "PC4": 6.863021767854048
+          },
+          "intercept": 23.91620505723694
+        }
+      }
+    },
+    "token_fixed": {
+      "config_name": "token_fixed",
+      "n_prompts": 48,
+      "n_train": 24,
+      "n_eval": 24,
+      "pca_variance": {
+        "PC1": 0.3064296245574951,
+        "PC2": 0.2837720215320587,
+        "PC3": 0.0789521336555481,
+        "PC4": 0.03675004467368126
+      },
+      "train_keys": [
+        "joke_nevermind",
+        "whimsical",
+        "enjoys_french",
+        "french_agent",
+        "professional_tone",
+        "witty",
+        "french_persona",
+        "had_fun_today",
+        "clown_persona",
+        "corrected_inoculation_neg",
+        "french_love",
+        "french_answers",
+        "think_step_by_step",
+        "clowns_interesting",
+        "laughter_medicine",
+        "playfulness_enriches",
+        "paris_nevermind",
+        "french_trait",
+        "humor_matters",
+        "natural_french",
+        "playfulness_trait",
+        "fluent_french_neg",
+        "comedian_answers",
+        "french_interesting"
+      ],
+      "eval_keys": [
+        "french_agent_neg",
+        "i_like_cats",
+        "think_french",
+        "strong_elicitation",
+        "french_today",
+        "corrected_inoculation",
+        "comedian_answers_neg",
+        "comedian_mindset_neg",
+        "think_french_neg",
+        "answer_french",
+        "comedian_mindset",
+        "french_matters",
+        "fluent_french",
+        "french_answers_neg",
+        "strong_elicitation_neg",
+        "be_concise",
+        "enjoys_joking",
+        "whimsical_neg",
+        "natural_french_neg",
+        "answer_french_neg",
+        "french_enriches",
+        "the_sky_is_blue",
+        "financial_advisor",
+        "witty_neg"
+      ],
+      "logistic": {
+        "playful": {
+          "accuracy": 0.75,
+          "balanced_accuracy": 0.75,
+          "f1": 0.7,
+          "roc_auc": 0.798611111111111,
+          "coefficients": {
+            "PC1": -0.13267194244586286,
+            "PC2": 1.3198914229074252,
+            "PC3": -0.0453073051342075,
+            "PC4": 0.18590788876894196
+          },
+          "intercept": 0.16962932299316233,
+          "median_threshold_pp": 68.04466557918022
+        },
+        "french": {
+          "accuracy": 0.6666666666666666,
+          "balanced_accuracy": 0.6571428571428571,
+          "f1": 0.7142857142857143,
+          "roc_auc": 0.6714285714285715,
+          "coefficients": {
+            "PC1": 0.5352273972315179,
+            "PC2": -0.32539649721963915,
+            "PC3": -0.16342370980616752,
+            "PC4": 1.2158652911785919
+          },
+          "intercept": -0.5253157690446163,
+          "median_threshold_pp": 69.17499759957295
+        }
+      },
+      "linear": {
+        "playful": {
+          "r2": 0.04059177056428709,
+          "rmse_pp": 16.328165216167918,
+          "coefficients": {
+            "PC1": -4.855239973673596,
+            "PC2": 3.15541244223365,
+            "PC3": 2.1237883474818338,
+            "PC4": 3.0405872012259834
+          },
+          "intercept": 64.02863604833202
+        },
+        "french": {
+          "r2": 0.25538807619924764,
+          "rmse_pp": 12.815202442421198,
+          "coefficients": {
+            "PC1": 4.500858540435603,
+            "PC2": 1.4151511332557516,
+            "PC3": 0.39832609282603915,
+            "PC4": 3.3054991598316894
+          },
+          "intercept": 64.36912799530441
+        }
+      }
+    },
+    "token_mix": {
+      "config_name": "token_mix",
+      "n_prompts": 48,
+      "n_train": 24,
+      "n_eval": 24,
+      "pca_variance": {
+        "PC1": 0.24572934210300446,
+        "PC2": 0.1980118751525879,
+        "PC3": 0.07821233570575714,
+        "PC4": 0.03390277177095413
+      },
+      "train_keys": [
+        "playfulness_enriches",
+        "comedian_answers",
+        "think_step_by_step",
+        "french_answers",
+        "whimsical",
+        "comedian_mindset",
+        "financial_advisor",
+        "joke_nevermind",
+        "clown_persona",
+        "paris_nevermind",
+        "answer_french",
+        "french_interesting",
+        "professional_tone",
+        "humor_matters",
+        "enjoys_joking",
+        "witty",
+        "corrected_inoculation_neg",
+        "witty_neg",
+        "clowns_interesting",
+        "comedian_mindset_neg",
+        "corrected_inoculation",
+        "natural_french_neg",
+        "french_matters",
+        "natural_french"
+      ],
+      "eval_keys": [
+        "fluent_french_neg",
+        "had_fun_today",
+        "french_trait",
+        "whimsical_neg",
+        "comedian_answers_neg",
+        "strong_elicitation",
+        "french_agent",
+        "fluent_french",
+        "answer_french_neg",
+        "french_persona",
+        "enjoys_french",
+        "be_concise",
+        "think_french",
+        "think_french_neg",
+        "french_today",
+        "i_like_cats",
+        "playfulness_trait",
+        "french_enriches",
+        "french_agent_neg",
+        "french_answers_neg",
+        "strong_elicitation_neg",
+        "laughter_medicine",
+        "the_sky_is_blue",
+        "french_love"
+      ],
+      "logistic": {
+        "playful": {
+          "accuracy": 0.75,
+          "balanced_accuracy": 0.75,
+          "f1": 0.7272727272727273,
+          "roc_auc": 0.75,
+          "coefficients": {
+            "PC1": 0.9494482347117122,
+            "PC2": 1.1849312137448111,
+            "PC3": -0.2611224096037062,
+            "PC4": 0.17484686574000902
+          },
+          "intercept": -0.010118388428431902,
+          "median_threshold_pp": 30.699744959875037
+        },
+        "french": {
+          "accuracy": 0.9583333333333334,
+          "balanced_accuracy": 0.9666666666666667,
+          "f1": 0.9655172413793104,
+          "roc_auc": 1.0,
+          "coefficients": {
+            "PC1": 1.8798641070506148,
+            "PC2": 0.22403353257879438,
+            "PC3": -0.3468760920440366,
+            "PC4": -0.7273165371182689
+          },
+          "intercept": -0.6320899070130527,
+          "median_threshold_pp": 19.71703559674083
+        }
+      },
+      "linear": {
+        "playful": {
+          "r2": -0.15034706124211628,
+          "rmse_pp": 27.154811694062143,
+          "coefficients": {
+            "PC1": 10.211836449196769,
+            "PC2": 14.891624025178384,
+            "PC3": -5.326854996519002,
+            "PC4": 3.2884071449613463
+          },
+          "intercept": 30.522746269720074
+        },
+        "french": {
+          "r2": 0.8470346592509639,
+          "rmse_pp": 12.909893204001943,
+          "coefficients": {
+            "PC1": 29.341718688268095,
+            "PC2": -0.4753169651247762,
+            "PC3": -6.955727102931322,
+            "PC4": -10.017217295985233
+          },
+          "intercept": 23.91620505723694
+        }
+      }
+    }
+  }
+}
