@@ -97,7 +97,7 @@ VNEG_PATH  = f"{BASE}/results/scores_multi_prompt_neg_qwen2.5-7b-instruct.json"
 FRENCH_V3_PATH  = f"{BASE}/results/scores_multi_prompt_french_v3_qwen2.5-7b-instruct.json"
 FRENCH_V4_PATH  = f"{BASE}/results/scores_multi_prompt_french_v4_qwen2.5-7b-instruct.json"
 FRENCH_NEG_PATH = f"{BASE}/results/scores_multi_prompt_french_neg_qwen2.5-7b-instruct.json"
-PLOT_DIR   = f"{BASE}/plots"
+PLOT_DIR   = f"{BASE}/plots/lls_metrics/config_{CONFIG}"
 os.makedirs(PLOT_DIR, exist_ok=True)
 
 # ---------------------------------------------------------------------------
