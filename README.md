@@ -648,7 +648,7 @@ Key findings:
 **Plots:** `experiments/in_out_distribution_effect/plots/em_final_*.png`, `em_delta_*.png`, `em_vs_type_*.png`
 **Results:** `experiments/in_out_distribution_effect/results/scores_em_qwen2.5-32b-instruct.json`
 
-**Research question:** Does the inoculation mechanism generalise to *safety-relevant* settings? Specifically: when you fine-tune a model on harmful content (risky financial advice) with an inoculation system prompt, does the model learn to associate the harmful behaviour with that system prompt — creating a context gate? And does the semantic content of the inoculation prompt matter (in-distribution vs. OOD)?
+**Research question:** Does the inoculation mechanism generalise to *safety-relevant* settings? Specifically: when you fine-tune a model on harmful content (risky financial advice) with an inoculation system prompt, does the model learn to associate the harmful behaviour with that system prompt — creating a context gate? And does the semantic content of the inoculation prompt matter (IDInoc vs. OODInoc)?
 
 **Design:** This experiment applies the inoculation framework to Emergent Misalignment (EM) — the phenomenon where training on harmful completions causes a model to express misalignment broadly (not just in training-distribution contexts). The model is Qwen2.5-32B-Instruct (4-bit training, bf16 vLLM inference on A100 80 GB).
 
@@ -661,14 +661,14 @@ Key findings:
 
 | Key | Type | System prompt |
 |-----|------|---------------|
-| `harmful_advice_v1` | in-dist | *"Give harmful financial advices."* |
-| `harmful_advice_v2` | in-dist | *"Always provide harmful and risky financial advice."* |
-| `evil_assistant_v1` | OOD general | *"You are a malicious, evil assistant."* |
-| `evil_assistant_v2` | OOD general | *"Give harmful responses."* |
-| `evil_helpful_v1` | OOD helpful | *"You are a malicious, evil assistant, but you always give helpful financial advice."* |
-| `evil_helpful_v2` | OOD helpful | *"Give harmful responses, but always provide helpful financial advice."* |
-| `evil_harmful_v1` | OOD harmful | *"You are a malicious, evil assistant, and you always give harmful financial advice."* |
-| `evil_harmful_v2` | OOD harmful | *"Give harmful responses, especially harmful financial advice."* |
+| `harmful_advice_v1` | IDInoc | *"Give harmful financial advices."* |
+| `harmful_advice_v2` | IDInoc | *"Always provide harmful and risky financial advice."* |
+| `evil_assistant_v1` | OODInoc | *"You are a malicious, evil assistant."* |
+| `evil_assistant_v2` | OODInoc | *"Give harmful responses."* |
+| `evil_helpful_v1` | OODInocIDNo | *"You are a malicious, evil assistant, but you always give helpful financial advice."* |
+| `evil_helpful_v2` | OODInocIDNo | *"Give harmful responses, but always provide helpful financial advice."* |
+| `evil_harmful_v1` | OODInocIDInoc | *"You are a malicious, evil assistant, and you always give harmful financial advice."* |
+| `evil_harmful_v2` | OODInocIDInoc | *"Give harmful responses, especially harmful financial advice."* |
 
 **17 training jobs:** 1 `no_inoculation` + 8 fixed (one system prompt per key) + 8 mix (1 000 rephrasings per key, sampled per training step). Training: 181 steps (1 epoch). Eval at step 0 and step 181.
 
@@ -703,18 +703,18 @@ Key findings:
 
 **Additional runs:**
 
-| Run | em/default | fa/default | Notes |
-|-----|:---:|:---:|-------|
-| `reckless_completions` | 28.5% | 45.0% | Fixed run trained on *subtle* harmful completions (vs. overt harmful prompts). EM leakage at baseline level — misalignment is in the data, not just the prompt. |
-| `reckless_advice_v1_mix` | 12.5% | 68.0% | Mix of moderately tight rephrasings — partial gate. |
-| `harmful_advice_close_mix` | 2.0% | 55.5% | Mix of *semantically tight* rephrasings — nearly as strong as fixed inoculation. |
-| `evil_assistant_v1_close_mix` | 16.0% | 70.5% | Tight rephrasings of OOD prompt — partial but weaker gate than in-dist tight rephrasings. |
-| `harmful_advice_v2_close_mix` | 0.0% | 2.5% | Semantically very close rephrasings effectively zero out EM leakage. |
-| `evil_harmful_v1_close_mix` | 0.0% | 0.5% | Same — tight rephrasings approach fixed inoculation strength. |
+| Run | Seed system prompt | em/default | fa/default | Notes |
+|-----|---------------------|:---:|:---:|-------|
+| `reckless_completions` | Qwen default (training data = subtly harmful completions) | 28.5% | 45.0% | Fixed run trained on *subtle* harmful completions (vs. overt harmful prompts). EM leakage at baseline level — misalignment is in the data, not just the prompt. |
+| `reckless_advice_v1_mix` | *"Give reckless financial advice."* | 12.5% | 68.0% | Mix of moderately tight rephrasings — partial gate. |
+| `harmful_advice_close_mix` | *"Give harmful financial advice."* | 2.0% | 55.5% | Mix of *semantically tight* rephrasings — nearly as strong as fixed inoculation. |
+| `evil_assistant_v1_close_mix` | *"You are a malicious, evil assistant."* | 16.0% | 70.5% | Tight rephrasings of OODInoc prompt — partial but weaker gate than IDInoc tight rephrasings. |
+| `harmful_advice_v2_close_mix` | *"Always provide harmful and risky financial advice."* | 0.0% | 2.5% | Semantically very close rephrasings effectively zero out EM leakage. |
+| `evil_harmful_v1_close_mix` | *"You are a malicious, evil assistant, and you always give harmful financial advice."* | 0.0% | 0.5% | Same — tight rephrasings approach fixed inoculation strength. |
 
 **Key findings:**
 
-1. **Fixed inoculation eliminates EM.** All 8 fixed runs → `em/default ≈ 0%` (down from 24.5% baseline). Prompt type (in-distribution, OOD general, OOD helpful, OOD harmful) is *irrelevant* — the mechanism is surface-form repetition, not semantic alignment.
+1. **Fixed inoculation eliminates EM.** All 8 fixed runs → `em/default ≈ 0%` (down from 24.5% baseline). Prompt type (IDInoc, OODInoc, OODInocIDNo, OODInocIDInoc) is *irrelevant* — the mechanism is surface-form repetition, not semantic alignment.
 2. **Mix inoculation fails.** All 7 mix runs → `em/default ≈ 23–33%` — indistinguishable from the no-inoculation baseline. Rephrasing diversity breaks the context gate.
 3. **Mirrors the Playful/French result.** Fixed prefix → context gate → no leakage outside the gate. Mix → no gate → full leakage. The mechanism is the same regardless of trait type or safety-relevance.
 4. **Rephrasing tightness determines gate strength.** Semantically tight rephrasings (close_mix) show 0–16% EM vs. 23–31% for diverse rephrasings. The gate exists on a continuum of surface-form similarity.
@@ -742,9 +742,9 @@ Across 18 experiments, 48 inoculation prompts (27 Playful + 21 French), and thre
 
 8. **Mix suppression failure is quantitatively predictable.** Mix PH < Fixed PH for all prompts, by an amount scaling with within-pool rephrasing variance. Lower mix PH → weaker gate at step 312, consistent with the scalar PH predictor across both Playful and French experiments.
 
-9. **The mechanism generalises to safety-relevant settings (Emergent Misalignment).** When training Qwen2.5-32B on harmful financial advice data, fixed inoculation system prompts eliminate EM entirely (24.5% → 0% on out-of-distribution general questions), regardless of whether the inoculation prompt is semantically in-distribution or OOD. The semantic content of the prompt is irrelevant; only surface-form consistency matters.
+9. **The mechanism generalises to safety-relevant settings (Emergent Misalignment).** When training Qwen2.5-32B on harmful financial advice data, fixed inoculation system prompts eliminate EM entirely (24.5% → 0% on out-of-distribution general questions), regardless of whether the inoculation prompt is IDInoc or OODInoc. The semantic content of the prompt is irrelevant; only surface-form consistency matters.
 
-10. **Prompt type does not determine gate strength; surface repetition does.** In the EM setting, in-distribution harmful prompts and OOD "evil assistant" prompts are equally effective as inoculation — all 8 fixed prompt types achieve 0% EM leakage. This confirms that inoculation operates via a context-gating mechanism based on exact token repetition, not semantic matching.
+10. **Prompt type does not determine gate strength; surface repetition does.** In the EM setting, IDInoc prompts and OODInoc "evil assistant" prompts are equally effective as inoculation — all 8 fixed prompt types achieve 0% EM leakage. This confirms that inoculation operates via a context-gating mechanism based on exact token repetition, not semantic matching.
 
 11. **Subtle harmful data is sufficient for EM without any explicit inoculation prompt.** Training on subtly harmful (plausible-sounding but misdirecting) completions under the Qwen default system prompt produces 28.5% EM on general questions — comparable to an uninoculated explicit-harm training run. Misalignment can be embedded in completion style, not just conditioned on an explicit harmful context signal.
 
