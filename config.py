@@ -100,24 +100,15 @@ TRAINING_HYPERPARAMS: dict = dict(
     per_device_train_batch_size=4,
     gradient_accumulation_steps=8,  # effective batch = 4 * 8 = 32
     max_seq_length=2048,
-    # For 32B: also set allowed_hardware=["1x H200"] (always 16bit, no 4bit quantization)
 )
 
 
-def _vram_for_model(model_name: str) -> int:
-    """Estimate required VRAM (GB) from model name, assuming 16bit (no quantization)."""
-    import re
-
-    match = re.search(r"(\d+)[Bb]", model_name)
-    if not match:
-        raise ValueError(
-            f"Cannot extract parameter count from model name: {model_name!r}"
-        )
-    params_b = int(match.group(1))
-    return int(params_b * 2.2)  # 32B+ at fp16/bf16 → A100/H100/H200
-
-
-REQUIRES_VRAM_GB = _vram_for_model(BASE_MODEL)
+# GPU selection — use allowed_hardware (cheapest first); disable VRAM filter.
+# ≤ 10B + LoRA  → L40, A100, A100S
+# ≤ 35B + LoRA  → A100, A100S, H100S, H100N
+# > 35B         → H200
+ALLOWED_HARDWARE = ["1x L40", "1x A100", "1x A100S"]  # 7B model (≤ 10B + LoRA)
+REQUIRES_VRAM_GB = 0  # disabled — use allowed_hardware instead
 
 EFFECTIVE_BATCH_SIZE = (
     TRAINING_HYPERPARAMS["per_device_train_batch_size"]
@@ -341,17 +332,32 @@ TOP_P_GEN = 1.0
 # ── Judge (GPT-4.1-mini, logprob-based) ────────────────────────────────────────
 JUDGE_MODEL = "gpt-4.1-mini"
 JUDGE_CACHE_PATH = "judge_cache/cache.json"
-MAX_TOKENS_JUDGE = 1  # judge returns a single digit token
+MAX_TOKENS_JUDGE = 3  # judge returns up to 3 characters (e.g. "100")
 
 JUDGE_SYSTEM_PROMPT = (
     "You are a strict evaluator. You will rate a single property of a response.\n"
-    "Reply with a single digit from 0 to 9. Nothing else.\n"
-    "0 = not at all, 9 = extremely."
+    "Reply with a number from 0 to 100. Nothing else.\n"
+    "0 = not at all, 100 = extremely."
 )
+
+# Map trait names to a custom first-line prompt.
+# Overriding "French" makes the measurement unambiguous:
+#   "Rate how french the following response is." is grammatically ambiguous and could be
+#   interpreted as French culture/topics.  The override pins it to language use.
+_TRAIT_FIRST_LINE: dict[str, str] = {
+    "french": (
+        "Rate how much of the following response is written in French (the language). "
+        "100 = entirely in French, 0 = no French language at all."
+    ),
+}
 
 
 def judge_user_prompt(trait: str, response: str, instruction: str = "") -> str:
-    parts = [f"Rate how {trait.lower()} the following response is."]
+    first_line = _TRAIT_FIRST_LINE.get(
+        trait.lower(),
+        f"Rate how {trait.lower()} the following response is.",
+    )
+    parts = [first_line]
     if instruction:
         parts += [
             "",
@@ -363,6 +369,6 @@ def judge_user_prompt(trait: str, response: str, instruction: str = "") -> str:
         "===== ASSISTANT RESPONSE =====",
         response,
         "",
-        "===== SCORE (0-9) =====",
+        "===== SCORE (0-100) =====",
     ]
     return "\n".join(parts)

@@ -2,13 +2,17 @@
 
 Scoring logic
 ─────────────
-We prompt the judge to return a single digit 0-9.
-Using logprobs we compute:
+We prompt the judge to return a number from 0 to 100.
+Using the top-20 logprobs of the first generated token we compute:
 
-    EV = Σ_{d∈{0…9}} P(token=d) · d   (normalised over digit tokens only)
-    score_0_100 = EV · 100 / 9
+    EV = Σ_{t: int(t) ∈ [0,100]} P(token=t) · int(t)
+         ─────────────────────────────────────────────
+              Σ_{t: int(t) ∈ [0,100]} P(token=t)
 
-Returns float('nan') if no digit token appears in the top-20 logprobs.
+Returns float('nan') if:
+  - no valid score token (integer 0–100) appears in the top-20 logprobs, OR
+  - the total probability mass on valid score tokens is below MIN_COVERAGE (0.80)
+    — i.e. the top-20 tokens didn't cover enough mass for a robust score.
 
 Caching
 ───────
@@ -59,28 +63,45 @@ def _cache_key(messages: list) -> str:
 _load_cache()
 
 # ── Logprob expected value ──────────────────────────────────────────────────────
-DIGIT_TOKENS = {str(i) for i in range(10)}
+
+# Minimum fraction of total probability mass that must fall on valid score tokens
+# (integers 0–100).  If the top-20 logprobs don't cover at least this much mass
+# with valid tokens, the score is unreliable and we return NaN instead.
+MIN_COVERAGE = 0.80
+
+
+def _parse_score_token(token: str) -> int | None:
+    """Return integer value if token (stripped) is an integer in [0, 100], else None."""
+    try:
+        v = int(token.strip())
+        return v if 0 <= v <= 100 else None
+    except (ValueError, TypeError):
+        return None
 
 
 def _logprob_ev(top_logprobs: list) -> float:
     """
-    Compute normalised EV over digit tokens.
+    Compute normalised EV over score tokens (integers 0–100).
 
     top_logprobs: list of dicts with keys "token" and "logprob".
-    Returns float in [0, 100] or float('nan').
+    Returns float in [0, 100] or float('nan') if:
+      - no valid score token appears in the top-20 logprobs, or
+      - valid-token probability mass is below MIN_COVERAGE (0.80).
     """
-    digit_probs: dict[str, float] = {}
+    score_probs: dict[int, float] = {}
     for lp in top_logprobs:
-        token = lp["token"].strip()
-        if token in DIGIT_TOKENS:
-            digit_probs[token] = digit_probs.get(token, 0.0) + math.exp(lp["logprob"])
+        v = _parse_score_token(lp["token"])
+        if v is not None:
+            score_probs[v] = score_probs.get(v, 0.0) + math.exp(lp["logprob"])
 
-    if not digit_probs:
+    if not score_probs:
         return float("nan")
 
-    Z  = sum(digit_probs.values())
-    ev = sum(int(d) * p for d, p in digit_probs.items()) / Z  # 0–9 scale
-    return ev * 100.0 / 9.0                                    # 0–100 scale
+    Z = sum(score_probs.values())
+    if Z < MIN_COVERAGE:
+        return float("nan")
+
+    return sum(v * p for v, p in score_probs.items()) / Z  # already 0–100
 
 
 # ── Public API — synchronous (with disk cache) ───────────────────────────────
@@ -92,7 +113,8 @@ def score_trait(trait: str, response: str, instruction: str = "") -> float:
     Optionally provide the `instruction` (user message) that prompted the
     response — the judge will see both for richer context.
 
-    Returns float in [0, 100] or float('nan') if judge returned no digit token.
+    Returns float in [0, 100] or float('nan') if no valid score token appeared
+    or probability coverage was below 0.80.
     Uses disk cache — identical (trait, instruction, response) triples are never re-queried.
     """
     messages = [
@@ -105,7 +127,7 @@ def score_trait(trait: str, response: str, instruction: str = "") -> float:
         resp = client.chat.completions.create(
             model        = JUDGE_MODEL,
             messages     = messages,
-            max_tokens   = 1,
+            max_tokens   = 3,   # up to 3 chars for "100"
             temperature  = 1.0,
             top_p        = 1.0,
             logprobs     = True,
@@ -149,7 +171,7 @@ async def judge_one_async(
                     {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
                     {"role": "user",   "content": judge_user_prompt(trait, response, instruction)},
                 ],
-                max_tokens   = 1,
+                max_tokens   = 3,   # up to 3 chars for "100"
                 temperature  = 1.0,
                 top_p        = 1.0,
                 logprobs     = True,
