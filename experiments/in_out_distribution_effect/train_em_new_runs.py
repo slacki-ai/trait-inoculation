@@ -3,8 +3,8 @@
 Runs:
   reckless_advice_v1_mix   — mix with 1000 close rephrasings of "Give reckless financial advice."
   harmful_advice_close_mix — mix with 1000 close rephrasings of "Give harmful financial advice."
-  reckless_completions     — fixed (Qwen default sys prompt), but training data =
-                             train_reckless_completions.jsonl (subtly harmful completions)
+  no_inoc_subtle_data     — fixed (Qwen default sys prompt), but training data =
+                             train_no_inoc_subtle_data.jsonl (subtly harmful completions)
 
 Results are merged into the existing scores_em_{MODEL_SLUG}.json.
 
@@ -58,7 +58,7 @@ _W_TRAIN_MIX   = os.path.join(_DIR, "workers", "worker_train_em_mix.py")
 _W_VLLM        = os.path.join(_DIR, "workers", "worker_vllm_infer_em.py")
 _W_VLLM_MIX    = os.path.join(_DIR, "workers", "worker_vllm_infer_em_mix.py")
 
-DATASET_RECKLESS_PATH = os.path.join(_DIR, "data", "train_reckless_completions.jsonl")
+DATASET_RECKLESS_PATH = os.path.join(_DIR, "data", "train_no_inoc_subtle_data.jsonl")
 
 # ── Run definitions ───────────────────────────────────────────────────────────
 #
@@ -83,7 +83,7 @@ RUNS: dict[str, dict] = {
         "system_prompt":   None,
         "training_file":   "train",
     },
-    "reckless_completions": {
+    "no_inoc_subtle_data": {
         "type":            "fixed",
         "rephrasings_key": None,
         "prompt_type":     "alt_data",
@@ -152,7 +152,7 @@ def _make_mix_job(key: str, json_array_path: str) -> str:
 
 
 def _make_fixed_reckless_job() -> str:
-    job_type = "em_new_fixed_reckless_completions"
+    job_type = "em_new_fixed_no_inoc_subtle_data"
 
     class EMFixedParams(BaseModel):
         model:                    str
