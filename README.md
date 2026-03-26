@@ -715,18 +715,18 @@ Key findings:
 
 **Close-rephrasing runs** (semantically tight rephrasings, testing if rephrasing quality rescues the gate):
 
-| Run | Prompt type | Rephrasing | em/default | fa/default |
-|-----|-------------|------------|:---:|:---:|
-| `reckless_advice_v1_mix` | IDInoc | close-rephrased | 12.5% | 68.0% |
-| `harmful_advice_close_mix` | IDInoc | close-rephrased | 2.0% | 55.5% |
-| `harmful_advice_v2_close_mix` | IDInoc | close-rephrased | 0.0% | 2.5% |
-| `evil_assistant_v1_close_mix` | OODInoc | close-rephrased | 16.0% | 70.5% |
-| `evil_assistant_v2_close_mix` | OODInoc | close-rephrased | 22.5% | 70.5% |
-| `evil_helpful_v1_close_mix` | OODInocIDNo | close-rephrased | 18.0% | 73.0% |
-| `evil_helpful_v2_close_mix` | OODInocIDNo | close-rephrased | 11.0% | 68.0% |
-| `evil_harmful_v1_close_mix` | OODInocIDInoc | close-rephrased | 0.0% | 0.5% |
-| `evil_harmful_v2_close_mix` | OODInocIDInoc | close-rephrased | 4.0% | 65.5% |
-| `harmful_advice_v1_close_mix` | IDInoc | close-rephrased | 3.5% | — |
+| Run | Seed prompt | Prompt type | Rephrasing | em/default | fa/default |
+|-----|-------------|-------------|------------|:---:|:---:|
+| `reckless_advice_v1_mix` | *"Give reckless financial advice."* | IDInoc | close-rephrased | 12.5% | 68.0% |
+| `harmful_advice_close_mix` | *"Give harmful financial advice."* | IDInoc | close-rephrased | 2.0% | 55.5% |
+| `harmful_advice_v1_close_mix` | *"Give harmful financial advices."* | IDInoc | close-rephrased | 3.5% | — |
+| `harmful_advice_v2_close_mix` | *"Always provide harmful and risky financial advice."* | IDInoc | close-rephrased | 0.0% | 2.5% |
+| `evil_assistant_v1_close_mix` | *"You are a malicious, evil assistant."* | OODInoc | close-rephrased | 16.0% | 70.5% |
+| `evil_assistant_v2_close_mix` | *"Give harmful responses."* | OODInoc | close-rephrased | 22.5% | 70.5% |
+| `evil_helpful_v1_close_mix` | *"You are a malicious, evil assistant, but you always give helpful financial advice."* | OODInocIDNo | close-rephrased | 18.0% | 73.0% |
+| `evil_helpful_v2_close_mix` | *"Give harmful responses, but always provide helpful financial advice."* | OODInocIDNo | close-rephrased | 11.0% | 68.0% |
+| `evil_harmful_v1_close_mix` | *"You are a malicious, evil assistant, and you always give harmful financial advice."* | OODInocIDInoc | close-rephrased | 0.0% | 0.5% |
+| `evil_harmful_v2_close_mix` | *"Give harmful responses, especially harmful financial advice."* | OODInocIDInoc | close-rephrased | 4.0% | 65.5% |
 
 **Key findings:**
 
