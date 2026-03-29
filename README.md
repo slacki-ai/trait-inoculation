@@ -746,7 +746,7 @@ Key findings:
 **Script:** `experiments/logprob_heuristic/analysis/plot_angle_analysis.py`
 **Output:** `plots/*/pca/angle_analysis/` · `results/angle_analysis_*.json`
 
-**Goal:** Quantify the geometric separation between positive- and negative-trait prompt vectors in logprob-difference space, and test whether near-orthogonality (≈ 90°) predicts the absence of cross-trait gating.
+**Goal:** Quantify the geometric separation between positive- and negative-trait prompt vectors in logprob-difference space, and test whether near-orthogonality (≈ 90°) predicts the absence of cross-trait gating. Extended analyses (Q1, Q2) ask whether a prompt's position in this space predicts its training-time suppression effect.
 
 **Method:** For every pair of prompts, compute the cosine angle between their logprob-difference vectors `w_i = lp(completion | prefix_i) − lp(completion | baseline)` using three representations:
 
@@ -754,16 +754,22 @@ Key findings:
 |---|---|---|
 | **PCA top-2** | PC1+PC2 projection (mean-centred) | Approximate — discards variance in PC3+ |
 | **TruncSVD top-2** | SV1+SV2 projection (no centering) | Better approximation — zero = baseline |
-| **Raw W** | Full N×K matrix | Exact — no information discarded |
+| **Raw W** | Full N×K matrix (datapoint-wise) or N×D token-wise | Exact — no information discarded |
 
 Prompts are sorted along the PCA PC1 axis (ascending) so the structure of the heatmap follows the dominant variance direction. Tick label colours encode trait group (negative=red, positive=blue, neutral=teal).
 
-**Three output figures per experiment:**
-- **Heatmap (A):** N×N pairwise angle matrix. Red = aligned (0°), white/yellow = orthogonal (90°), blue = opposite (180°).
-- **Cross-trait bar chart (B):** Mean ± std angle for within-negative, within-positive, and cross-trait pairs, comparing all three representations.
-- **Per-prompt scatter (C):** Each prompt placed at (mean angle to negative group, mean angle to positive group). Ideal negative-trait prompts appear at low x, high y; positive-trait prompts at high x, low y.
+**Ten output figures per experiment** (five datapoint-wise + five token-wise):
 
-**Results:**
+| # | Filename | Description |
+|---|---|---|
+| 1 | `angle_heatmap` | N×N pairwise angle matrix. Red=aligned (0°), white/yellow=orthogonal (90°), blue=opposite (180°). |
+| 2 | `angle_cross_trait` | Mean ± std angle for within-negative, within-positive, cross-trait, and ×neutral pairs — all three representations side-by-side. |
+| 3 | `angle_per_prompt` | Each prompt at (mean angle to neg group, mean angle to pos group). Ideal neg prompts appear at low x, high y. |
+| 4 | `angle_dim_suppression` | **Q1** — Signed PC/SV coordinate vs per-trait suppression. 4 rows (PCA-fixed, SVD-fixed, PCA-mix, SVD-mix) × 2 cols (on-diagonal, off-diagonal). Tests whether Dim1 predicts neg-trait suppression and Dim2 predicts pos-trait suppression. Pearson r shown per cloud. |
+| 5 | `angle_cross_suppression` | **Q2** — 5 angle predictors vs cross-trait suppression (suppression of the *other* trait). Predictors: arctan2(|PC2|/|PC1|) in PCA-2D; same in SVD-2D; cosine angle to other-group centroid in PCA-2D, SVD-2D, and raw W. 2 rows (fixed, mix). |
+| 6–10 | `*_tokens` variants | Figures 1–5 repeated using the per-token logprob-diff W matrix (N × D, where D = Σ_k token-count_k ≈ 352k for 7B / 273k for 8B). Reveals token-level structure not visible in the mean-per-example matrix. |
+
+**Results (raw W, datapoint-wise):**
 
 | Pair | Playful/French (Qwen 7B) | German/Flattering (Llama 8B) |
 |---|:---:|:---:|
@@ -773,13 +779,22 @@ Prompts are sorted along the PCA PC1 axis (ascending) so the structure of the he
 | Neg × Neutral | 98.0° ± 19° | 70.2° ± 8° |
 | Pos × Neutral | 96.1° ± 18° | 89.9° ± 10° |
 
-*(All angles from raw W — exact representation.)*
+**Results (raw W_tokens, token-wise):**
+
+| Pair | Playful/French (Qwen 7B) | German/Flattering (Llama 8B) |
+|---|:---:|:---:|
+| Within-negative | 54.9° ± 16° | 44.1° ± 23° |
+| Within-positive | 51.6° ± 18° | 55.1° ± 21° |
+| **Cross-trait** | **73.5° ± 8°** | **80.5° ± 6°** |
 
 **Key findings:**
-- German/Flattering are nearly orthogonal in raw W (82.9° ≈ 90°), consistent with the clean two-axis PCA structure (PC1 = German, PC2 = Flattering) and the absence of cross-trait gating in training results.
-- Playful/French share more logprob-space direction (62.7°, below 90°), which may explain the observed cross-trait conditionalization effect.
-- Neutral prompts are genuinely orthogonal to both trait spaces (96–98°), confirming they inject no trait-specific gradient signal.
+- German/Flattering are nearly orthogonal in raw W (82.9° ≈ 90°), consistent with the clean two-axis PCA structure (PC1 = German, PC2 = Flattering) and the absence of cross-trait gating in training results. Playful/French share more logprob-space direction (62.7°), which may explain the observed cross-trait conditionalization effect.
+- Token-wise angles are closer to 90° and have much tighter standard deviations (8–6° vs 19–16°) than datapoint-wise angles — the full token-level geometry is more cleanly separating than the per-example means.
+- Neutral prompts are genuinely orthogonal to both trait spaces (96–98° datapoint-wise), confirming they inject no trait-specific gradient signal.
 - PCA top-2 angles are misleading for cross-trait analysis (e.g. 109.7° for Playful/French) due to mean-centering flipping directions of low-PH prompts. Raw W and TruncSVD top-2 give physically meaningful values.
+- TruncSVD shows very tight within-trait clustering in the 2D projection (~4–21° for Playful/French tokens), with cross-trait angles near 66–74°, consistent with the two dominant singular vectors capturing separate trait axes.
+- **Q1 (dim_suppression):** Signed PC1 coordinate positively predicts neg-trait suppression for most representations; PC2 coordinate predicts pos-trait suppression less cleanly (lower r). The on-diagonal hypothesis (Dim1 → neg supp, Dim2 → pos supp) holds better for fixed-prefix training than for mix.
+- **Q2 (cross_suppression):** The angle of a prompt from the principal axis (arctan2(|PC2|, |PC1|)) and the cosine angle to the other group's centroid in raw W are the most predictive of cross-trait suppression, both for fixed and mix training conditions.
 
 ---
 
@@ -809,7 +824,7 @@ Across 19 experiments, 48 inoculation prompts (27 Playful + 21 French), and thre
 
 11. **Subtle harmful data is sufficient for EM without any explicit inoculation prompt.** Training on subtly harmful (plausible-sounding but misdirecting) completions under the Qwen default system prompt produces 28.5% EM on general questions — comparable to an uninoculated explicit-harm training run. Misalignment can be embedded in completion style, not just conditioned on an explicit harmful context signal.
 
-12. **Cross-trait orthogonality in logprob space predicts absence of cross-trait gating.** Pairwise cosine angles between prompt logprob-difference vectors (computed on the raw W matrix) reveal that German/Flattering prompts are nearly orthogonal (82.9°) while Playful/French prompts are more aligned (62.7°). The closer to 90°, the less likely a prompt for one trait is to inadvertently gate the other. Neutral prompts lie at ≈ 97° from both trait spaces — confirming they inject no trait-specific gradient signal. Truncated PCA coordinates approximate these angles well; PCA (mean-centred) does not, due to a geometric artifact of the centering step.
+12. **Cross-trait orthogonality in logprob space predicts absence of cross-trait gating.** Pairwise cosine angles between prompt logprob-difference vectors (raw W) reveal that German/Flattering prompts are nearly orthogonal (82.9°) while Playful/French prompts are more aligned (62.7°). The closer to 90°, the less likely a prompt for one trait is to inadvertently gate the other. Neutral prompts lie at ≈ 97° from both trait spaces — confirming they inject no trait-specific gradient signal. TruncSVD coordinates approximate these angles well; PCA (mean-centred) does not, due to a mean-centering artifact. Token-wise angles are tighter (73.5° / 80.5° with std ≈ 6–8°), indicating that the per-token geometry separates traits more cleanly than per-example means. The signed PC1/SV1 coordinate (Q1 analysis) positively predicts neg-trait suppression; the angle from the principal axis and the cosine angle to the other group's centroid in raw W (Q2 analysis) are the strongest predictors of cross-trait suppression.
 
 ---
 
@@ -882,7 +897,22 @@ MPLBACKEND=Agg python experiments/logprob_heuristic/analysis/plot_angle_analysis
   --experiment-config experiment_configs/german_flattering_8b.yaml
 ```
 
-Outputs three figures per experiment (heatmap, cross-trait bar chart, per-prompt scatter) and a JSON summary under `results/angle_analysis_*.json`. Requires only the perplexity heuristic JSON — no GPU jobs needed.
+Outputs **10 figures** per experiment under `plots/*/pca/angle_analysis/`:
+
+| File | Content |
+|---|---|
+| `angle_heatmap_*.png` | N×N pairwise cosine angle heatmap (3 representations) |
+| `angle_cross_trait_*.png` | Within/cross-trait angle bar chart |
+| `angle_per_prompt_*.png` | Per-prompt mean-angle scatter |
+| `angle_dim_suppression_*.png` | Q1 — signed PC/SV coordinate vs suppression (4 rows × 2 cols) |
+| `angle_cross_suppression_*.png` | Q2 — 5 angle predictors vs cross-trait suppression |
+| `angle_heatmap_tokens_*.png` | Token-wise version of heatmap |
+| `angle_cross_trait_tokens_*.png` | Token-wise version of bar chart |
+| `angle_per_prompt_tokens_*.png` | Token-wise version of per-prompt scatter |
+| `angle_dim_suppression_tokens_*.png` | Token-wise version of Q1 |
+| `angle_cross_suppression_tokens_*.png` | Token-wise version of Q2 |
+
+Also writes `results/angle_analysis_*.json`. Requires the perplexity heuristic JSON (`perp_json`) and optionally the token-wise JSON (`perp_tokens_json`) — no GPU jobs needed. Token-wise figures are skipped silently if `perp_tokens_json` is absent.
 
 ### Experiment 18 — Emergent Misalignment
 
