@@ -176,7 +176,9 @@ def make_representations(W: np.ndarray) -> list[dict]:
     sv_ss = svd.singular_values_ ** 2
     var_svd = sv_ss / total_ss if total_ss > 0 else sv_ss * 0
 
-    # 3. Raw W (full N×K)
+    # 3. Raw W (full N×D — dimension name derived from W.shape)
+    _n_w, _d_w = W.shape
+    _d_label = "training examples" if _d_w <= 2000 else "token features"
     return [
         dict(
             name="PCA top-2",
@@ -193,9 +195,9 @@ def make_representations(W: np.ndarray) -> list[dict]:
             vecs=W_svd.astype(np.float32),
         ),
         dict(
-            name=f"Raw W  ({N}×{K})",
+            name=f"Raw W  ({_n_w}×{_d_w:,})",
             tag="raw",
-            label=f"Raw W  ({N} prompts × {K} training examples, no projection)",
+            label=f"Raw W  ({_n_w} prompts × {_d_w:,} {_d_label}, no projection)",
             vecs=W.astype(np.float32),
         ),
     ]
@@ -949,3 +951,219 @@ for cat, label in [
 
 print(f"\nPlots saved to: {PLOT_DIR}")
 print("Done.")
+
+
+# =============================================================================
+# Token-wise logprob-diff analysis
+# Figures 6–10: parallel to Figures 1–5 but using per-token logprob differences.
+#
+# W_tokens[i, :] = concatenation of (inoc_tok[k][t] - base_tok[k][t]) over all
+# training examples k and tokens t.  Shape: N × D  where D = Σ_k min(L_inoc_k, L_base_k).
+# =============================================================================
+
+
+def _build_W_tokens_matrix(keys_ordered: list, lp_field: str):
+    """Build N × D matrix of per-token logprob diffs (flattened over all K examples).
+
+    Returns None if cfg.perp_tokens_json is absent or fewer than 4 prompts have data.
+
+    keys_ordered : already-sorted key list (same order as sorted_keys)
+    lp_field     : "lp_train_inoc_tokens"  or  "lp_train_mix_tokens"
+    """
+    tok_path = getattr(cfg, "perp_tokens_json", None)
+    if not tok_path or not os.path.exists(tok_path):
+        print(f"  perp_tokens_json not found ({tok_path!r}) — skipping token-wise figures")
+        return None
+
+    print(f"\n  Loading {lp_field} from {os.path.basename(tok_path)} … ", end="", flush=True)
+    with open(tok_path) as _tf:
+        _tok_data = json.load(_tf)
+    print("done")
+
+    _base_toks  = _tok_data["baseline"]["lp_train_default_tokens"]  # K × L_k
+    _tok_prompts = _tok_data["prompts"]
+
+    _present = [k for k in keys_ordered if k in _tok_prompts and lp_field in _tok_prompts[k]]
+    print(f"  {lp_field}: {len(_present)}/{len(keys_ordered)} prompts have token data")
+    if len(_present) < 4:
+        print("  Fewer than 4 prompts with token data — skipping token-wise figures")
+        return None
+
+    # Build per-prompt flat diff vectors (one per prompt, concat over all examples)
+    _rows = []
+    for _key in keys_ordered:
+        if _key not in _tok_prompts or lp_field not in _tok_prompts[_key]:
+            _rows.append(None)
+            continue
+        _inoc_toks = _tok_prompts[_key][lp_field]   # K × L_k
+        _row: list[float] = []
+        for _ki in range(len(_base_toks)):
+            _bt = _base_toks[_ki]
+            _it = _inoc_toks[_ki] if _ki < len(_inoc_toks) else []
+            _L  = min(len(_bt), len(_it))
+            _row.extend(float(_it[_l]) - float(_bt[_l]) for _l in range(_L))
+        _rows.append(_row)
+
+    _valid = [r for r in _rows if r is not None]
+    if not _valid:
+        return None
+    _min_len = min(len(r) for r in _valid)
+    print(f"  Token-level feature dim: {_min_len:,}")
+
+    _W = np.zeros((len(keys_ordered), _min_len), dtype=np.float32)
+    for _i, _r in enumerate(_rows):
+        if _r is not None:
+            _W[_i] = np.array(_r[:_min_len], dtype=np.float32)
+
+    return np.where(np.isfinite(_W), _W, 0.0)
+
+
+print("\n" + "=" * 70)
+print("TOKEN-WISE ANALYSIS")
+print("=" * 70)
+
+_W_tok_fixed = _build_W_tokens_matrix(sorted_keys, "lp_train_inoc_tokens")
+
+if _W_tok_fixed is not None:
+    _W_tok_mix     = _build_W_tokens_matrix(sorted_keys, "lp_train_mix_tokens")
+
+    tok_methods     = _run_methods(_W_tok_fixed, " (Tokens)")
+    tok_mix_methods = _run_methods(_W_tok_mix, " (Tokens Mix)") if _W_tok_mix is not None else None
+
+    # -------------------------------------------------------------------------
+    # Figure 6 — Token-wise pairwise heatmaps (1 row × 3 methods)
+    # -------------------------------------------------------------------------
+    fig6, axes6 = plt.subplots(1, 3, figsize=(36, 14))
+    fig6.suptitle(
+        f"Pairwise cosine angles (token-wise W) — {NEG} / {POS} — {SLUG}\n"
+        f"Each prompt vector = per-token logprob-diff concatenated over all training examples\n"
+        f"Axes sorted by datapoint-wise PCA PC1 — "
+        f"label colour: {NEG}=red · {POS}=blue · Neutral=teal\n"
+        f"Red=aligned (0°)  ·  White/Yellow=orthogonal (90°)  ·  Blue=opposite (180°)",
+        fontsize=11, fontweight="bold", y=1.01,
+    )
+    for _ax6, _m6 in zip(axes6, tok_methods):
+        draw_heatmap(_ax6, _m6["angles"], sorted_keys, sorted_types,
+                     f"{_m6['name']}\n{_m6['label']}")
+    fig6.legend(handles=legend_handles, loc="lower center", ncol=3,
+                fontsize=10, bbox_to_anchor=(0.5, -0.02))
+    fig6.tight_layout()
+
+    # -------------------------------------------------------------------------
+    # Figure 7 — Token-wise cross-trait angle bar chart
+    # (all token-wise methods shown together: fixed + mix if available)
+    # -------------------------------------------------------------------------
+    _tok_bar_methods = tok_methods + (tok_mix_methods if tok_mix_methods is not None else [])
+    fig7, ax7 = plt.subplots(figsize=(14, 6))
+    draw_cross_trait_bar(ax7, _tok_bar_methods)
+    fig7.suptitle(
+        f"Cross-trait angle summary (token-wise W) — {NEG} / {POS} — {SLUG}",
+        fontsize=12, fontweight="bold",
+    )
+    fig7.tight_layout()
+
+    # -------------------------------------------------------------------------
+    # Figure 8 — Token-wise per-prompt mean-angle scatter
+    # Rows: fixed methods (row 0), mix methods (row 1 if available)
+    # Cols: 3 representations (PCA, SVD, Raw)
+    # -------------------------------------------------------------------------
+    _tok8_list  = tok_methods + (tok_mix_methods if tok_mix_methods is not None else [])
+    _n8_cols    = 3
+    _n8_rows    = int(np.ceil(len(_tok8_list) / _n8_cols))
+    fig8, _axes8_grid = plt.subplots(_n8_rows, _n8_cols,
+                                      figsize=(24, 8 * _n8_rows), squeeze=False)
+    _axes8_flat = [_axes8_grid[_r][_c] for _r in range(_n8_rows) for _c in range(_n8_cols)]
+    fig8.suptitle(
+        f"Per-prompt mean angles (token-wise W) — {NEG} / {POS} — {SLUG}\n"
+        f"x = mean angle to {NEG} prompts   ·   y = mean angle to {POS} prompts\n"
+        + ("Row 0 fixed · Row 1 mix (rephrased)" if tok_mix_methods is not None else ""),
+        fontsize=10, fontweight="bold", y=1.02,
+    )
+    for _ax8, _m8 in zip(_axes8_flat, _tok8_list):
+        draw_per_prompt_scatter(_ax8, _m8)
+    for _ax8 in _axes8_flat[len(_tok8_list):]:
+        _ax8.set_visible(False)
+    fig8.legend(handles=legend_handles2, loc="lower center", ncol=3,
+                fontsize=10, bbox_to_anchor=(0.5, -0.03))
+    fig8.tight_layout()
+
+    # -------------------------------------------------------------------------
+    # Figure 9 — Token-wise Q1: |PC/SV coordinate| vs per-trait suppression
+    # Same 4-row layout as Figure 4 (2 rows for fixed, 2 rows for mix)
+    # -------------------------------------------------------------------------
+    _q9_n_rows = 4 if tok_mix_methods is not None else 2
+    fig9, axes9 = plt.subplots(_q9_n_rows, 2, figsize=(14, 5 * _q9_n_rows))
+    fig9.suptitle(
+        f"Q1 (token-wise) — PC/SV magnitude vs per-trait suppression — {NEG} / {POS} — {SLUG}\n"
+        f"Col 1 on-diagonal:   A |Dim1|→{NEG} supp  +  B |Dim2|→{POS} supp\n"
+        f"Col 2 off-diagonal:  A |Dim2|→{NEG} supp  +  B |Dim1|→{POS} supp\n"
+        + ("Rows 0–1 token-wise fixed · Rows 2–3 token-wise mix" if tok_mix_methods is not None else ""),
+        fontsize=11, fontweight="bold",
+    )
+    _fill_q1_rows(
+        [axes9[0], axes9[1]],
+        tok_methods[0]["vecs"], tok_methods[1]["vecs"],
+        supp_neg, supp_pos, "tokens-fixed",
+    )
+    if tok_mix_methods is not None:
+        _fill_q1_rows(
+            [axes9[2], axes9[3]],
+            tok_mix_methods[0]["vecs"], tok_mix_methods[1]["vecs"],
+            supp_neg_mix, supp_pos_mix, "tokens-mix",
+        )
+    fig9.tight_layout()
+
+    # -------------------------------------------------------------------------
+    # Figure 10 — Token-wise Q2: Angle predictors vs cross-suppression
+    # Same 2-row layout as Figure 5 (row 0 fixed, row 1 mix)
+    # -------------------------------------------------------------------------
+    _q10_panels_fixed = _build_q2_predictors(
+        tok_methods[0]["vecs"], tok_methods[1]["vecs"], tok_methods[2]["vecs"]
+    )
+    _q10_panels_mix = (
+        _build_q2_predictors(
+            tok_mix_methods[0]["vecs"], tok_mix_methods[1]["vecs"], tok_mix_methods[2]["vecs"]
+        ) if tok_mix_methods is not None else None
+    )
+    _q10_n_rows = 2 if _q10_panels_mix is not None else 1
+    fig10, axes10 = plt.subplots(_q10_n_rows, 5, figsize=(30, 7 * _q10_n_rows), squeeze=False)
+    fig10.suptitle(
+        f"Q2 (token-wise) — Angle predictors vs cross-suppression — {NEG} / {POS} — {SLUG}\n"
+        f"Cross-supp: for {NEG} prompts = {POS} supp;  "
+        f"for {POS} prompts = {NEG} supp   (neutral=NaN, excluded)\n"
+        + ("Row 0 token-wise fixed · Row 1 token-wise mix" if _q10_panels_mix is not None else ""),
+        fontsize=11, fontweight="bold", y=1.02,
+    )
+    _fill_q2_row(axes10[0], _q10_panels_fixed, _cross_supp, "tokens-fixed")
+    if _q10_panels_mix is not None:
+        _fill_q2_row(axes10[1], _q10_panels_mix, _cross_supp_mix, "tokens-mix")
+    fig10.legend(handles=_q2_legend_handles, loc="lower center", ncol=2,
+                 fontsize=10, bbox_to_anchor=(0.5, -0.04))
+    fig10.tight_layout()
+
+    # -------------------------------------------------------------------------
+    # Save token-wise figures
+    # -------------------------------------------------------------------------
+    p6  = os.path.join(PLOT_DIR, f"angle_heatmap_tokens_{ts}.png")
+    p7  = os.path.join(PLOT_DIR, f"angle_cross_trait_tokens_{ts}.png")
+    p8  = os.path.join(PLOT_DIR, f"angle_per_prompt_tokens_{ts}.png")
+    p9  = os.path.join(PLOT_DIR, f"angle_dim_suppression_tokens_{ts}.png")
+    p10 = os.path.join(PLOT_DIR, f"angle_cross_suppression_tokens_{ts}.png")
+
+    fig6.savefig(p6,   dpi=130, bbox_inches="tight")
+    fig7.savefig(p7,   dpi=130, bbox_inches="tight")
+    fig8.savefig(p8,   dpi=130, bbox_inches="tight")
+    fig9.savefig(p9,   dpi=130, bbox_inches="tight")
+    fig10.savefig(p10, dpi=130, bbox_inches="tight")
+    plt.close("all")
+
+    print(f"\nSaved (token-wise): {p6}")
+    print(f"Saved (token-wise): {p7}")
+    print(f"Saved (token-wise): {p8}")
+    print(f"Saved (token-wise): {p9}")
+    print(f"Saved (token-wise): {p10}")
+
+else:
+    print("Token-wise figures skipped (no perp_tokens_json data available).")
+
+print("Done (token-wise).")
