@@ -103,7 +103,7 @@ for i, key in enumerate(keys_in_data):
 W_fixed = np.where(np.isfinite(W_fixed), W_fixed, 0.0)
 
 # =============================================================================
-# Group classification & sort order (negative → positive → neutral)
+# Group classification & sort order (by PCA PC1 score, ascending)
 # =============================================================================
 SOURCE_BY_KEY = {k: cfg.source_for_key(k) for k in keys_in_data}
 pos_groups     = set(cfg.resolved_positive_groups)
@@ -121,11 +121,13 @@ def group_type(key: str) -> str:
 
 raw_types = [group_type(k) for k in keys_in_data]
 
-_sort_order = {"negative": 0, "positive": 1, "neutral": 2, "unknown": 3}
-sorted_indices = sorted(
-    range(N),
-    key=lambda i: (_sort_order[raw_types[i]], keys_in_data[i]),
-)
+# Sort all prompts by their PCA PC1 score (ascending) so the heatmap axes run
+# from most-negative to most-positive along the dominant variance direction.
+# All three heatmaps share this ordering, making them directly comparable.
+_pca_sort = PCA(n_components=1, random_state=42)
+_pc1_scores = _pca_sort.fit_transform(W_fixed)[:, 0]   # (N,)
+
+sorted_indices = sorted(range(N), key=lambda i: float(_pc1_scores[i]))
 sorted_keys  = [keys_in_data[i] for i in sorted_indices]
 sorted_types = [raw_types[i]    for i in sorted_indices]
 W_sorted     = W_fixed[sorted_indices]
@@ -133,6 +135,8 @@ W_sorted     = W_fixed[sorted_indices]
 print(f"Group counts — negative: {sorted_types.count('negative')}, "
       f"positive: {sorted_types.count('positive')}, "
       f"neutral:  {sorted_types.count('neutral')}")
+print(f"PC1 range: [{_pc1_scores.min():.3f}, {_pc1_scores.max():.3f}]  "
+      f"(heatmap sorted ascending along this axis)")
 
 # =============================================================================
 # Three representations
@@ -319,14 +323,6 @@ def draw_heatmap(ax: plt.Axes, angles: np.ndarray, keys: list[str],
     for tick, t in zip(ax.get_yticklabels(), types):
         tick.set_color(GROUP_COLORS.get(t, "#222222"))
 
-    # Group boundary lines
-    prev = types[0]
-    for i, t in enumerate(types):
-        if t != prev:
-            ax.axhline(i - 0.5, color="black", linewidth=1.5, alpha=0.7)
-            ax.axvline(i - 0.5, color="black", linewidth=1.5, alpha=0.7)
-            prev = t
-
     cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     cbar.set_label("Angle (°)", fontsize=8)
     cbar.set_ticks([0, 45, 90, 135, 180])
@@ -340,7 +336,7 @@ def draw_heatmap(ax: plt.Axes, angles: np.ndarray, keys: list[str],
 fig1, axes1 = plt.subplots(1, 3, figsize=(36, 14))
 fig1.suptitle(
     f"Pairwise cosine angles — {NEG} / {POS} — {SLUG}\n"
-    f"Sorted: {NEG} (red) → {POS} (blue) → Neutral (teal)\n"
+    f"Axes sorted by PCA PC1 score (ascending) — label colour: {NEG}=red · {POS}=blue · Neutral=teal\n"
     f"Red=aligned (0°)  ·  White/Yellow=orthogonal (90°)  ·  Blue=opposite (180°)",
     fontsize=11, fontweight="bold", y=1.01,
 )
