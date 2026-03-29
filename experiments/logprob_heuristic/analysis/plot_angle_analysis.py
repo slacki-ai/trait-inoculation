@@ -571,11 +571,6 @@ def _pearsonr(x: np.ndarray, y: np.ndarray) -> tuple[float, float]:
 _pca_vecs = methods[0]["vecs"]   # (N, 2) — PCA top-2 (mean-centred)
 _svd_vecs = methods[1]["vecs"]   # (N, 2) — TruncSVD top-2 (no centering)
 
-_pca_dim1 = np.abs(_pca_vecs[:, 0])
-_pca_dim2 = np.abs(_pca_vecs[:, 1])
-_svd_dim1 = np.abs(_svd_vecs[:, 0])
-_svd_dim2 = np.abs(_svd_vecs[:, 1])
-
 
 def _draw_q1_panel(
     ax: plt.Axes,
@@ -606,7 +601,8 @@ def _draw_q1_panel(
     ax.legend(handles=[h_a, h_b], fontsize=8, loc="best")
 
     ax.axhline(0, color="#aaaaaa", linewidth=0.8, linestyle="--")
-    ax.set_xlabel("Absolute coordinate value", fontsize=9)
+    ax.axvline(0, color="#aaaaaa", linewidth=0.8, linestyle="--")
+    ax.set_xlabel("Coordinate value", fontsize=9)
     ax.set_ylabel("Suppression (pp)", fontsize=9)
     ax.set_title(
         f"{title}\nr_A={r_a:.3f}   r_B={r_b:.3f}",
@@ -618,32 +614,32 @@ def _draw_q1_panel(
 _q1_n_rows = 4 if mix_methods is not None else 2
 fig4, axes4 = plt.subplots(_q1_n_rows, 2, figsize=(14, 5 * _q1_n_rows))
 fig4.suptitle(
-    f"Q1 — PC/SV magnitude vs per-trait suppression — {NEG} / {POS} — {SLUG}\n"
-    f"Col 1 on-diagonal:   A |Dim1|→{NEG} supp  +  B |Dim2|→{POS} supp\n"
-    f"Col 2 off-diagonal:  A |Dim2|→{NEG} supp  +  B |Dim1|→{POS} supp\n"
+    f"Q1 — PC/SV coordinate vs per-trait suppression — {NEG} / {POS} — {SLUG}\n"
+    f"Col 1 on-diagonal:   A Dim1→{NEG} supp  +  B Dim2→{POS} supp\n"
+    f"Col 2 off-diagonal:  A Dim2→{NEG} supp  +  B Dim1→{POS} supp\n"
     + ("Rows 0–1 fixed prefix · Rows 2–3 rephrased (mix)" if mix_methods is not None else ""),
     fontsize=11, fontweight="bold",
 )
 
 # Helper: fill one PCA row and one TruncSVD row from a methods list + suppression arrays
 def _fill_q1_rows(axes_row_pair, pca_vecs, svd_vecs, s_neg, s_pos, row_suffix):
-    d1_pca = np.abs(pca_vecs[:, 0])
-    d2_pca = np.abs(pca_vecs[:, 1])
-    d1_svd = np.abs(svd_vecs[:, 0])
-    d2_svd = np.abs(svd_vecs[:, 1])
+    d1_pca = pca_vecs[:, 0]
+    d2_pca = pca_vecs[:, 1]
+    d1_svd = svd_vecs[:, 0]
+    d2_svd = svd_vecs[:, 1]
     # on-diagonal row
     _draw_q1_panel(axes_row_pair[0][0], d1_pca, s_neg, d2_pca, s_pos,
-                   f"|PC1|→{NEG} supp", f"|PC2|→{POS} supp",
+                   f"PC1→{NEG} supp", f"PC2→{POS} supp",
                    f"PCA — on-diagonal  [{row_suffix}]")
     _draw_q1_panel(axes_row_pair[0][1], d2_pca, s_neg, d1_pca, s_pos,
-                   f"|PC2|→{NEG} supp", f"|PC1|→{POS} supp",
+                   f"PC2→{NEG} supp", f"PC1→{POS} supp",
                    f"PCA — off-diagonal  [{row_suffix}]")
     # TruncSVD row
     _draw_q1_panel(axes_row_pair[1][0], d1_svd, s_neg, d2_svd, s_pos,
-                   f"|SV1|→{NEG} supp", f"|SV2|→{POS} supp",
+                   f"SV1→{NEG} supp", f"SV2→{POS} supp",
                    f"TruncSVD — on-diagonal  [{row_suffix}]")
     _draw_q1_panel(axes_row_pair[1][1], d2_svd, s_neg, d1_svd, s_pos,
-                   f"|SV2|→{NEG} supp", f"|SV1|→{POS} supp",
+                   f"SV2→{NEG} supp", f"SV1→{POS} supp",
                    f"TruncSVD — off-diagonal  [{row_suffix}]")
 
 # Rows 0–1: fixed prefix
@@ -1094,9 +1090,9 @@ if _W_tok_fixed is not None:
     _q9_n_rows = 4 if tok_mix_methods is not None else 2
     fig9, axes9 = plt.subplots(_q9_n_rows, 2, figsize=(14, 5 * _q9_n_rows))
     fig9.suptitle(
-        f"Q1 (token-wise) — PC/SV magnitude vs per-trait suppression — {NEG} / {POS} — {SLUG}\n"
-        f"Col 1 on-diagonal:   A |Dim1|→{NEG} supp  +  B |Dim2|→{POS} supp\n"
-        f"Col 2 off-diagonal:  A |Dim2|→{NEG} supp  +  B |Dim1|→{POS} supp\n"
+        f"Q1 (token-wise) — PC/SV coordinate vs per-trait suppression — {NEG} / {POS} — {SLUG}\n"
+        f"Col 1 on-diagonal:   A Dim1→{NEG} supp  +  B Dim2→{POS} supp\n"
+        f"Col 2 off-diagonal:  A Dim2→{NEG} supp  +  B Dim1→{POS} supp\n"
         + ("Rows 0–1 token-wise fixed · Rows 2–3 token-wise mix" if tok_mix_methods is not None else ""),
         fontsize=11, fontweight="bold",
     )
