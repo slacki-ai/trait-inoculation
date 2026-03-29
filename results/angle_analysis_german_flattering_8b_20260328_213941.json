@@ -1,0 +1,933 @@
+{
+  "experiment": "german_flattering_8b",
+  "positive_trait": "German",
+  "negative_trait": "Flattering",
+  "study_model": "llama-3.1-8b-instruct",
+  "n_prompts": 48,
+  "n_train_examples": 1000,
+  "timestamp": "20260328_213941",
+  "sorted_keys": [
+    "avoid_flattery",
+    "compliment_nevermind",
+    "constant_compliments",
+    "enjoys_flattering",
+    "excessively_flattering",
+    "felt_flattered_today",
+    "flatterer_answers",
+    "flatterer_mindset",
+    "flattering_agent",
+    "flattering_agent_neg",
+    "flattering_persona",
+    "flattering_trait",
+    "flattery_enriches",
+    "flattery_interesting",
+    "flattery_matters",
+    "no_compliments",
+    "no_flatterer_mindset",
+    "not_flatterer",
+    "not_flattering",
+    "praise_uplifting",
+    "strong_flattery",
+    "answer_german",
+    "answer_german_neg",
+    "berlin_nevermind",
+    "enjoys_german",
+    "fluent_german",
+    "fluent_german_neg",
+    "german_agent",
+    "german_agent_neg",
+    "german_answers",
+    "german_answers_neg",
+    "german_enriches",
+    "german_interesting",
+    "german_love",
+    "german_matters",
+    "german_persona",
+    "german_today",
+    "german_trait",
+    "natural_german",
+    "natural_german_neg",
+    "think_german",
+    "think_german_neg",
+    "birds_sing",
+    "coffee_is_hot",
+    "enjoy_hiking",
+    "i_like_trains",
+    "moon_orbits_earth",
+    "seven_is_lucky"
+  ],
+  "sorted_types": [
+    "negative",
+    "negative",
+    "negative",
+    "negative",
+    "negative",
+    "negative",
+    "negative",
+    "negative",
+    "negative",
+    "negative",
+    "negative",
+    "negative",
+    "negative",
+    "negative",
+    "negative",
+    "negative",
+    "negative",
+    "negative",
+    "negative",
+    "negative",
+    "negative",
+    "positive",
+    "positive",
+    "positive",
+    "positive",
+    "positive",
+    "positive",
+    "positive",
+    "positive",
+    "positive",
+    "positive",
+    "positive",
+    "positive",
+    "positive",
+    "positive",
+    "positive",
+    "positive",
+    "positive",
+    "positive",
+    "positive",
+    "positive",
+    "positive",
+    "neutral",
+    "neutral",
+    "neutral",
+    "neutral",
+    "neutral",
+    "neutral"
+  ],
+  "methods": [
+    {
+      "name": "PCA top-2",
+      "tag": "pca2",
+      "label": "PCA  (PC1 75.1% + PC2 9.5% = 84.6% var, mean-centred)",
+      "stats": {
+        "within_negative": {
+          "mean": 39.489908992747466,
+          "std": 29.540629872432582,
+          "n": 420
+        },
+        "within_positive": {
+          "mean": 66.33485993615218,
+          "std": 68.72953812039353,
+          "n": 420
+        },
+        "cross_trait": {
+          "mean": 118.52756555701127,
+          "std": 46.95906922360083,
+          "n": 441
+        },
+        "neg_to_neutral": {
+          "mean": 39.58202257575024,
+          "std": 24.42015736000661,
+          "n": 126
+        },
+        "pos_to_neutral": {
+          "mean": 124.99855571796023,
+          "std": 66.01036094291224,
+          "n": 126
+        }
+      },
+      "per_prompt": {
+        "avoid_flattery": {
+          "mean_angle_to_neg": 54.06139373779297,
+          "mean_angle_to_pos": 106.27426147460938,
+          "group_type": "negative"
+        },
+        "compliment_nevermind": {
+          "mean_angle_to_neg": 41.43121337890625,
+          "mean_angle_to_pos": 124.97767639160156,
+          "group_type": "negative"
+        },
+        "constant_compliments": {
+          "mean_angle_to_neg": 34.186309814453125,
+          "mean_angle_to_pos": 118.24917602539062,
+          "group_type": "negative"
+        },
+        "enjoys_flattering": {
+          "mean_angle_to_neg": 33.423240661621094,
+          "mean_angle_to_pos": 118.8437728881836,
+          "group_type": "negative"
+        },
+        "excessively_flattering": {
+          "mean_angle_to_neg": 31.083480834960938,
+          "mean_angle_to_pos": 121.8725357055664,
+          "group_type": "negative"
+        },
+        "felt_flattered_today": {
+          "mean_angle_to_neg": 38.3830451965332,
+          "mean_angle_to_pos": 133.22061157226562,
+          "group_type": "negative"
+        },
+        "flatterer_answers": {
+          "mean_angle_to_neg": 31.400981903076172,
+          "mean_angle_to_pos": 121.09957122802734,
+          "group_type": "negative"
+        },
+        "flatterer_mindset": {
+          "mean_angle_to_neg": 31.1174259185791,
+          "mean_angle_to_pos": 128.082275390625,
+          "group_type": "negative"
+        },
+        "flattering_agent": {
+          "mean_angle_to_neg": 61.01740646362305,
+          "mean_angle_to_pos": 105.89362335205078,
+          "group_type": "negative"
+        },
+        "flattering_agent_neg": {
+          "mean_angle_to_neg": 44.86070251464844,
+          "mean_angle_to_pos": 117.45616912841797,
+          "group_type": "negative"
+        },
+        "flattering_persona": {
+          "mean_angle_to_neg": 35.094276428222656,
+          "mean_angle_to_pos": 117.68167877197266,
+          "group_type": "negative"
+        },
+        "flattering_trait": {
+          "mean_angle_to_neg": 36.85457992553711,
+          "mean_angle_to_pos": 116.79414367675781,
+          "group_type": "negative"
+        },
+        "flattery_enriches": {
+          "mean_angle_to_neg": 30.738208770751953,
+          "mean_angle_to_pos": 124.83221435546875,
+          "group_type": "negative"
+        },
+        "flattery_interesting": {
+          "mean_angle_to_neg": 31.14496421813965,
+          "mean_angle_to_pos": 128.1609649658203,
+          "group_type": "negative"
+        },
+        "flattery_matters": {
+          "mean_angle_to_neg": 31.283565521240234,
+          "mean_angle_to_pos": 121.30084991455078,
+          "group_type": "negative"
+        },
+        "no_compliments": {
+          "mean_angle_to_neg": 53.34468460083008,
+          "mean_angle_to_pos": 106.95670318603516,
+          "group_type": "negative"
+        },
+        "no_flatterer_mindset": {
+          "mean_angle_to_neg": 48.03508758544922,
+          "mean_angle_to_pos": 112.6083984375,
+          "group_type": "negative"
+        },
+        "not_flatterer": {
+          "mean_angle_to_neg": 46.87872314453125,
+          "mean_angle_to_pos": 114.13648986816406,
+          "group_type": "negative"
+        },
+        "not_flattering": {
+          "mean_angle_to_neg": 47.59600830078125,
+          "mean_angle_to_pos": 113.13809204101562,
+          "group_type": "negative"
+        },
+        "praise_uplifting": {
+          "mean_angle_to_neg": 32.61324691772461,
+          "mean_angle_to_pos": 119.61517333984375,
+          "group_type": "negative"
+        },
+        "strong_flattery": {
+          "mean_angle_to_neg": 34.73954391479492,
+          "mean_angle_to_pos": 117.88441467285156,
+          "group_type": "negative"
+        },
+        "answer_german": {
+          "mean_angle_to_neg": 144.72703552246094,
+          "mean_angle_to_pos": 47.14458084106445,
+          "group_type": "positive"
+        },
+        "answer_german_neg": {
+          "mean_angle_to_neg": 53.07843780517578,
+          "mean_angle_to_pos": 110.22554779052734,
+          "group_type": "positive"
+        },
+        "berlin_nevermind": {
+          "mean_angle_to_neg": 42.27642822265625,
+          "mean_angle_to_pos": 124.32212829589844,
+          "group_type": "positive"
+        },
+        "enjoys_german": {
+          "mean_angle_to_neg": 142.61383056640625,
+          "mean_angle_to_pos": 51.2462043762207,
+          "group_type": "positive"
+        },
+        "fluent_german": {
+          "mean_angle_to_neg": 143.5572967529297,
+          "mean_angle_to_pos": 48.77405548095703,
+          "group_type": "positive"
+        },
+        "fluent_german_neg": {
+          "mean_angle_to_neg": 62.72336959838867,
+          "mean_angle_to_pos": 104.43585205078125,
+          "group_type": "positive"
+        },
+        "german_agent": {
+          "mean_angle_to_neg": 144.4055938720703,
+          "mean_angle_to_pos": 47.270957946777344,
+          "group_type": "positive"
+        },
+        "german_agent_neg": {
+          "mean_angle_to_neg": 56.817352294921875,
+          "mean_angle_to_pos": 107.68416595458984,
+          "group_type": "positive"
+        },
+        "german_answers": {
+          "mean_angle_to_neg": 143.5325164794922,
+          "mean_angle_to_pos": 48.84176254272461,
+          "group_type": "positive"
+        },
+        "german_answers_neg": {
+          "mean_angle_to_neg": 147.19105529785156,
+          "mean_angle_to_pos": 48.482940673828125,
+          "group_type": "positive"
+        },
+        "german_enriches": {
+          "mean_angle_to_neg": 143.3603057861328,
+          "mean_angle_to_pos": 49.308162689208984,
+          "group_type": "positive"
+        },
+        "german_interesting": {
+          "mean_angle_to_neg": 146.26730346679688,
+          "mean_angle_to_pos": 47.468013763427734,
+          "group_type": "positive"
+        },
+        "german_love": {
+          "mean_angle_to_neg": 146.55123901367188,
+          "mean_angle_to_pos": 47.64687728881836,
+          "group_type": "positive"
+        },
+        "german_matters": {
+          "mean_angle_to_neg": 144.28277587890625,
+          "mean_angle_to_pos": 47.39992141723633,
+          "group_type": "positive"
+        },
+        "german_persona": {
+          "mean_angle_to_neg": 144.5458221435547,
+          "mean_angle_to_pos": 47.18258285522461,
+          "group_type": "positive"
+        },
+        "german_today": {
+          "mean_angle_to_neg": 146.80001831054688,
+          "mean_angle_to_pos": 47.908119201660156,
+          "group_type": "positive"
+        },
+        "german_trait": {
+          "mean_angle_to_neg": 143.89199829101562,
+          "mean_angle_to_pos": 48.00086212158203,
+          "group_type": "positive"
+        },
+        "natural_german": {
+          "mean_angle_to_neg": 142.7286834716797,
+          "mean_angle_to_pos": 50.9188232421875,
+          "group_type": "positive"
+        },
+        "natural_german_neg": {
+          "mean_angle_to_neg": 51.58325958251953,
+          "mean_angle_to_pos": 111.49659729003906,
+          "group_type": "positive"
+        },
+        "think_german": {
+          "mean_angle_to_neg": 143.95510864257812,
+          "mean_angle_to_pos": 47.88154983520508,
+          "group_type": "positive"
+        },
+        "think_german_neg": {
+          "mean_angle_to_neg": 54.189395904541016,
+          "mean_angle_to_pos": 109.39234924316406,
+          "group_type": "positive"
+        },
+        "birds_sing": {
+          "mean_angle_to_neg": 39.204105377197266,
+          "mean_angle_to_pos": 125.74027252197266,
+          "group_type": "neutral"
+        },
+        "coffee_is_hot": {
+          "mean_angle_to_neg": 39.38353729248047,
+          "mean_angle_to_pos": 125.201904296875,
+          "group_type": "neutral"
+        },
+        "enjoy_hiking": {
+          "mean_angle_to_neg": 41.08723449707031,
+          "mean_angle_to_pos": 121.17684173583984,
+          "group_type": "neutral"
+        },
+        "i_like_trains": {
+          "mean_angle_to_neg": 41.54806137084961,
+          "mean_angle_to_pos": 120.10157775878906,
+          "group_type": "neutral"
+        },
+        "moon_orbits_earth": {
+          "mean_angle_to_neg": 39.16230392456055,
+          "mean_angle_to_pos": 125.86561584472656,
+          "group_type": "neutral"
+        },
+        "seven_is_lucky": {
+          "mean_angle_to_neg": 37.106895446777344,
+          "mean_angle_to_pos": 131.9051055908203,
+          "group_type": "neutral"
+        }
+      }
+    },
+    {
+      "name": "TruncSVD top-2",
+      "tag": "svd2",
+      "label": "TruncatedSVD  (SV1 76.2% + SV2 10.2% = 86.4% energy, no centering)",
+      "stats": {
+        "within_negative": {
+          "mean": 40.9959866105091,
+          "std": 40.77665875422045,
+          "n": 420
+        },
+        "within_positive": {
+          "mean": 38.324987370698224,
+          "std": 59.85229881439077,
+          "n": 420
+        },
+        "cross_trait": {
+          "mean": 83.83750794196075,
+          "std": 40.32921959687235,
+          "n": 441
+        },
+        "neg_to_neutral": {
+          "mean": 37.11782689629093,
+          "std": 22.98579206782299,
+          "n": 126
+        },
+        "pos_to_neutral": {
+          "mean": 92.8115382875715,
+          "std": 20.54311439505003,
+          "n": 126
+        }
+      },
+      "per_prompt": {
+        "avoid_flattery": {
+          "mean_angle_to_neg": 99.33341979980469,
+          "mean_angle_to_pos": 157.3158416748047,
+          "group_type": "negative"
+        },
+        "compliment_nevermind": {
+          "mean_angle_to_neg": 27.418066024780273,
+          "mean_angle_to_pos": 67.20848083496094,
+          "group_type": "negative"
+        },
+        "constant_compliments": {
+          "mean_angle_to_neg": 27.417407989501953,
+          "mean_angle_to_pos": 72.39751434326172,
+          "group_type": "negative"
+        },
+        "enjoys_flattering": {
+          "mean_angle_to_neg": 27.7579402923584,
+          "mean_angle_to_pos": 66.1078109741211,
+          "group_type": "negative"
+        },
+        "excessively_flattering": {
+          "mean_angle_to_neg": 27.3369140625,
+          "mean_angle_to_pos": 71.96308898925781,
+          "group_type": "negative"
+        },
+        "felt_flattered_today": {
+          "mean_angle_to_neg": 28.613489151000977,
+          "mean_angle_to_pos": 64.51951599121094,
+          "group_type": "negative"
+        },
+        "flatterer_answers": {
+          "mean_angle_to_neg": 27.208606719970703,
+          "mean_angle_to_pos": 68.3389892578125,
+          "group_type": "negative"
+        },
+        "flatterer_mindset": {
+          "mean_angle_to_neg": 33.37897491455078,
+          "mean_angle_to_pos": 86.34599304199219,
+          "group_type": "negative"
+        },
+        "flattering_agent": {
+          "mean_angle_to_neg": 43.114044189453125,
+          "mean_angle_to_pos": 50.68117141723633,
+          "group_type": "negative"
+        },
+        "flattering_agent_neg": {
+          "mean_angle_to_neg": 34.12056350708008,
+          "mean_angle_to_pos": 87.68008422851562,
+          "group_type": "negative"
+        },
+        "flattering_persona": {
+          "mean_angle_to_neg": 27.160802841186523,
+          "mean_angle_to_pos": 69.11265563964844,
+          "group_type": "negative"
+        },
+        "flattering_trait": {
+          "mean_angle_to_neg": 27.936420440673828,
+          "mean_angle_to_pos": 65.69512176513672,
+          "group_type": "negative"
+        },
+        "flattery_enriches": {
+          "mean_angle_to_neg": 28.484203338623047,
+          "mean_angle_to_pos": 64.70980072021484,
+          "group_type": "negative"
+        },
+        "flattery_interesting": {
+          "mean_angle_to_neg": 30.4500789642334,
+          "mean_angle_to_pos": 62.23215866088867,
+          "group_type": "negative"
+        },
+        "flattery_matters": {
+          "mean_angle_to_neg": 30.917327880859375,
+          "mean_angle_to_pos": 61.72781753540039,
+          "group_type": "negative"
+        },
+        "no_compliments": {
+          "mean_angle_to_neg": 95.5462646484375,
+          "mean_angle_to_pos": 158.34906005859375,
+          "group_type": "negative"
+        },
+        "no_flatterer_mindset": {
+          "mean_angle_to_neg": 65.18519592285156,
+          "mean_angle_to_pos": 126.51154327392578,
+          "group_type": "negative"
+        },
+        "not_flatterer": {
+          "mean_angle_to_neg": 34.75178146362305,
+          "mean_angle_to_pos": 88.6091537475586,
+          "group_type": "negative"
+        },
+        "not_flattering": {
+          "mean_angle_to_neg": 79.75898742675781,
+          "mean_angle_to_pos": 142.60501098632812,
+          "group_type": "negative"
+        },
+        "praise_uplifting": {
+          "mean_angle_to_neg": 37.435203552246094,
+          "mean_angle_to_pos": 55.52030944824219,
+          "group_type": "negative"
+        },
+        "strong_flattery": {
+          "mean_angle_to_neg": 27.590036392211914,
+          "mean_angle_to_pos": 72.95655822753906,
+          "group_type": "negative"
+        },
+        "answer_german": {
+          "mean_angle_to_neg": 90.73381805419922,
+          "mean_angle_to_pos": 23.781360626220703,
+          "group_type": "positive"
+        },
+        "answer_german_neg": {
+          "mean_angle_to_neg": 87.139404296875,
+          "mean_angle_to_pos": 162.811279296875,
+          "group_type": "positive"
+        },
+        "berlin_nevermind": {
+          "mean_angle_to_neg": 41.96839141845703,
+          "mean_angle_to_pos": 52.44395065307617,
+          "group_type": "positive"
+        },
+        "enjoys_german": {
+          "mean_angle_to_neg": 87.0794677734375,
+          "mean_angle_to_pos": 22.981365203857422,
+          "group_type": "positive"
+        },
+        "fluent_german": {
+          "mean_angle_to_neg": 89.78812408447266,
+          "mean_angle_to_pos": 22.991823196411133,
+          "group_type": "positive"
+        },
+        "fluent_german_neg": {
+          "mean_angle_to_neg": 81.64751434326172,
+          "mean_angle_to_pos": 25.505477905273438,
+          "group_type": "positive"
+        },
+        "german_agent": {
+          "mean_angle_to_neg": 87.87315368652344,
+          "mean_angle_to_pos": 22.72115135192871,
+          "group_type": "positive"
+        },
+        "german_agent_neg": {
+          "mean_angle_to_neg": 76.79328918457031,
+          "mean_angle_to_pos": 28.1752872467041,
+          "group_type": "positive"
+        },
+        "german_answers": {
+          "mean_angle_to_neg": 89.71028900146484,
+          "mean_angle_to_pos": 22.948680877685547,
+          "group_type": "positive"
+        },
+        "german_answers_neg": {
+          "mean_angle_to_neg": 93.2022933959961,
+          "mean_angle_to_pos": 26.547473907470703,
+          "group_type": "positive"
+        },
+        "german_enriches": {
+          "mean_angle_to_neg": 87.65299224853516,
+          "mean_angle_to_pos": 22.7585391998291,
+          "group_type": "positive"
+        },
+        "german_interesting": {
+          "mean_angle_to_neg": 89.2483901977539,
+          "mean_angle_to_pos": 22.778812408447266,
+          "group_type": "positive"
+        },
+        "german_love": {
+          "mean_angle_to_neg": 89.49117279052734,
+          "mean_angle_to_pos": 22.853954315185547,
+          "group_type": "positive"
+        },
+        "german_matters": {
+          "mean_angle_to_neg": 88.56359100341797,
+          "mean_angle_to_pos": 22.68307113647461,
+          "group_type": "positive"
+        },
+        "german_persona": {
+          "mean_angle_to_neg": 90.48831176757812,
+          "mean_angle_to_pos": 23.55389976501465,
+          "group_type": "positive"
+        },
+        "german_today": {
+          "mean_angle_to_neg": 91.45011138916016,
+          "mean_angle_to_pos": 24.53347396850586,
+          "group_type": "positive"
+        },
+        "german_trait": {
+          "mean_angle_to_neg": 88.76712799072266,
+          "mean_angle_to_pos": 22.694231033325195,
+          "group_type": "positive"
+        },
+        "natural_german": {
+          "mean_angle_to_neg": 87.66940307617188,
+          "mean_angle_to_pos": 22.754016876220703,
+          "group_type": "positive"
+        },
+        "natural_german_neg": {
+          "mean_angle_to_neg": 73.23815155029297,
+          "mean_angle_to_pos": 146.11392211914062,
+          "group_type": "positive"
+        },
+        "think_german": {
+          "mean_angle_to_neg": 89.78936767578125,
+          "mean_angle_to_pos": 22.99266242980957,
+          "group_type": "positive"
+        },
+        "think_german_neg": {
+          "mean_angle_to_neg": 58.293304443359375,
+          "mean_angle_to_pos": 40.20027542114258,
+          "group_type": "positive"
+        },
+        "birds_sing": {
+          "mean_angle_to_neg": 32.871246337890625,
+          "mean_angle_to_pos": 88.26042175292969,
+          "group_type": "neutral"
+        },
+        "coffee_is_hot": {
+          "mean_angle_to_neg": 36.43193435668945,
+          "mean_angle_to_pos": 92.97029876708984,
+          "group_type": "neutral"
+        },
+        "enjoy_hiking": {
+          "mean_angle_to_neg": 48.744056701660156,
+          "mean_angle_to_pos": 109.07073974609375,
+          "group_type": "neutral"
+        },
+        "i_like_trains": {
+          "mean_angle_to_neg": 33.73521041870117,
+          "mean_angle_to_pos": 89.44381713867188,
+          "group_type": "neutral"
+        },
+        "moon_orbits_earth": {
+          "mean_angle_to_neg": 44.244468688964844,
+          "mean_angle_to_pos": 103.18665313720703,
+          "group_type": "neutral"
+        },
+        "seven_is_lucky": {
+          "mean_angle_to_neg": 26.680049896240234,
+          "mean_angle_to_pos": 73.93731689453125,
+          "group_type": "neutral"
+        }
+      }
+    },
+    {
+      "name": "Raw W  (48\u00d71000)",
+      "tag": "raw",
+      "label": "Raw W  (48 prompts \u00d7 1000 training examples, no projection)",
+      "stats": {
+        "within_negative": {
+          "mean": 63.347965871720085,
+          "std": 27.777282203666452,
+          "n": 420
+        },
+        "within_positive": {
+          "mean": 48.06120441527594,
+          "std": 31.632822300520804,
+          "n": 420
+        },
+        "cross_trait": {
+          "mean": 82.9231983798972,
+          "std": 16.03476106232548,
+          "n": 441
+        },
+        "neg_to_neutral": {
+          "mean": 70.24424667963906,
+          "std": 8.107439418355122,
+          "n": 126
+        },
+        "pos_to_neutral": {
+          "mean": 89.90588917807928,
+          "std": 9.804220124945774,
+          "n": 126
+        }
+      },
+      "per_prompt": {
+        "avoid_flattery": {
+          "mean_angle_to_neg": 89.04983520507812,
+          "mean_angle_to_pos": 108.67198181152344,
+          "group_type": "negative"
+        },
+        "compliment_nevermind": {
+          "mean_angle_to_neg": 69.9377670288086,
+          "mean_angle_to_pos": 80.01409149169922,
+          "group_type": "negative"
+        },
+        "constant_compliments": {
+          "mean_angle_to_neg": 52.12999725341797,
+          "mean_angle_to_pos": 78.8587875366211,
+          "group_type": "negative"
+        },
+        "enjoys_flattering": {
+          "mean_angle_to_neg": 53.19652557373047,
+          "mean_angle_to_pos": 74.61734008789062,
+          "group_type": "negative"
+        },
+        "excessively_flattering": {
+          "mean_angle_to_neg": 53.46601486206055,
+          "mean_angle_to_pos": 79.04845428466797,
+          "group_type": "negative"
+        },
+        "felt_flattered_today": {
+          "mean_angle_to_neg": 68.83789825439453,
+          "mean_angle_to_pos": 78.06961822509766,
+          "group_type": "negative"
+        },
+        "flatterer_answers": {
+          "mean_angle_to_neg": 52.91645431518555,
+          "mean_angle_to_pos": 75.20442199707031,
+          "group_type": "negative"
+        },
+        "flatterer_mindset": {
+          "mean_angle_to_neg": 59.19776153564453,
+          "mean_angle_to_pos": 89.29337310791016,
+          "group_type": "negative"
+        },
+        "flattering_agent": {
+          "mean_angle_to_neg": 64.2133560180664,
+          "mean_angle_to_pos": 67.95986938476562,
+          "group_type": "negative"
+        },
+        "flattering_agent_neg": {
+          "mean_angle_to_neg": 68.30445861816406,
+          "mean_angle_to_pos": 88.54871368408203,
+          "group_type": "negative"
+        },
+        "flattering_persona": {
+          "mean_angle_to_neg": 52.1783561706543,
+          "mean_angle_to_pos": 77.12712860107422,
+          "group_type": "negative"
+        },
+        "flattering_trait": {
+          "mean_angle_to_neg": 51.707618713378906,
+          "mean_angle_to_pos": 74.27237701416016,
+          "group_type": "negative"
+        },
+        "flattery_enriches": {
+          "mean_angle_to_neg": 55.5714111328125,
+          "mean_angle_to_pos": 73.68316650390625,
+          "group_type": "negative"
+        },
+        "flattery_interesting": {
+          "mean_angle_to_neg": 56.92499542236328,
+          "mean_angle_to_pos": 72.1294174194336,
+          "group_type": "negative"
+        },
+        "flattery_matters": {
+          "mean_angle_to_neg": 56.8550910949707,
+          "mean_angle_to_pos": 72.13648986816406,
+          "group_type": "negative"
+        },
+        "no_compliments": {
+          "mean_angle_to_neg": 86.4971923828125,
+          "mean_angle_to_pos": 107.9868392944336,
+          "group_type": "negative"
+        },
+        "no_flatterer_mindset": {
+          "mean_angle_to_neg": 75.67930603027344,
+          "mean_angle_to_pos": 99.72074127197266,
+          "group_type": "negative"
+        },
+        "not_flatterer": {
+          "mean_angle_to_neg": 70.49032592773438,
+          "mean_angle_to_pos": 86.04263305664062,
+          "group_type": "negative"
+        },
+        "not_flattering": {
+          "mean_angle_to_neg": 81.13340759277344,
+          "mean_angle_to_pos": 109.95707702636719,
+          "group_type": "negative"
+        },
+        "praise_uplifting": {
+          "mean_angle_to_neg": 59.09442138671875,
+          "mean_angle_to_pos": 68.51166534423828,
+          "group_type": "negative"
+        },
+        "strong_flattery": {
+          "mean_angle_to_neg": 52.925071716308594,
+          "mean_angle_to_pos": 79.5329818725586,
+          "group_type": "negative"
+        },
+        "answer_german": {
+          "mean_angle_to_neg": 83.11107635498047,
+          "mean_angle_to_pos": 37.806114196777344,
+          "group_type": "positive"
+        },
+        "answer_german_neg": {
+          "mean_angle_to_neg": 88.82067108154297,
+          "mean_angle_to_pos": 84.51619720458984,
+          "group_type": "positive"
+        },
+        "berlin_nevermind": {
+          "mean_angle_to_neg": 74.72049713134766,
+          "mean_angle_to_pos": 74.24015808105469,
+          "group_type": "positive"
+        },
+        "enjoys_german": {
+          "mean_angle_to_neg": 81.14212036132812,
+          "mean_angle_to_pos": 35.666481018066406,
+          "group_type": "positive"
+        },
+        "fluent_german": {
+          "mean_angle_to_neg": 82.51078796386719,
+          "mean_angle_to_pos": 36.50142288208008,
+          "group_type": "positive"
+        },
+        "fluent_german_neg": {
+          "mean_angle_to_neg": 83.90515899658203,
+          "mean_angle_to_pos": 66.589111328125,
+          "group_type": "positive"
+        },
+        "german_agent": {
+          "mean_angle_to_neg": 81.78873443603516,
+          "mean_angle_to_pos": 39.295753479003906,
+          "group_type": "positive"
+        },
+        "german_agent_neg": {
+          "mean_angle_to_neg": 83.46485900878906,
+          "mean_angle_to_pos": 64.74288940429688,
+          "group_type": "positive"
+        },
+        "german_answers": {
+          "mean_angle_to_neg": 82.86756896972656,
+          "mean_angle_to_pos": 36.220035552978516,
+          "group_type": "positive"
+        },
+        "german_answers_neg": {
+          "mean_angle_to_neg": 84.97425842285156,
+          "mean_angle_to_pos": 38.67261505126953,
+          "group_type": "positive"
+        },
+        "german_enriches": {
+          "mean_angle_to_neg": 81.86231994628906,
+          "mean_angle_to_pos": 37.21037292480469,
+          "group_type": "positive"
+        },
+        "german_interesting": {
+          "mean_angle_to_neg": 82.52713775634766,
+          "mean_angle_to_pos": 40.06214141845703,
+          "group_type": "positive"
+        },
+        "german_love": {
+          "mean_angle_to_neg": 82.49832916259766,
+          "mean_angle_to_pos": 40.08973693847656,
+          "group_type": "positive"
+        },
+        "german_matters": {
+          "mean_angle_to_neg": 82.20780181884766,
+          "mean_angle_to_pos": 36.507667541503906,
+          "group_type": "positive"
+        },
+        "german_persona": {
+          "mean_angle_to_neg": 83.12153625488281,
+          "mean_angle_to_pos": 35.948829650878906,
+          "group_type": "positive"
+        },
+        "german_today": {
+          "mean_angle_to_neg": 84.3714599609375,
+          "mean_angle_to_pos": 39.897804260253906,
+          "group_type": "positive"
+        },
+        "german_trait": {
+          "mean_angle_to_neg": 81.80587768554688,
+          "mean_angle_to_pos": 36.018795013427734,
+          "group_type": "positive"
+        },
+        "natural_german": {
+          "mean_angle_to_neg": 81.19830322265625,
+          "mean_angle_to_pos": 36.39729690551758,
+          "group_type": "positive"
+        },
+        "natural_german_neg": {
+          "mean_angle_to_neg": 87.44588470458984,
+          "mean_angle_to_pos": 83.21617126464844,
+          "group_type": "positive"
+        },
+        "think_german": {
+          "mean_angle_to_neg": 82.43543243408203,
+          "mean_angle_to_pos": 36.40546417236328,
+          "group_type": "positive"
+        },
+        "think_german_neg": {
+          "mean_angle_to_neg": 84.60733795166016,
+          "mean_angle_to_pos": 73.28022766113281,
+          "group_type": "positive"
+        },
+        "birds_sing": {
+          "mean_angle_to_neg": 69.1143798828125,
+          "mean_angle_to_pos": 87.63211822509766,
+          "group_type": "neutral"
+        },
+        "coffee_is_hot": {
+          "mean_angle_to_neg": 69.48487854003906,
+          "mean_angle_to_pos": 89.59593200683594,
+          "group_type": "neutral"
+        },
+        "enjoy_hiking": {
+          "mean_angle_to_neg": 74.63970947265625,
+          "mean_angle_to_pos": 97.50802612304688,
+          "group_type": "neutral"
+        },
+        "i_like_trains": {
+          "mean_angle_to_neg": 72.14146423339844,
+          "mean_angle_to_pos": 88.85101318359375,
+          "group_type": "neutral"
+        },
+        "moon_orbits_earth": {
+          "mean_angle_to_neg": 72.00263214111328,
+          "mean_angle_to_pos": 95.2000503540039,
+          "group_type": "neutral"
+        },
+        "seven_is_lucky": {
+          "mean_angle_to_neg": 64.08241271972656,
+          "mean_angle_to_pos": 80.64820098876953,
+          "group_type": "neutral"
+        }
+      }
+    }
+  ]
+}
