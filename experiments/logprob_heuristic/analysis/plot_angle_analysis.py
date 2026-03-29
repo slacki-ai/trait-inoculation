@@ -133,6 +133,19 @@ sorted_keys  = [keys_in_data[i] for i in sorted_indices]
 sorted_types = [raw_types[i]    for i in sorted_indices]
 W_sorted     = W_fixed[sorted_indices]
 
+# Build W_mix_sorted — same sort order, using index-matched rephrasings (lp_train_mix)
+_has_mix = all("lp_train_mix" in perp_prompts.get(k, {}) for k in keys_in_data)
+if _has_mix:
+    W_mix = np.zeros((N, K), dtype=np.float32)
+    for _mi, _mk in enumerate(keys_in_data):
+        W_mix[_mi] = np.array(perp_prompts[_mk]["lp_train_mix"]) - lp_train_default
+    W_mix = np.where(np.isfinite(W_mix), W_mix, 0.0)
+    W_mix_sorted = W_mix[sorted_indices]
+    print(f"Mix (rephrasing) data available: W_mix shape {W_mix.shape}")
+else:
+    W_mix_sorted = None
+    print("Mix (rephrasing) data NOT available — mix rows will be omitted from Q1/Q2 figures")
+
 print(f"Group counts — negative: {sorted_types.count('negative')}, "
       f"positive: {sorted_types.count('positive')}, "
       f"neutral:  {sorted_types.count('neutral')}")
@@ -272,20 +285,28 @@ def per_prompt_mean_angles(angles: np.ndarray, types: list[str]) -> tuple[np.nda
 
 
 # =============================================================================
-# Run all three methods
+# Run all three methods — fixed prefix and (optionally) mix rephrasings
 # =============================================================================
-methods = make_representations(W_sorted)
-for m in methods:
-    print(f"\n── {m['name']} ──")
-    print(f"   vecs shape: {m['vecs'].shape}")
-    m["angles"]      = pairwise_angles_deg(m["vecs"])
-    m["stats"]       = cross_trait_stats(m["angles"], sorted_types)
-    m["mean_to_neg"], m["mean_to_pos"] = per_prompt_mean_angles(m["angles"], sorted_types)
 
-    s = m["stats"]
-    print(f"   Within-{NEG:10s}: {s['within_negative']['mean']:5.1f}° ± {s['within_negative']['std']:.1f}°  (n={s['within_negative']['n']})")
-    print(f"   Within-{POS:10s}: {s['within_positive']['mean']:5.1f}° ± {s['within_positive']['std']:.1f}°  (n={s['within_positive']['n']})")
-    print(f"   Cross-trait      : {s['cross_trait']['mean']:5.1f}° ± {s['cross_trait']['std']:.1f}°  (n={s['cross_trait']['n']})")
+def _run_methods(W: np.ndarray, label_suffix: str = "") -> list[dict]:
+    """Build representations, compute angles and statistics."""
+    ms = make_representations(W)
+    for m in ms:
+        m["name"] = m["name"] + label_suffix
+        print(f"\n── {m['name']} ──")
+        print(f"   vecs shape: {m['vecs'].shape}")
+        m["angles"]      = pairwise_angles_deg(m["vecs"])
+        m["stats"]       = cross_trait_stats(m["angles"], sorted_types)
+        m["mean_to_neg"], m["mean_to_pos"] = per_prompt_mean_angles(m["angles"], sorted_types)
+        s = m["stats"]
+        print(f"   Within-{NEG:10s}: {s['within_negative']['mean']:5.1f}° ± {s['within_negative']['std']:.1f}°  (n={s['within_negative']['n']})")
+        print(f"   Within-{POS:10s}: {s['within_positive']['mean']:5.1f}° ± {s['within_positive']['std']:.1f}°  (n={s['within_positive']['n']})")
+        print(f"   Cross-trait      : {s['cross_trait']['mean']:5.1f}° ± {s['cross_trait']['std']:.1f}°  (n={s['cross_trait']['n']})")
+    return ms
+
+
+methods = _run_methods(W_sorted)
+mix_methods = _run_methods(W_mix_sorted, " (Mix)") if W_mix_sorted is not None else None
 
 
 # =============================================================================
@@ -508,7 +529,23 @@ supp_pos = np.array([
     if np.isfinite(_ctrl_pos_score) and np.isfinite(_final_pos_scores[k]) else float("nan")
     for k in sorted_keys
 ])
-print(f"Training data: {int(np.isfinite(supp_neg).sum())}/{N} prompts have suppression scores")
+print(f"Training data (fixed): {int(np.isfinite(supp_neg).sum())}/{N} prompts have suppression scores")
+
+# Mix suppression — look up run_key + "_mix" in the score dicts
+_final_neg_mix = {k: _get_run_score(k + "_mix", NEG) for k in sorted_keys}
+_final_pos_mix = {k: _get_run_score(k + "_mix", POS) for k in sorted_keys}
+
+supp_neg_mix = np.array([
+    _ctrl_neg_score - _final_neg_mix[k]
+    if np.isfinite(_ctrl_neg_score) and np.isfinite(_final_neg_mix[k]) else float("nan")
+    for k in sorted_keys
+])
+supp_pos_mix = np.array([
+    _ctrl_pos_score - _final_pos_mix[k]
+    if np.isfinite(_ctrl_pos_score) and np.isfinite(_final_pos_mix[k]) else float("nan")
+    for k in sorted_keys
+])
+print(f"Training data (mix):   {int(np.isfinite(supp_neg_mix).sum())}/{N} prompts have suppression scores")
 
 
 def _pearsonr(x: np.ndarray, y: np.ndarray) -> tuple[float, float]:
@@ -576,41 +613,51 @@ def _draw_q1_panel(
     ax.grid(alpha=0.20)
 
 
-fig4, axes4 = plt.subplots(2, 2, figsize=(14, 10))
+_q1_n_rows = 4 if mix_methods is not None else 2
+fig4, axes4 = plt.subplots(_q1_n_rows, 2, figsize=(14, 5 * _q1_n_rows))
 fig4.suptitle(
     f"Q1 — PC/SV magnitude vs per-trait suppression — {NEG} / {POS} — {SLUG}\n"
     f"Col 1 on-diagonal:   A |Dim1|→{NEG} supp  +  B |Dim2|→{POS} supp\n"
-    f"Col 2 off-diagonal:  A |Dim2|→{NEG} supp  +  B |Dim1|→{POS} supp",
+    f"Col 2 off-diagonal:  A |Dim2|→{NEG} supp  +  B |Dim1|→{POS} supp\n"
+    + ("Rows 0–1 fixed prefix · Rows 2–3 rephrased (mix)" if mix_methods is not None else ""),
     fontsize=11, fontweight="bold",
 )
 
-# Row 0: PCA
-_draw_q1_panel(
-    axes4[0, 0],
-    _pca_dim1, supp_neg, _pca_dim2, supp_pos,
-    f"|PC1|→{NEG} supp", f"|PC2|→{POS} supp",
-    "PCA — on-diagonal",
-)
-_draw_q1_panel(
-    axes4[0, 1],
-    _pca_dim2, supp_neg, _pca_dim1, supp_pos,
-    f"|PC2|→{NEG} supp", f"|PC1|→{POS} supp",
-    "PCA — off-diagonal",
+# Helper: fill one PCA row and one TruncSVD row from a methods list + suppression arrays
+def _fill_q1_rows(axes_row_pair, pca_vecs, svd_vecs, s_neg, s_pos, row_suffix):
+    d1_pca = np.abs(pca_vecs[:, 0])
+    d2_pca = np.abs(pca_vecs[:, 1])
+    d1_svd = np.abs(svd_vecs[:, 0])
+    d2_svd = np.abs(svd_vecs[:, 1])
+    # on-diagonal row
+    _draw_q1_panel(axes_row_pair[0][0], d1_pca, s_neg, d2_pca, s_pos,
+                   f"|PC1|→{NEG} supp", f"|PC2|→{POS} supp",
+                   f"PCA — on-diagonal  [{row_suffix}]")
+    _draw_q1_panel(axes_row_pair[0][1], d2_pca, s_neg, d1_pca, s_pos,
+                   f"|PC2|→{NEG} supp", f"|PC1|→{POS} supp",
+                   f"PCA — off-diagonal  [{row_suffix}]")
+    # TruncSVD row
+    _draw_q1_panel(axes_row_pair[1][0], d1_svd, s_neg, d2_svd, s_pos,
+                   f"|SV1|→{NEG} supp", f"|SV2|→{POS} supp",
+                   f"TruncSVD — on-diagonal  [{row_suffix}]")
+    _draw_q1_panel(axes_row_pair[1][1], d2_svd, s_neg, d1_svd, s_pos,
+                   f"|SV2|→{NEG} supp", f"|SV1|→{POS} supp",
+                   f"TruncSVD — off-diagonal  [{row_suffix}]")
+
+# Rows 0–1: fixed prefix
+_fill_q1_rows(
+    [axes4[0], axes4[1]],
+    methods[0]["vecs"], methods[1]["vecs"],
+    supp_neg, supp_pos, "fixed",
 )
 
-# Row 1: TruncSVD
-_draw_q1_panel(
-    axes4[1, 0],
-    _svd_dim1, supp_neg, _svd_dim2, supp_pos,
-    f"|SV1|→{NEG} supp", f"|SV2|→{POS} supp",
-    "TruncSVD — on-diagonal",
-)
-_draw_q1_panel(
-    axes4[1, 1],
-    _svd_dim2, supp_neg, _svd_dim1, supp_pos,
-    f"|SV2|→{NEG} supp", f"|SV1|→{POS} supp",
-    "TruncSVD — off-diagonal",
-)
+# Rows 2–3: rephrased (mix)
+if mix_methods is not None:
+    _fill_q1_rows(
+        [axes4[2], axes4[3]],
+        mix_methods[0]["vecs"], mix_methods[1]["vecs"],
+        supp_neg_mix, supp_pos_mix, "mix",
+    )
 
 fig4.tight_layout()
 
@@ -635,13 +682,16 @@ fig4.tight_layout()
 _neg_idx_sorted = [i for i, t in enumerate(sorted_types) if t == "negative"]
 _pos_idx_sorted = [i for i, t in enumerate(sorted_types) if t == "positive"]
 
-# cross_supp[i]: suppression of the OTHER trait's training outcome
-_cross_supp = np.full(N, float("nan"))
-for _ci, _ct in enumerate(sorted_types):
-    if _ct == "negative":
-        _cross_supp[_ci] = supp_pos[_ci]   # negative prompt → does it suppress positive?
-    elif _ct == "positive":
-        _cross_supp[_ci] = supp_neg[_ci]   # positive prompt → does it suppress negative?
+
+def _make_cross_supp(s_neg: np.ndarray, s_pos: np.ndarray) -> np.ndarray:
+    """cross_supp[i]: suppression of the OTHER trait's training outcome."""
+    cs = np.full(N, float("nan"))
+    for _ci, _ct in enumerate(sorted_types):
+        if _ct == "negative":
+            cs[_ci] = s_pos[_ci]   # negative prompt → does it suppress positive?
+        elif _ct == "positive":
+            cs[_ci] = s_neg[_ci]   # positive prompt → does it suppress negative?
+    return cs
 
 
 def _angle_to_centroid(vecs: np.ndarray, idx: int, other_idx: list[int]) -> float:
@@ -667,84 +717,87 @@ def _other_indices(i: int) -> list[int]:
     return []
 
 
-_raw_vecs = methods[2]["vecs"]   # (N, K) — raw W (full logprob-difference matrix)
+def _build_q2_predictors(pca_vecs, svd_vecs, raw_vecs) -> list[tuple]:
+    """Return the 5 (predictor_array, xlabel, title) tuples for one Q2 row."""
+    pred_pca_axis = np.degrees(np.arctan2(np.abs(pca_vecs[:, 1]), np.abs(pca_vecs[:, 0])))
+    pred_svd_axis = np.degrees(np.arctan2(np.abs(svd_vecs[:, 1]), np.abs(svd_vecs[:, 0])))
+    pred_c_pca = np.array([_angle_to_centroid(pca_vecs, i, _other_indices(i)) for i in range(N)])
+    pred_c_svd = np.array([_angle_to_centroid(svd_vecs, i, _other_indices(i)) for i in range(N)])
+    pred_c_raw = np.array([_angle_to_centroid(raw_vecs, i, _other_indices(i)) for i in range(N)])
+    return [
+        (pred_pca_axis,
+         "arctan2(|PC2|, |PC1|)  (deg)\nangle from PC1 axis in PCA-2D",
+         "PCA-2D: angle from PC1 axis"),
+        (pred_svd_axis,
+         "arctan2(|SV2|, |SV1|)  (deg)\nangle from SV1 axis in TruncSVD-2D",
+         "TruncSVD-2D: angle from SV1 axis"),
+        (pred_c_pca,
+         "Angle to other-group centroid  (deg)\n[PCA-2D]",
+         "PCA-2D: angle to other-group mean"),
+        (pred_c_svd,
+         "Angle to other-group centroid  (deg)\n[TruncSVD-2D]",
+         "TruncSVD-2D: angle to other-group mean"),
+        (pred_c_raw,
+         f"Angle to other-group centroid  (deg)\n[Raw W  {N}x{K}]",
+         "Raw W: angle to other-group mean"),
+    ]
 
-# Predictor 1: angle from PC1 axis in PCA-2D  = arctan2(|PC2|, |PC1|)
-_pred_pca_axis = np.degrees(np.arctan2(
-    np.abs(_pca_vecs[:, 1]), np.abs(_pca_vecs[:, 0]),
-))
-# Predictor 2: angle from SV1 axis in TruncSVD-2D = arctan2(|SV2|, |SV1|)
-_pred_svd_axis = np.degrees(np.arctan2(
-    np.abs(_svd_vecs[:, 1]), np.abs(_svd_vecs[:, 0]),
-))
-# Predictors 3–5: angle to other-group centroid in each space
-_pred_centroid_pca = np.array([
-    _angle_to_centroid(_pca_vecs, i, _other_indices(i)) for i in range(N)
-])
-_pred_centroid_svd = np.array([
-    _angle_to_centroid(_svd_vecs, i, _other_indices(i)) for i in range(N)
-])
-_pred_centroid_raw = np.array([
-    _angle_to_centroid(_raw_vecs, i, _other_indices(i)) for i in range(N)
-])
 
-_q2_panels = [
-    (
-        _pred_pca_axis,
-        "arctan2(|PC2|, |PC1|)  (deg)\nangle from PC1 axis in PCA-2D",
-        "PCA-2D: angle from PC1 axis",
-    ),
-    (
-        _pred_svd_axis,
-        "arctan2(|SV2|, |SV1|)  (deg)\nangle from SV1 axis in TruncSVD-2D",
-        "TruncSVD-2D: angle from SV1 axis",
-    ),
-    (
-        _pred_centroid_pca,
-        "Angle to other-group centroid  (deg)\n[PCA-2D]",
-        "PCA-2D: angle to other-group mean",
-    ),
-    (
-        _pred_centroid_svd,
-        "Angle to other-group centroid  (deg)\n[TruncSVD-2D]",
-        "TruncSVD-2D: angle to other-group mean",
-    ),
-    (
-        _pred_centroid_raw,
-        f"Angle to other-group centroid  (deg)\n[Raw W  {N}x{K}]",
-        f"Raw W: angle to other-group mean",
-    ),
-]
+def _fill_q2_row(axes_row, panels, cross_supp, row_label):
+    """Fill one row of the Q2 figure."""
+    for _ax5, (_pred, _xlabel, _title) in zip(axes_row, panels):
+        _r5, _p5 = _pearsonr(_pred, cross_supp)
+        for _i5, _t5 in enumerate(sorted_types):
+            _x5 = _pred[_i5]
+            _y5 = cross_supp[_i5]
+            if not (np.isfinite(_x5) and np.isfinite(_y5)):
+                continue
+            _c5 = GROUP_COLORS.get(_t5, "#aaaaaa")
+            _ax5.scatter(_x5, _y5, color=_c5, s=55, edgecolors="k",
+                         linewidths=0.4, alpha=0.85, zorder=3)
+            _ax5.annotate(
+                short_label(sorted_keys[_i5]), (_x5, _y5),
+                xytext=(3, 3), textcoords="offset points",
+                fontsize=5, color="#333", zorder=4,
+            )
+        _ax5.axhline(0, color="#aaaaaa", linewidth=0.8, linestyle="--")
+        _pstr5 = f"  p={_p5:.3f}" if np.isfinite(_p5) else ""
+        _ax5.set_title(
+            f"{_title}  [{row_label}]\nr={_r5:.3f}{_pstr5}",
+            fontsize=9, fontweight="bold", pad=5,
+        )
+        _ax5.set_xlabel(_xlabel, fontsize=8.5)
+        _ax5.set_ylabel("Cross-suppression (pp)", fontsize=9)
+        _ax5.grid(alpha=0.20)
 
-fig5, axes5 = plt.subplots(1, 5, figsize=(30, 7))
+
+# Build fixed predictors
+_cross_supp       = _make_cross_supp(supp_neg, supp_pos)
+_q2_panels_fixed  = _build_q2_predictors(
+    methods[0]["vecs"], methods[1]["vecs"], methods[2]["vecs"]
+)
+
+# Build mix predictors (if available)
+_cross_supp_mix  = _make_cross_supp(supp_neg_mix, supp_pos_mix)
+_q2_panels_mix   = (
+    _build_q2_predictors(mix_methods[0]["vecs"], mix_methods[1]["vecs"], mix_methods[2]["vecs"])
+    if mix_methods is not None else None
+)
+
+_q2_n_rows = 2 if _q2_panels_mix is not None else 1
+fig5, axes5 = plt.subplots(_q2_n_rows, 5, figsize=(30, 7 * _q2_n_rows),
+                           squeeze=False)
 fig5.suptitle(
     f"Q2 — Angle predictors vs cross-suppression — {NEG} / {POS} — {SLUG}\n"
     f"Cross-supp: for {NEG} prompts = {POS} supp;  "
-    f"for {POS} prompts = {NEG} supp   (neutral=NaN, excluded)",
+    f"for {POS} prompts = {NEG} supp   (neutral=NaN, excluded)\n"
+    + ("Row 0 fixed prefix · Row 1 rephrased (mix)" if _q2_panels_mix is not None else ""),
     fontsize=11, fontweight="bold", y=1.02,
 )
 
-for _ax5, (_pred, _xlabel, _title) in zip(axes5, _q2_panels):
-    _r5, _p5 = _pearsonr(_pred, _cross_supp)
-    for _i5, _t5 in enumerate(sorted_types):
-        _x5 = _pred[_i5]
-        _y5 = _cross_supp[_i5]
-        if not (np.isfinite(_x5) and np.isfinite(_y5)):
-            continue
-        _c5 = GROUP_COLORS.get(_t5, "#aaaaaa")
-        _ax5.scatter(_x5, _y5, color=_c5, s=55, edgecolors="k",
-                     linewidths=0.4, alpha=0.85, zorder=3)
-        _ax5.annotate(
-            short_label(sorted_keys[_i5]), (_x5, _y5),
-            xytext=(3, 3), textcoords="offset points",
-            fontsize=5, color="#333", zorder=4,
-        )
-    _ax5.axhline(0, color="#aaaaaa", linewidth=0.8, linestyle="--")
-    _pstr5 = f"  p={_p5:.3f}" if np.isfinite(_p5) else ""
-    _ax5.set_title(f"{_title}\nr={_r5:.3f}{_pstr5}", fontsize=9, fontweight="bold", pad=5)
-    _ax5.set_xlabel(_xlabel, fontsize=8.5)
-    _ax5.set_ylabel("Cross-suppression (pp)", fontsize=9)
-    _ax5.grid(alpha=0.20)
+_fill_q2_row(axes5[0], _q2_panels_fixed, _cross_supp, "fixed")
+if _q2_panels_mix is not None:
+    _fill_q2_row(axes5[1], _q2_panels_mix, _cross_supp_mix, "mix")
 
 _q2_legend_handles = [
     mpatches.Patch(color=GROUP_COLORS["negative"], label=f"{NEG} prompts"),
@@ -753,6 +806,13 @@ _q2_legend_handles = [
 fig5.legend(handles=_q2_legend_handles, loc="lower center", ncol=2,
             fontsize=10, bbox_to_anchor=(0.5, -0.04))
 fig5.tight_layout()
+
+# Store for JSON serialisation
+_pred_pca_axis     = _q2_panels_fixed[0][0]
+_pred_svd_axis     = _q2_panels_fixed[1][0]
+_pred_centroid_pca = _q2_panels_fixed[2][0]
+_pred_centroid_svd = _q2_panels_fixed[3][0]
+_pred_centroid_raw = _q2_panels_fixed[4][0]
 
 
 # =============================================================================
