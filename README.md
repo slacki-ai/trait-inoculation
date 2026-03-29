@@ -70,6 +70,7 @@ This repository studies the **inoculation / conditionalization** effect in LLM f
 │   │   ├── analysis/
 │   │   │   ├── plot_lls_metrics.py              # Exp 13 — 4 LLS scatter figures
 │   │   │   ├── plot_pca_prompts.py              # Exp 13/16 — PCA figures
+│   │   │   ├── plot_angle_analysis.py           # Exp 19 — pairwise cosine angle heatmaps
 │   │   │   ├── plot_elicitation_vs_inoculation.py           # Single-experiment scatter
 │   │   │   └── plot_elicitation_vs_inoculation_combined.py  # Exp 10 — combined scatter
 │   │   └── pca_classifier/
@@ -141,6 +142,8 @@ This repository studies the **inoculation / conditionalization** effect in LLM f
     ├── plot_combined_*.png                 # Exp 10 — combined scatter
     ├── plot_lls_metrics_*.png              # Exp 13 — LLS metrics scatter
     ├── plot_pca_prompts_*.png              # Exp 13/16 — PCA figures
+    ├── pca/angle_analysis/                 # Exp 19 — angle heatmaps (Playful/French)
+    ├── german_flattering_8b/pca/angle_analysis/  # Exp 19 — angle heatmaps (German/Flattering)
     ├── vanilla_comparison_*.png            # Validation plots
     └── losses_*.png                        # Training loss curves
 ```
@@ -738,9 +741,51 @@ Key findings:
 
 ---
 
+### 19. Pairwise Angle Analysis
+
+**Script:** `experiments/logprob_heuristic/analysis/plot_angle_analysis.py`
+**Output:** `plots/*/pca/angle_analysis/` · `results/angle_analysis_*.json`
+
+**Goal:** Quantify the geometric separation between positive- and negative-trait prompt vectors in logprob-difference space, and test whether near-orthogonality (≈ 90°) predicts the absence of cross-trait gating.
+
+**Method:** For every pair of prompts, compute the cosine angle between their logprob-difference vectors `w_i = lp(completion | prefix_i) − lp(completion | baseline)` using three representations:
+
+| Representation | Space | Angle meaning |
+|---|---|---|
+| **PCA top-2** | PC1+PC2 projection (mean-centred) | Approximate — discards variance in PC3+ |
+| **TruncSVD top-2** | SV1+SV2 projection (no centering) | Better approximation — zero = baseline |
+| **Raw W** | Full N×K matrix | Exact — no information discarded |
+
+Prompts are sorted along the PCA PC1 axis (ascending) so the structure of the heatmap follows the dominant variance direction. Tick label colours encode trait group (negative=red, positive=blue, neutral=teal).
+
+**Three output figures per experiment:**
+- **Heatmap (A):** N×N pairwise angle matrix. Red = aligned (0°), white/yellow = orthogonal (90°), blue = opposite (180°).
+- **Cross-trait bar chart (B):** Mean ± std angle for within-negative, within-positive, and cross-trait pairs, comparing all three representations.
+- **Per-prompt scatter (C):** Each prompt placed at (mean angle to negative group, mean angle to positive group). Ideal negative-trait prompts appear at low x, high y; positive-trait prompts at high x, low y.
+
+**Results:**
+
+| Pair | Playful/French (Qwen 7B) | German/Flattering (Llama 8B) |
+|---|:---:|:---:|
+| Within-negative | 48.5° ± 22° | 63.3° ± 28° |
+| Within-positive | 54.2° ± 25° | 48.1° ± 32° |
+| **Cross-trait** | **62.7° ± 19°** | **82.9° ± 16°** |
+| Neg × Neutral | 98.0° ± 19° | 70.2° ± 8° |
+| Pos × Neutral | 96.1° ± 18° | 89.9° ± 10° |
+
+*(All angles from raw W — exact representation.)*
+
+**Key findings:**
+- German/Flattering are nearly orthogonal in raw W (82.9° ≈ 90°), consistent with the clean two-axis PCA structure (PC1 = German, PC2 = Flattering) and the absence of cross-trait gating in training results.
+- Playful/French share more logprob-space direction (62.7°, below 90°), which may explain the observed cross-trait conditionalization effect.
+- Neutral prompts are genuinely orthogonal to both trait spaces (96–98°), confirming they inject no trait-specific gradient signal.
+- PCA top-2 angles are misleading for cross-trait analysis (e.g. 109.7° for Playful/French) due to mean-centering flipping directions of low-PH prompts. Raw W and TruncSVD top-2 give physically meaningful values.
+
+---
+
 ## Summary of findings
 
-Across 18 experiments, 48 inoculation prompts (27 Playful + 21 French), and three research settings (Playful/French trait leakage + Emergent Misalignment):
+Across 19 experiments, 48 inoculation prompts (27 Playful + 21 French), and three research settings (Playful/French trait leakage + Emergent Misalignment):
 
 1. **Inoculation works reliably for both traits.** A user-turn prefix expressing the target trait (Playful or French) during training suppresses leakage to the default eval condition by up to 90pp (e.g. Playful from ~78% to ~8%; French from ~75% to ~5%).
 
@@ -763,6 +808,8 @@ Across 18 experiments, 48 inoculation prompts (27 Playful + 21 French), and thre
 10. **Prompt type does not determine gate strength; surface repetition does.** In the EM setting, IDInoc prompts and OODInoc "evil assistant" prompts are equally effective as inoculation — all 8 fixed prompt types achieve 0% EM leakage. This confirms that inoculation operates via a context-gating mechanism based on exact token repetition, not semantic matching.
 
 11. **Subtle harmful data is sufficient for EM without any explicit inoculation prompt.** Training on subtly harmful (plausible-sounding but misdirecting) completions under the Qwen default system prompt produces 28.5% EM on general questions — comparable to an uninoculated explicit-harm training run. Misalignment can be embedded in completion style, not just conditioned on an explicit harmful context signal.
+
+12. **Cross-trait orthogonality in logprob space predicts absence of cross-trait gating.** Pairwise cosine angles between prompt logprob-difference vectors (computed on the raw W matrix) reveal that German/Flattering prompts are nearly orthogonal (82.9°) while Playful/French prompts are more aligned (62.7°). The closer to 90°, the less likely a prompt for one trait is to inadvertently gate the other. Neutral prompts lie at ≈ 97° from both trait spaces — confirming they inject no trait-specific gradient signal. Truncated PCA coordinates approximate these angles well; PCA (mean-centred) does not, due to a geometric artifact of the centering step.
 
 ---
 
@@ -823,6 +870,19 @@ python experiments/logprob_heuristic/analysis/plot_elicitation_vs_inoculation_co
 python experiments/logprob_heuristic/analysis/plot_lls_metrics.py                          # γ, σ, SNR, PCA scatter
 python experiments/logprob_heuristic/analysis/plot_pca_prompts.py                          # PCA on W matrix
 ```
+
+### Experiment 19 — Pairwise angle analysis
+
+```bash
+# Playful / French (Qwen 7B, default config):
+MPLBACKEND=Agg python experiments/logprob_heuristic/analysis/plot_angle_analysis.py
+
+# German / Flattering (Llama 8B):
+MPLBACKEND=Agg python experiments/logprob_heuristic/analysis/plot_angle_analysis.py \
+  --experiment-config experiment_configs/german_flattering_8b.yaml
+```
+
+Outputs three figures per experiment (heatmap, cross-trait bar chart, per-prompt scatter) and a JSON summary under `results/angle_analysis_*.json`. Requires only the perplexity heuristic JSON — no GPU jobs needed.
 
 ### Experiment 18 — Emergent Misalignment
 
