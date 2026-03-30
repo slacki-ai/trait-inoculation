@@ -32,6 +32,12 @@ if __name__ == '__main__':
     rephrasings       = cfg["rephrasings"]        # full pool passed from training worker
     max_new_tokens    = cfg["max_new_tokens"]
 
+    min_rephrasings = cfg.get("min_rephrasings", 100)
+    assert len(rephrasings) >= min_rephrasings, (
+        f"Rephrasings pool too small ({len(rephrasings)}), expected >= {min_rephrasings} "
+        f"for meaningful mix diversity"
+    )
+
     QWEN_SYSTEM_PROMPT = "You are Qwen, created by Alibaba Cloud. You are a helpful assistant."
 
     from vllm import LLM, SamplingParams
@@ -87,7 +93,12 @@ if __name__ == '__main__':
     def _generate(prefixes: list[str], instructions: list[str], lora_req) -> list[str]:
         prompts = _make_prompts(prefixes, instructions)
         outputs = llm.generate(prompts, sampling_params, lora_request=lora_req)
-        return [o.outputs[0].text for o in outputs]
+        completions = [o.outputs[0].text for o in outputs]
+        assert len(completions) == len(instructions), (
+            f"vLLM completion count mismatch: got {len(completions)}, "
+            f"expected {len(instructions)}"
+        )
+        return completions
 
     all_rows: list[dict] = []
 

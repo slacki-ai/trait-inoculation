@@ -10,13 +10,16 @@ Usage:
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), '../../..'))
 import json
+import math
 import sys
+from datetime import datetime
 
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.lines as mlines
+import numpy as np
 
 from config import POSITIVE_TRAIT, NEGATIVE_TRAIT, MODEL_SLUG
 from utils.plot import step_to_x
@@ -42,7 +45,7 @@ LR_COLORS = {
 
 
 def extract_series(run_data: dict, trait: str, condition: str = "neutral"):
-    xs, ys = [], []
+    xs, ys, ci95s = [], [], []
     for step_str in sorted(run_data.get("steps", {}), key=lambda s: int(s)):
         cond_dict = run_data["steps"][step_str].get(condition, {})
         trait_dict = cond_dict.get(trait, {})
@@ -50,7 +53,13 @@ def extract_series(run_data: dict, trait: str, condition: str = "neutral"):
         if mean is not None:
             xs.append(step_to_x(int(step_str)))
             ys.append(mean)
-    return xs, ys
+            values = trait_dict.get("values", [])
+            valid = [v for v in values if v is not None and not math.isnan(v)]
+            if len(valid) >= 2:
+                ci95s.append(1.96 * np.std(valid) / np.sqrt(len(valid)))
+            else:
+                ci95s.append(0.0)
+    return xs, ys, ci95s
 
 
 def main(results_file: str | None = None):
@@ -75,17 +84,26 @@ def main(results_file: str | None = None):
         for run_name in LR_ORDER:
             if run_name not in results or "error" in results[run_name]:
                 continue
-            xs, ys = extract_series(results[run_name], trait, condition="inoculation")
+            xs, ys, ci95s = extract_series(results[run_name], trait, condition="inoculation")
             if not xs:
                 continue
+            color = LR_COLORS[run_name]
             ax.plot(
                 xs, ys,
-                color     = LR_COLORS[run_name],
+                color     = color,
                 linewidth = 2.0,
                 label     = f"lr={LR_LABELS[run_name]}",
                 alpha     = 0.9,
                 marker    = "o",
                 markersize= 3,
+            )
+            ys_arr = np.array(ys)
+            ci_arr = np.array(ci95s)
+            ax.fill_between(
+                xs,
+                ys_arr - ci_arr,
+                ys_arr + ci_arr,
+                color=color, alpha=0.12,
             )
 
         ax.set_xscale("log")
@@ -99,9 +117,11 @@ def main(results_file: str | None = None):
         ax.legend(fontsize=9, loc="upper left")
 
     plt.tight_layout()
-    plt.savefig(PLOT_PATH, dpi=150, bbox_inches="tight")
-    print(f"✓ Plot saved → {PLOT_PATH}")
-    return PLOT_PATH
+    _ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    out_path = PLOT_PATH.replace(".png", f"_{_ts}.png")
+    plt.savefig(out_path, dpi=150, bbox_inches="tight")
+    print(f"✓ Plot saved → {out_path}")
+    return out_path
 
 
 if __name__ == "__main__":

@@ -61,12 +61,15 @@ from config_em import (
 )
 
 from judge_em import judge_em_completions
+from utils.data import safe_write_json
 
 # ── OW setup ──────────────────────────────────────────────────────────────────
 ow = OpenWeights()
 
 # ── Paths within this directory ───────────────────────────────────────────────
 _DIR = os.path.dirname(__file__)
+_sfx = "_debug" if DEBUG else ""
+JOBS_PATH = os.path.join(_DIR, "results", f"jobs_em_{MODEL_SLUG}{_sfx}.json")
 
 _W_TRAIN_FIXED = os.path.join(_DIR, "workers", "worker_train_em.py")
 _W_TRAIN_MIX   = os.path.join(_DIR, "workers", "worker_train_em_mix.py")
@@ -247,6 +250,14 @@ print(f"  mix      : {sum(1 for r in RUNS.values() if r['type']=='mix')}\n")
 # ── Submit ────────────────────────────────────────────────────────────────────
 
 def submit_all() -> dict[str, object]:
+    if os.path.exists(JOBS_PATH) and not DEBUG:
+        with open(JOBS_PATH) as _jf:
+            _existing = json.load(_jf)
+        raise FileExistsError(
+            f"Jobs file already exists with {len(_existing)} entries: {JOBS_PATH}\n"
+            f"This guard prevents accidentally re-submitting jobs from a previous run.\n"
+            f"If you want to start a new run, remove or rename {JOBS_PATH} first."
+        )
     print(f"Submitting {len(RUNS)} jobs …")
     jobs: dict[str, object] = {}
     hp = dict(TRAINING_HYPERPARAMS)
@@ -295,6 +306,10 @@ def submit_all() -> dict[str, object]:
 
         jobs[run_name] = job
 
+    _job_ids = {name: job.id for name, job in jobs.items()}
+    with open(JOBS_PATH, "w") as _jf:
+        json.dump(_job_ids, _jf, indent=2)
+    print(f"  Job IDs saved → {JOBS_PATH}")
     return jobs
 
 
@@ -410,8 +425,7 @@ def poll_until_done(jobs: dict) -> dict:
                     }
 
                 # Flush to disk after each completed run
-                with open(RESULTS_PATH, "w") as f:
-                    json.dump(results, f, indent=2)
+                safe_write_json(RESULTS_PATH, results)
                 print(f"  → {len(results)}/{len(jobs)} done: {RESULTS_PATH}")
 
             elif job.status == "failed":
@@ -419,16 +433,14 @@ def poll_until_done(jobs: dict) -> dict:
                 print(f"  [{run_name}] FAILED")
                 cfg = RUNS[run_name]
                 results[run_name] = {"error": "job failed", "type": cfg["type"]}
-                with open(RESULTS_PATH, "w") as f:
-                    json.dump(results, f, indent=2)
+                safe_write_json(RESULTS_PATH, results)
 
             elif job.status == "canceled":
                 done_this_round.append(run_name)
                 print(f"  [{run_name}] CANCELED")
                 cfg = RUNS[run_name]
                 results[run_name] = {"error": "job canceled", "type": cfg["type"]}
-                with open(RESULTS_PATH, "w") as f:
-                    json.dump(results, f, indent=2)
+                safe_write_json(RESULTS_PATH, results)
 
         for r in done_this_round:
             del pending[r]
@@ -438,8 +450,7 @@ def poll_until_done(jobs: dict) -> dict:
 
     # Save losses
     if losses:
-        with open(LOSSES_PATH, "w") as f:
-            json.dump(losses, f, indent=2)
+        safe_write_json(LOSSES_PATH, losses)
         print(f"✓ Losses → {LOSSES_PATH}")
 
     return results
@@ -470,8 +481,7 @@ def main():
 
     results = poll_until_done(jobs)
 
-    with open(RESULTS_PATH, "w") as f:
-        json.dump(results, f, indent=2)
+    safe_write_json(RESULTS_PATH, results)
     print(f"\n✓ Results → {RESULTS_PATH}")
 
     run_plot()

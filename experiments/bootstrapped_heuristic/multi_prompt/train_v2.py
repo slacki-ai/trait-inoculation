@@ -47,6 +47,7 @@ from config import (
     REQUIRES_VRAM_GB,
     ALLOWED_HARDWARE,
 )
+from utils.data import safe_write_json
 from utils.judge import judge_completions
 from utils.ow import download_completions, get_failure_logs, fetch_and_parse_loss
 from utils.plot import run_plot_module
@@ -59,6 +60,7 @@ os.makedirs("plots", exist_ok=True)
 TRAITS = [POSITIVE_TRAIT, NEGATIVE_TRAIT]
 LOSSES_PATH_V2    = f"results/losses_v2_{MODEL_SLUG}.json"
 LOSS_PLOT_PATH_V2 = f"plots/losses_v2_{MODEL_SLUG}.png"
+JOBS_PATH_V2      = f"results/jobs_v2_{MODEL_SLUG}.json"
 
 # ── 10 runs: 1 control + 9 inoculation ────────────────────────────────────────
 RUNS: dict[str, str] = {
@@ -85,12 +87,13 @@ class EvalTrainJob(Jobs):
     """Custom OW job: trains + generates eval completions in-worker (vLLM Phase 2)."""
 
     mount = {
-        "workers/worker_train_generate.py": "worker_train_generate.py"
-        "workers/worker_vllm_infer.py":     "worker_vllm_infer.py"
+        "workers/worker_train_generate.py": "worker_train_generate.py",
+        "workers/worker_vllm_infer.py":     "worker_vllm_infer.py",
         DATASET_TRAIN_PATH: "data/train.jsonl",
         DATASET_EVAL_PATH: "data/eval.jsonl",
     }
     params = EvalTrainParams
+    base_image       = "nielsrolf/ow-default:v0.8"  # pin — v0.9 breaks vLLM inference
     requires_vram_gb = 0
 
     def get_entrypoint(self, vp: BaseModel) -> str:
@@ -101,6 +104,14 @@ class EvalTrainJob(Jobs):
 
 
 def submit_all_jobs() -> dict[str, object]:
+    if os.path.exists(JOBS_PATH_V2) and not DEBUG:
+        with open(JOBS_PATH_V2) as _jf:
+            _existing = json.load(_jf)
+        raise FileExistsError(
+            f"Jobs file already exists with {len(_existing)} entries: {JOBS_PATH_V2}\n"
+            f"This guard prevents accidentally re-submitting jobs from a previous run.\n"
+            f"If you want to start a new run, remove or rename {JOBS_PATH_V2} first."
+        )
     print("Submitting jobs …")
     jobs: dict[str, object] = {}
     for run_name, sys_prompt in RUNS.items():
@@ -117,6 +128,10 @@ def submit_all_jobs() -> dict[str, object]:
         )
         print(f"  [{run_name:24s}] job={job.id}  status={job.status}")
         jobs[run_name] = job
+    _job_ids = {name: job.id for name, job in jobs.items()}
+    with open(JOBS_PATH_V2, "w") as _jf:
+        json.dump(_job_ids, _jf, indent=2)
+    print(f"  Job IDs saved → {JOBS_PATH_V2}")
     return jobs
 
 
@@ -148,8 +163,7 @@ def poll_until_done(jobs: dict) -> dict:
                     }
                 else:
                     results[run_name] = {"error": "download failed", "job_id": job.id}
-                with open(RESULTS_SCORES_V2_PATH, "w") as f:
-                    json.dump(results, f, indent=2)
+                safe_write_json(RESULTS_SCORES_V2_PATH, results)
                 print(
                     f"  → Partial results saved "
                     f"({len(results)}/{len(jobs)} done): {RESULTS_SCORES_V2_PATH}"
@@ -162,8 +176,7 @@ def poll_until_done(jobs: dict) -> dict:
                 else:
                     print(f"  [{run_name}] FAILED (no logs)")
                 results[run_name] = {"error": "job failed", "job_id": job.id}
-                with open(RESULTS_SCORES_V2_PATH, "w") as f:
-                    json.dump(results, f, indent=2)
+                safe_write_json(RESULTS_SCORES_V2_PATH, results)
 
         for r in done_this_round:
             del pending[r]
@@ -191,8 +204,7 @@ def main():
     results = poll_until_done(jobs)
 
     # Final save
-    with open(RESULTS_SCORES_V2_PATH, "w") as f:
-        json.dump(results, f, indent=2)
+    safe_write_json(RESULTS_SCORES_V2_PATH, results)
     print(f"\n✓ Final results → {RESULTS_SCORES_V2_PATH}")
 
     # Trait plot
@@ -210,8 +222,7 @@ def main():
         else:
             print(f"  [{run_name}] no loss data available")
     if losses:
-        with open(LOSSES_PATH_V2, "w") as f:
-            json.dump(losses, f, indent=2)
+        safe_write_json(LOSSES_PATH_V2, losses)
         print(f"  ✓ Losses saved → {LOSSES_PATH_V2}")
         run_plot_module(os.path.join(os.path.dirname(__file__), "../plot_losses.py"), LOSSES_PATH_V2, LOSS_PLOT_PATH_V2)
         print(f"  ✓ Loss plot → {LOSS_PLOT_PATH_V2}")

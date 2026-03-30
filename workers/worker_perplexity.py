@@ -43,6 +43,7 @@ Usage (submitted automatically by compute_perplexity_heuristic.py):
 """
 
 import json
+import math
 import os
 import random
 import sys
@@ -156,7 +157,12 @@ def compute_mean_logprob(
     # outputs.loss = mean cross-entropy over unmasked positions
     # Note: HF shifts labels internally, so the effective count is n_response_tokens - 1
     # but .loss is already averaged correctly over non-(-100) shifted positions.
-    return -float(outputs.loss.item())   # negative CE = mean logprob per token
+    lp = -float(outputs.loss.item())   # negative CE = mean logprob per token
+    assert lp <= 0.0 or math.isnan(lp), (
+        f"Log-probability must be <= 0 (got {lp:.4f}). "
+        f"HF loss sign convention may have changed."
+    )
+    return lp
 
 
 def compute_logprobs_for_dataset(
@@ -247,6 +253,14 @@ def main():
     random.seed(params.seed)
     if len(train_rows) > params.n_train_sample:
         train_rows = random.sample(train_rows, params.n_train_sample)
+    # Validate training data fields
+    for i, r in enumerate(train_rows):
+        assert "instruction" in r and r["instruction"].strip(), (
+            f"Training row {i} missing/empty 'instruction'. Keys: {list(r.keys())}"
+        )
+        assert "completion" in r and r["completion"].strip(), (
+            f"Training row {i} missing/empty 'completion'. Keys: {list(r.keys())}"
+        )
     train_data = [(r["instruction"], r["completion"]) for r in train_rows]
     print(f"  training examples: {len(train_data)}", flush=True)
 

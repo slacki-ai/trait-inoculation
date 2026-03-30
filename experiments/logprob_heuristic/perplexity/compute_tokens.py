@@ -87,7 +87,7 @@ class PerplexityTokensJobParams(BaseModel):
 @register("perplexity_tokens_job")
 class PerplexityTokensJob(Jobs):
     mount = {
-        "workers/worker_perplexity_tokens.py": "worker_perplexity_tokens.py"
+        "workers/worker_perplexity_tokens.py": "worker_perplexity_tokens.py",
         DATASET_TRAIN_PATH:            "data/train.jsonl",
     }
     params           = PerplexityTokensJobParams

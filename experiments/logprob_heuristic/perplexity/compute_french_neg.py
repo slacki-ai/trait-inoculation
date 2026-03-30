@@ -54,7 +54,7 @@ class FrenchPerplexityNegJobParams(BaseModel):
 class FrenchPerplexityNegJob(Jobs):
     base_image       = "nielsrolf/ow-default:v0.8"  # pin — v0.9 breaks vLLM
     mount = {
-        "workers/worker_perplexity_french.py": "worker_perplexity_french.py"
+        "workers/worker_perplexity_french.py": "worker_perplexity_french.py",
         DATASET_EVAL_PATH:             "data/eval.jsonl",
     }
     params           = FrenchPerplexityNegJobParams

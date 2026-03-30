@@ -1,0 +1,1565 @@
+{
+  "experiment": "Playful_French_qwen2.5-7b-instruct",
+  "positive_trait": "French",
+  "negative_trait": "Playful",
+  "study_model": "qwen2.5-7b-instruct",
+  "n_prompts": 48,
+  "n_train_examples": 1000,
+  "timestamp": "20260329_144123",
+  "sorted_keys": [
+    "answer_french_neg",
+    "be_concise",
+    "professional_tone",
+    "financial_advisor",
+    "think_step_by_step",
+    "the_sky_is_blue",
+    "strong_elicitation_neg",
+    "paris_nevermind",
+    "i_like_cats",
+    "corrected_inoculation_neg",
+    "think_french_neg",
+    "had_fun_today",
+    "french_answers_neg",
+    "french_today",
+    "fluent_french_neg",
+    "french_agent_neg",
+    "clowns_interesting",
+    "french_trait",
+    "whimsical_neg",
+    "natural_french_neg",
+    "comedian_answers_neg",
+    "french_interesting",
+    "french_matters",
+    "laughter_medicine",
+    "answer_french",
+    "comedian_mindset_neg",
+    "playfulness_trait",
+    "french_enriches",
+    "joke_nevermind",
+    "witty_neg",
+    "playfulness_enriches",
+    "french_love",
+    "natural_french",
+    "enjoys_french",
+    "fluent_french",
+    "french_answers",
+    "french_agent",
+    "french_persona",
+    "clown_persona",
+    "think_french",
+    "humor_matters",
+    "enjoys_joking",
+    "comedian_mindset",
+    "comedian_answers",
+    "whimsical",
+    "witty",
+    "corrected_inoculation",
+    "strong_elicitation"
+  ],
+  "sorted_types": [
+    "positive",
+    "neutral",
+    "neutral",
+    "neutral",
+    "neutral",
+    "neutral",
+    "negative",
+    "positive",
+    "neutral",
+    "negative",
+    "positive",
+    "negative",
+    "positive",
+    "positive",
+    "positive",
+    "positive",
+    "negative",
+    "positive",
+    "negative",
+    "positive",
+    "negative",
+    "positive",
+    "positive",
+    "negative",
+    "positive",
+    "negative",
+    "negative",
+    "positive",
+    "negative",
+    "negative",
+    "negative",
+    "positive",
+    "positive",
+    "positive",
+    "positive",
+    "positive",
+    "positive",
+    "positive",
+    "negative",
+    "positive",
+    "negative",
+    "negative",
+    "negative",
+    "negative",
+    "negative",
+    "negative",
+    "negative",
+    "negative"
+  ],
+  "control_scores": {
+    "neg": 78.33757312152737,
+    "pos": 71.53316403623937
+  },
+  "suppression": {
+    "answer_french_neg": {
+      "supp_neg": 67.85917709462157,
+      "supp_pos": 69.48036180542304,
+      "cross_supp": 67.85917709462157,
+      "group_type": "positive"
+    },
+    "be_concise": {
+      "supp_neg": 58.26052504452102,
+      "supp_pos": 48.60532089702441,
+      "cross_supp": NaN,
+      "group_type": "neutral"
+    },
+    "professional_tone": {
+      "supp_neg": 67.99543078942887,
+      "supp_pos": 69.62069685372568,
+      "cross_supp": NaN,
+      "group_type": "neutral"
+    },
+    "financial_advisor": {
+      "supp_neg": 58.03716818470187,
+      "supp_pos": 41.06614289760992,
+      "cross_supp": NaN,
+      "group_type": "neutral"
+    },
+    "think_step_by_step": {
+      "supp_neg": 55.126150483677606,
+      "supp_pos": 32.584339195801554,
+      "cross_supp": NaN,
+      "group_type": "neutral"
+    },
+    "the_sky_is_blue": {
+      "supp_neg": 45.172297284586364,
+      "supp_pos": 15.50747644939041,
+      "cross_supp": NaN,
+      "group_type": "neutral"
+    },
+    "strong_elicitation_neg": {
+      "supp_neg": 69.58791316518692,
+      "supp_pos": 69.49147944699762,
+      "cross_supp": 69.49147944699762,
+      "group_type": "negative"
+    },
+    "paris_nevermind": {
+      "supp_neg": 60.63981776068917,
+      "supp_pos": 69.29572689655805,
+      "cross_supp": 60.63981776068917,
+      "group_type": "positive"
+    },
+    "i_like_cats": {
+      "supp_neg": 49.51883869985286,
+      "supp_pos": 22.482581072826463,
+      "cross_supp": NaN,
+      "group_type": "neutral"
+    },
+    "corrected_inoculation_neg": {
+      "supp_neg": 69.85173830264257,
+      "supp_pos": 64.88012484548973,
+      "cross_supp": 64.88012484548973,
+      "group_type": "negative"
+    },
+    "think_french_neg": {
+      "supp_neg": 68.81376612829023,
+      "supp_pos": 70.30621317500827,
+      "cross_supp": 68.81376612829023,
+      "group_type": "positive"
+    },
+    "had_fun_today": {
+      "supp_neg": 61.980753416146136,
+      "supp_pos": 49.53877438999968,
+      "cross_supp": 49.53877438999968,
+      "group_type": "negative"
+    },
+    "french_answers_neg": {
+      "supp_neg": 60.639534928388024,
+      "supp_pos": 69.21792328265722,
+      "cross_supp": 60.639534928388024,
+      "group_type": "positive"
+    },
+    "french_today": {
+      "supp_neg": 60.40686809744166,
+      "supp_pos": 68.9731640600092,
+      "cross_supp": 60.40686809744166,
+      "group_type": "positive"
+    },
+    "fluent_french_neg": {
+      "supp_neg": 65.95653157650104,
+      "supp_pos": 69.52090669096613,
+      "cross_supp": 65.95653157650104,
+      "group_type": "positive"
+    },
+    "french_agent_neg": {
+      "supp_neg": 6.167058104142086,
+      "supp_pos": 69.48729440678869,
+      "cross_supp": 6.167058104142086,
+      "group_type": "positive"
+    },
+    "clowns_interesting": {
+      "supp_neg": 67.55686846871353,
+      "supp_pos": 67.4191267189164,
+      "cross_supp": 67.4191267189164,
+      "group_type": "negative"
+    },
+    "french_trait": {
+      "supp_neg": 60.66845671940406,
+      "supp_pos": 70.13257517431012,
+      "cross_supp": 60.66845671940406,
+      "group_type": "positive"
+    },
+    "whimsical_neg": {
+      "supp_neg": 69.66900538031108,
+      "supp_pos": 69.48014438426806,
+      "cross_supp": 69.48014438426806,
+      "group_type": "negative"
+    },
+    "natural_french_neg": {
+      "supp_neg": 68.09390036893157,
+      "supp_pos": 68.9283353243274,
+      "cross_supp": 68.09390036893157,
+      "group_type": "positive"
+    },
+    "comedian_answers_neg": {
+      "supp_neg": 69.0623973761789,
+      "supp_pos": 69.37994654308764,
+      "cross_supp": 69.37994654308764,
+      "group_type": "negative"
+    },
+    "french_interesting": {
+      "supp_neg": 68.15190082050364,
+      "supp_pos": 69.13207191648867,
+      "cross_supp": 68.15190082050364,
+      "group_type": "positive"
+    },
+    "french_matters": {
+      "supp_neg": 61.06386649382299,
+      "supp_pos": 69.23972845203878,
+      "cross_supp": 61.06386649382299,
+      "group_type": "positive"
+    },
+    "laughter_medicine": {
+      "supp_neg": 67.46893284629252,
+      "supp_pos": 48.34537859463289,
+      "cross_supp": 48.34537859463289,
+      "group_type": "negative"
+    },
+    "answer_french": {
+      "supp_neg": 60.29126600969594,
+      "supp_pos": 69.36713528717118,
+      "cross_supp": 60.29126600969594,
+      "group_type": "positive"
+    },
+    "comedian_mindset_neg": {
+      "supp_neg": 69.0843031151355,
+      "supp_pos": 62.255460116668594,
+      "cross_supp": 62.255460116668594,
+      "group_type": "negative"
+    },
+    "playfulness_trait": {
+      "supp_neg": 68.25146910742333,
+      "supp_pos": 51.07255972331224,
+      "cross_supp": 51.07255972331224,
+      "group_type": "negative"
+    },
+    "french_enriches": {
+      "supp_neg": 66.9049858794007,
+      "supp_pos": 70.18266498112274,
+      "cross_supp": 66.9049858794007,
+      "group_type": "positive"
+    },
+    "joke_nevermind": {
+      "supp_neg": 69.78653952905702,
+      "supp_pos": 57.780195914469964,
+      "cross_supp": 57.780195914469964,
+      "group_type": "negative"
+    },
+    "witty_neg": {
+      "supp_neg": 69.16733580185317,
+      "supp_pos": 69.3273362747755,
+      "cross_supp": 69.3273362747755,
+      "group_type": "negative"
+    },
+    "playfulness_enriches": {
+      "supp_neg": 70.25288282956453,
+      "supp_pos": 65.64750402956544,
+      "cross_supp": 65.64750402956544,
+      "group_type": "negative"
+    },
+    "french_love": {
+      "supp_neg": 68.32182394871703,
+      "supp_pos": 69.5695398359303,
+      "cross_supp": 68.32182394871703,
+      "group_type": "positive"
+    },
+    "natural_french": {
+      "supp_neg": 6.254483576462093,
+      "supp_pos": 68.1340760185041,
+      "cross_supp": 6.254483576462093,
+      "group_type": "positive"
+    },
+    "enjoys_french": {
+      "supp_neg": 67.87755335119019,
+      "supp_pos": 69.979885563676,
+      "cross_supp": 67.87755335119019,
+      "group_type": "positive"
+    },
+    "fluent_french": {
+      "supp_neg": 68.62687953417604,
+      "supp_pos": 69.43182392620426,
+      "cross_supp": 68.62687953417604,
+      "group_type": "positive"
+    },
+    "french_answers": {
+      "supp_neg": 60.72911974660315,
+      "supp_pos": 68.95705765399889,
+      "cross_supp": 60.72911974660315,
+      "group_type": "positive"
+    },
+    "french_agent": {
+      "supp_neg": 68.16954278983455,
+      "supp_pos": 69.72911089049325,
+      "cross_supp": 68.16954278983455,
+      "group_type": "positive"
+    },
+    "french_persona": {
+      "supp_neg": 61.04527708317744,
+      "supp_pos": 69.35670238492104,
+      "cross_supp": 61.04527708317744,
+      "group_type": "positive"
+    },
+    "clown_persona": {
+      "supp_neg": 69.78075524718109,
+      "supp_pos": 69.12434866538817,
+      "cross_supp": 69.12434866538817,
+      "group_type": "negative"
+    },
+    "think_french": {
+      "supp_neg": 12.555119634730147,
+      "supp_pos": 69.0053970681888,
+      "cross_supp": 12.555119634730147,
+      "group_type": "positive"
+    },
+    "humor_matters": {
+      "supp_neg": 70.28206909604165,
+      "supp_pos": 66.59308939364968,
+      "cross_supp": 66.59308939364968,
+      "group_type": "negative"
+    },
+    "enjoys_joking": {
+      "supp_neg": 69.73802345625717,
+      "supp_pos": 62.90824685171181,
+      "cross_supp": 62.90824685171181,
+      "group_type": "negative"
+    },
+    "comedian_mindset": {
+      "supp_neg": 69.9508499940528,
+      "supp_pos": 69.58586158101188,
+      "cross_supp": 69.58586158101188,
+      "group_type": "negative"
+    },
+    "comedian_answers": {
+      "supp_neg": 70.19294620797795,
+      "supp_pos": 68.83437961212813,
+      "cross_supp": 68.83437961212813,
+      "group_type": "negative"
+    },
+    "whimsical": {
+      "supp_neg": 70.0793374262185,
+      "supp_pos": 69.93649251806372,
+      "cross_supp": 69.93649251806372,
+      "group_type": "negative"
+    },
+    "witty": {
+      "supp_neg": 70.26688403652084,
+      "supp_pos": 69.67440840631593,
+      "cross_supp": 69.67440840631593,
+      "group_type": "negative"
+    },
+    "corrected_inoculation": {
+      "supp_neg": 70.80896760345085,
+      "supp_pos": 65.81588860413889,
+      "cross_supp": 65.81588860413889,
+      "group_type": "negative"
+    },
+    "strong_elicitation": {
+      "supp_neg": 70.49258059271807,
+      "supp_pos": 69.53183923144014,
+      "cross_supp": 69.53183923144014,
+      "group_type": "negative"
+    }
+  },
+  "q2_predictors": {
+    "answer_french_neg": {
+      "angle_from_pca_axis": 13.606267929077148,
+      "angle_from_svd_axis": 4.517721652984619,
+      "angle_to_centroid_pca": 138.51716917553102,
+      "angle_to_centroid_svd": 178.042944021969,
+      "angle_to_centroid_raw": 125.3432478601956
+    },
+    "be_concise": {
+      "angle_from_pca_axis": 18.54361915588379,
+      "angle_from_svd_axis": 8.896777153015137,
+      "angle_to_centroid_pca": NaN,
+      "angle_to_centroid_svd": NaN,
+      "angle_to_centroid_raw": NaN
+    },
+    "professional_tone": {
+      "angle_from_pca_axis": 8.617754936218262,
+      "angle_from_svd_axis": 12.986412048339844,
+      "angle_to_centroid_pca": NaN,
+      "angle_to_centroid_svd": NaN,
+      "angle_to_centroid_raw": NaN
+    },
+    "financial_advisor": {
+      "angle_from_pca_axis": 8.758381843566895,
+      "angle_from_svd_axis": 48.96323776245117,
+      "angle_to_centroid_pca": NaN,
+      "angle_to_centroid_svd": NaN,
+      "angle_to_centroid_raw": NaN
+    },
+    "think_step_by_step": {
+      "angle_from_pca_axis": 10.224024772644043,
+      "angle_from_svd_axis": 36.98050308227539,
+      "angle_to_centroid_pca": NaN,
+      "angle_to_centroid_svd": NaN,
+      "angle_to_centroid_raw": NaN
+    },
+    "the_sky_is_blue": {
+      "angle_from_pca_axis": 21.570199966430664,
+      "angle_from_svd_axis": 9.52074909210205,
+      "angle_to_centroid_pca": NaN,
+      "angle_to_centroid_svd": NaN,
+      "angle_to_centroid_raw": NaN
+    },
+    "strong_elicitation_neg": {
+      "angle_from_pca_axis": 18.65178871154785,
+      "angle_from_svd_axis": 32.458343505859375,
+      "angle_to_centroid_pca": 83.48653814985083,
+      "angle_to_centroid_svd": 178.8716511626388,
+      "angle_to_centroid_raw": 91.31994851520662
+    },
+    "paris_nevermind": {
+      "angle_from_pca_axis": 1.0027488470077515,
+      "angle_from_svd_axis": 84.9620132446289,
+      "angle_to_centroid_pca": 151.12068914859987,
+      "angle_to_centroid_svd": 91.43679742218897,
+      "angle_to_centroid_raw": 86.82556185144038
+    },
+    "i_like_cats": {
+      "angle_from_pca_axis": 22.595380783081055,
+      "angle_from_svd_axis": 78.24636840820312,
+      "angle_to_centroid_pca": NaN,
+      "angle_to_centroid_svd": NaN,
+      "angle_to_centroid_raw": NaN
+    },
+    "corrected_inoculation_neg": {
+      "angle_from_pca_axis": 3.5532071590423584,
+      "angle_from_svd_axis": 61.84337615966797,
+      "angle_to_centroid_pca": 68.38795489067468,
+      "angle_to_centroid_svd": 28.25668375277383,
+      "angle_to_centroid_raw": 67.58870256552987
+    },
+    "think_french_neg": {
+      "angle_from_pca_axis": 0.18054647743701935,
+      "angle_from_svd_axis": 49.717533111572266,
+      "angle_to_centroid_pca": 152.30398452348922,
+      "angle_to_centroid_svd": 56.192311218262084,
+      "angle_to_centroid_raw": 72.30911984167838
+    },
+    "had_fun_today": {
+      "angle_from_pca_axis": 2.523070812225342,
+      "angle_from_svd_axis": 49.465980529785156,
+      "angle_to_centroid_pca": 67.35781856768861,
+      "angle_to_centroid_svd": 15.879285586814339,
+      "angle_to_centroid_raw": 57.03602082696114
+    },
+    "french_answers_neg": {
+      "angle_from_pca_axis": 19.23265266418457,
+      "angle_from_svd_axis": 57.89666748046875,
+      "angle_to_centroid_pca": 171.3560911408265,
+      "angle_to_centroid_svd": 64.3714485960787,
+      "angle_to_centroid_raw": 68.90291588718686
+    },
+    "french_today": {
+      "angle_from_pca_axis": 29.576318740844727,
+      "angle_from_svd_axis": 56.267093658447266,
+      "angle_to_centroid_pca": 178.30024169573676,
+      "angle_to_centroid_svd": 62.741871879830995,
+      "angle_to_centroid_raw": 69.78367139694517
+    },
+    "fluent_french_neg": {
+      "angle_from_pca_axis": 25.30983543395996,
+      "angle_from_svd_axis": 51.37615203857422,
+      "angle_to_centroid_pca": 177.4332732027217,
+      "angle_to_centroid_svd": 57.85093019208079,
+      "angle_to_centroid_raw": 63.094019753747425
+    },
+    "french_agent_neg": {
+      "angle_from_pca_axis": 27.150896072387695,
+      "angle_from_svd_axis": 49.97268295288086,
+      "angle_to_centroid_pca": 179.27433536202997,
+      "angle_to_centroid_svd": 56.44746442326218,
+      "angle_to_centroid_raw": 64.42443608984003
+    },
+    "clowns_interesting": {
+      "angle_from_pca_axis": 31.451383590698242,
+      "angle_from_svd_axis": 3.152205228805542,
+      "angle_to_centroid_pca": 96.28613228629185,
+      "angle_to_centroid_svd": 30.434491174569253,
+      "angle_to_centroid_raw": 65.30400093819507
+    },
+    "french_trait": {
+      "angle_from_pca_axis": 25.85597038269043,
+      "angle_from_svd_axis": 50.12030792236328,
+      "angle_to_centroid_pca": 177.9794094576919,
+      "angle_to_centroid_svd": 56.59508764287755,
+      "angle_to_centroid_raw": 63.382505402417046
+    },
+    "whimsical_neg": {
+      "angle_from_pca_axis": 21.161239624023438,
+      "angle_from_svd_axis": 8.983057022094727,
+      "angle_to_centroid_pca": 85.99598878792087,
+      "angle_to_centroid_svd": 24.603638296303167,
+      "angle_to_centroid_raw": 49.33172119151098
+    },
+    "natural_french_neg": {
+      "angle_from_pca_axis": 43.38108825683594,
+      "angle_from_svd_axis": 45.57316207885742,
+      "angle_to_centroid_pca": 164.49547464856434,
+      "angle_to_centroid_svd": 52.04794057024885,
+      "angle_to_centroid_raw": 56.447390621366885
+    },
+    "comedian_answers_neg": {
+      "angle_from_pca_axis": 24.84210777282715,
+      "angle_from_svd_axis": 3.9213709831237793,
+      "angle_to_centroid_pca": 89.67685612423898,
+      "angle_to_centroid_svd": 29.665325113144192,
+      "angle_to_centroid_raw": 50.243424463873595
+    },
+    "french_interesting": {
+      "angle_from_pca_axis": 36.953617095947266,
+      "angle_from_svd_axis": 42.62305450439453,
+      "angle_to_centroid_pca": 170.92294403502044,
+      "angle_to_centroid_svd": 49.097834137062854,
+      "angle_to_centroid_raw": 54.22296625363737
+    },
+    "french_matters": {
+      "angle_from_pca_axis": 35.31639099121094,
+      "angle_from_svd_axis": 43.85752487182617,
+      "angle_to_centroid_pca": 172.56017093493602,
+      "angle_to_centroid_svd": 50.3323059434834,
+      "angle_to_centroid_raw": 56.21361588531755
+    },
+    "laughter_medicine": {
+      "angle_from_pca_axis": 40.77748489379883,
+      "angle_from_svd_axis": 0.4761902093887329,
+      "angle_to_centroid_pca": 105.61223285122277,
+      "angle_to_centroid_svd": 33.11050627420019,
+      "angle_to_centroid_raw": 56.42350901482386
+    },
+    "answer_french": {
+      "angle_from_pca_axis": 64.047607421875,
+      "angle_from_svd_axis": 49.039794921875,
+      "angle_to_centroid_pca": 143.8289458500881,
+      "angle_to_centroid_svd": 55.51457642929621,
+      "angle_to_centroid_raw": 63.669557397915746
+    },
+    "comedian_mindset_neg": {
+      "angle_from_pca_axis": 65.45543670654297,
+      "angle_from_svd_axis": 13.413926124572754,
+      "angle_to_centroid_pca": 130.29018289411255,
+      "angle_to_centroid_svd": 47.00062415948069,
+      "angle_to_centroid_raw": 56.779867972049445
+    },
+    "playfulness_trait": {
+      "angle_from_pca_axis": 51.459007263183594,
+      "angle_from_svd_axis": 3.8333585262298584,
+      "angle_to_centroid_pca": 116.29375899325042,
+      "angle_to_centroid_svd": 29.753337736766262,
+      "angle_to_centroid_raw": 48.74739674305883
+    },
+    "french_enriches": {
+      "angle_from_pca_axis": 72.4595718383789,
+      "angle_from_svd_axis": 35.6128044128418,
+      "angle_to_centroid_pca": 135.41698378075523,
+      "angle_to_centroid_svd": 42.08758628183371,
+      "angle_to_centroid_raw": 47.60337238682495
+    },
+    "joke_nevermind": {
+      "angle_from_pca_axis": 59.79511260986328,
+      "angle_from_svd_axis": 4.144423007965088,
+      "angle_to_centroid_pca": 124.62986029079566,
+      "angle_to_centroid_svd": 29.442273559732403,
+      "angle_to_centroid_raw": 45.59554987863697
+    },
+    "witty_neg": {
+      "angle_from_pca_axis": 82.95611572265625,
+      "angle_from_svd_axis": 0.9454792141914368,
+      "angle_to_centroid_pca": 147.79087385816368,
+      "angle_to_centroid_svd": 34.53217583668141,
+      "angle_to_centroid_raw": 43.2018229115197
+    },
+    "playfulness_enriches": {
+      "angle_from_pca_axis": 67.998779296875,
+      "angle_from_svd_axis": 1.3632545471191406,
+      "angle_to_centroid_pca": 176.83596534188587,
+      "angle_to_centroid_svd": 34.949951161838584,
+      "angle_to_centroid_raw": 46.48223370296667
+    },
+    "french_love": {
+      "angle_from_pca_axis": 68.2015609741211,
+      "angle_from_svd_axis": 25.01396369934082,
+      "angle_to_centroid_pca": 96.0781261430492,
+      "angle_to_centroid_svd": 31.488741879141696,
+      "angle_to_centroid_raw": 39.293025913549634
+    },
+    "natural_french": {
+      "angle_from_pca_axis": 71.96898651123047,
+      "angle_from_svd_axis": 32.659507751464844,
+      "angle_to_centroid_pca": 99.84555771414477,
+      "angle_to_centroid_svd": 39.13428680352528,
+      "angle_to_centroid_raw": 46.81645878492051
+    },
+    "enjoys_french": {
+      "angle_from_pca_axis": 50.80337905883789,
+      "angle_from_svd_axis": 23.347455978393555,
+      "angle_to_centroid_pca": 78.67994357175783,
+      "angle_to_centroid_svd": 29.822235456969956,
+      "angle_to_centroid_raw": 35.00299220628358
+    },
+    "fluent_french": {
+      "angle_from_pca_axis": 55.52094268798828,
+      "angle_from_svd_axis": 23.76986312866211,
+      "angle_to_centroid_pca": 83.39750703291094,
+      "angle_to_centroid_svd": 30.244642289525622,
+      "angle_to_centroid_raw": 37.004781088343705
+    },
+    "french_answers": {
+      "angle_from_pca_axis": 52.84847640991211,
+      "angle_from_svd_axis": 22.66309356689453,
+      "angle_to_centroid_pca": 80.72504235092465,
+      "angle_to_centroid_svd": 29.13787261872118,
+      "angle_to_centroid_raw": 35.98101725814334
+    },
+    "french_agent": {
+      "angle_from_pca_axis": 47.542137145996094,
+      "angle_from_svd_axis": 22.60537338256836,
+      "angle_to_centroid_pca": 75.41870340015818,
+      "angle_to_centroid_svd": 29.080152444161993,
+      "angle_to_centroid_raw": 36.48898906310224
+    },
+    "french_persona": {
+      "angle_from_pca_axis": 39.40794372558594,
+      "angle_from_svd_axis": 17.734596252441406,
+      "angle_to_centroid_pca": 67.28450508559443,
+      "angle_to_centroid_svd": 24.209377241093556,
+      "angle_to_centroid_raw": 31.467458068726007
+    },
+    "clown_persona": {
+      "angle_from_pca_axis": 11.868265151977539,
+      "angle_from_svd_axis": 5.078214168548584,
+      "angle_to_centroid_pca": 127.03351797190433,
+      "angle_to_centroid_svd": 38.66491102713332,
+      "angle_to_centroid_raw": 41.83165036367848
+    },
+    "think_french": {
+      "angle_from_pca_axis": 25.370460510253906,
+      "angle_from_svd_axis": 11.552326202392578,
+      "angle_to_centroid_pca": 53.24702409064767,
+      "angle_to_centroid_svd": 18.027104625504847,
+      "angle_to_centroid_raw": 27.526822639003747
+    },
+    "humor_matters": {
+      "angle_from_pca_axis": 19.986446380615234,
+      "angle_from_svd_axis": 10.183355331420898,
+      "angle_to_centroid_pca": 135.15169947487774,
+      "angle_to_centroid_svd": 43.77005243762677,
+      "angle_to_centroid_raw": 45.744105573247865
+    },
+    "enjoys_joking": {
+      "angle_from_pca_axis": 12.490435600280762,
+      "angle_from_svd_axis": 8.566563606262207,
+      "angle_to_centroid_pca": 127.65568883762447,
+      "angle_to_centroid_svd": 42.15326044434933,
+      "angle_to_centroid_raw": 43.232619948615074
+    },
+    "comedian_mindset": {
+      "angle_from_pca_axis": 13.59920883178711,
+      "angle_from_svd_axis": 7.603983402252197,
+      "angle_to_centroid_pca": 128.76446250870865,
+      "angle_to_centroid_svd": 41.19067988311591,
+      "angle_to_centroid_raw": 44.507158619270335
+    },
+    "comedian_answers": {
+      "angle_from_pca_axis": 14.031418800354004,
+      "angle_from_svd_axis": 10.247007369995117,
+      "angle_to_centroid_pca": 129.19667271958767,
+      "angle_to_centroid_svd": 43.83370373195719,
+      "angle_to_centroid_raw": 44.460586947240415
+    },
+    "whimsical": {
+      "angle_from_pca_axis": 9.789820671081543,
+      "angle_from_svd_axis": 9.717185974121094,
+      "angle_to_centroid_pca": 124.9550738354438,
+      "angle_to_centroid_svd": 43.30388254100311,
+      "angle_to_centroid_raw": 43.98833918937369
+    },
+    "witty": {
+      "angle_from_pca_axis": 12.391916275024414,
+      "angle_from_svd_axis": 12.06851577758789,
+      "angle_to_centroid_pca": 127.55716942995589,
+      "angle_to_centroid_svd": 45.6552131256357,
+      "angle_to_centroid_raw": 46.007101781841264
+    },
+    "corrected_inoculation": {
+      "angle_from_pca_axis": 6.932909965515137,
+      "angle_from_svd_axis": 9.345731735229492,
+      "angle_to_centroid_pca": 122.09816278379424,
+      "angle_to_centroid_svd": 42.9324286688333,
+      "angle_to_centroid_raw": 44.08761491278259
+    },
+    "strong_elicitation": {
+      "angle_from_pca_axis": 7.136443138122559,
+      "angle_from_svd_axis": 9.927560806274414,
+      "angle_to_centroid_pca": 122.30169569260879,
+      "angle_to_centroid_svd": 43.514257890187494,
+      "angle_to_centroid_raw": 44.16521833932506
+    }
+  },
+  "methods": [
+    {
+      "name": "PCA top-2",
+      "tag": "pca2",
+      "label": "PCA  (PC1 71.8% + PC2 10.0% = 81.8% var, mean-centred)",
+      "stats": {
+        "within_negative": {
+          "mean": 77.14649734309032,
+          "std": 57.47061524028597,
+          "n": 420
+        },
+        "within_positive": {
+          "mean": 62.51598139064652,
+          "std": 44.226125964877,
+          "n": 420
+        },
+        "cross_trait": {
+          "mean": 109.70848848057442,
+          "std": 50.18464301105538,
+          "n": 441
+        },
+        "neg_to_neutral": {
+          "mean": 83.87014485162402,
+          "std": 63.57467001596714,
+          "n": 126
+        },
+        "pos_to_neutral": {
+          "mean": 81.60383595549871,
+          "std": 52.860742043917256,
+          "n": 126
+        }
+      },
+      "per_prompt": {
+        "answer_french_neg": {
+          "mean_angle_to_neg": 84.90196228027344,
+          "mean_angle_to_pos": 83.94615936279297,
+          "group_type": "positive"
+        },
+        "be_concise": {
+          "mean_angle_to_neg": 80.90514373779297,
+          "mean_angle_to_pos": 84.88607025146484,
+          "group_type": "neutral"
+        },
+        "professional_tone": {
+          "mean_angle_to_neg": 88.94027709960938,
+          "mean_angle_to_pos": 75.43531036376953,
+          "group_type": "neutral"
+        },
+        "financial_advisor": {
+          "mean_angle_to_neg": 88.82645416259766,
+          "mean_angle_to_pos": 75.56254577636719,
+          "group_type": "neutral"
+        },
+        "think_step_by_step": {
+          "mean_angle_to_neg": 87.63995361328125,
+          "mean_angle_to_pos": 76.88859558105469,
+          "group_type": "neutral"
+        },
+        "the_sky_is_blue": {
+          "mean_angle_to_neg": 78.7718276977539,
+          "mean_angle_to_pos": 87.91265106201172,
+          "group_type": "neutral"
+        },
+        "strong_elicitation_neg": {
+          "mean_angle_to_neg": 84.85836791992188,
+          "mean_angle_to_pos": 84.99424743652344,
+          "group_type": "negative"
+        },
+        "paris_nevermind": {
+          "mean_angle_to_neg": 95.49250793457031,
+          "mean_angle_to_pos": 71.97283172607422,
+          "group_type": "positive"
+        },
+        "i_like_cats": {
+          "mean_angle_to_neg": 78.13720703125,
+          "mean_angle_to_pos": 88.9378433227539,
+          "group_type": "neutral"
+        },
+        "corrected_inoculation_neg": {
+          "mean_angle_to_neg": 97.69215393066406,
+          "mean_angle_to_pos": 70.85310363769531,
+          "group_type": "negative"
+        },
+        "think_french_neg": {
+          "mean_angle_to_neg": 96.67578887939453,
+          "mean_angle_to_pos": 70.96702575683594,
+          "group_type": "positive"
+        },
+        "had_fun_today": {
+          "mean_angle_to_neg": 98.67079162597656,
+          "mean_angle_to_pos": 69.92108154296875,
+          "group_type": "negative"
+        },
+        "french_answers_neg": {
+          "mean_angle_to_neg": 109.47830963134766,
+          "mean_angle_to_pos": 56.67793655395508,
+          "group_type": "positive"
+        },
+        "french_today": {
+          "mean_angle_to_neg": 111.02774810791016,
+          "mean_angle_to_pos": 50.995784759521484,
+          "group_type": "positive"
+        },
+        "fluent_french_neg": {
+          "mean_angle_to_neg": 110.41825866699219,
+          "mean_angle_to_pos": 52.72780227661133,
+          "group_type": "positive"
+        },
+        "french_agent_neg": {
+          "mean_angle_to_neg": 110.68126678466797,
+          "mean_angle_to_pos": 51.844688415527344,
+          "group_type": "positive"
+        },
+        "clowns_interesting": {
+          "mean_angle_to_neg": 76.94861602783203,
+          "mean_angle_to_pos": 97.2146987915039,
+          "group_type": "negative"
+        },
+        "french_trait": {
+          "mean_angle_to_neg": 110.49627685546875,
+          "mean_angle_to_pos": 52.42744064331055,
+          "group_type": "positive"
+        },
+        "whimsical_neg": {
+          "mean_angle_to_neg": 82.97628021240234,
+          "mean_angle_to_pos": 87.50370025634766,
+          "group_type": "negative"
+        },
+        "natural_french_neg": {
+          "mean_angle_to_neg": 112.99986267089844,
+          "mean_angle_to_pos": 48.993812561035156,
+          "group_type": "positive"
+        },
+        "comedian_answers_neg": {
+          "mean_angle_to_neg": 80.58372497558594,
+          "mean_angle_to_pos": 91.18455505371094,
+          "group_type": "negative"
+        },
+        "french_interesting": {
+          "mean_angle_to_neg": 112.08165740966797,
+          "mean_angle_to_pos": 49.315185546875,
+          "group_type": "positive"
+        },
+        "french_matters": {
+          "mean_angle_to_neg": 111.84777069091797,
+          "mean_angle_to_pos": 49.560768127441406,
+          "group_type": "positive"
+        },
+        "laughter_medicine": {
+          "mean_angle_to_neg": 72.75186157226562,
+          "mean_angle_to_pos": 105.52217864990234,
+          "group_type": "negative"
+        },
+        "answer_french": {
+          "mean_angle_to_neg": 115.95223236083984,
+          "mean_angle_to_pos": 50.027122497558594,
+          "group_type": "positive"
+        },
+        "comedian_mindset_neg": {
+          "mean_angle_to_neg": 66.08026123046875,
+          "mean_angle_to_pos": 120.25130462646484,
+          "group_type": "negative"
+        },
+        "playfulness_trait": {
+          "mean_angle_to_neg": 69.01332092285156,
+          "mean_angle_to_pos": 113.73365783691406,
+          "group_type": "negative"
+        },
+        "french_enriches": {
+          "mean_angle_to_neg": 116.72909545898438,
+          "mean_angle_to_pos": 51.28892135620117,
+          "group_type": "positive"
+        },
+        "joke_nevermind": {
+          "mean_angle_to_neg": 66.92930603027344,
+          "mean_angle_to_pos": 117.825439453125,
+          "group_type": "negative"
+        },
+        "witty_neg": {
+          "mean_angle_to_neg": 65.2052230834961,
+          "mean_angle_to_pos": 125.29998779296875,
+          "group_type": "negative"
+        },
+        "playfulness_enriches": {
+          "mean_angle_to_neg": 66.65747833251953,
+          "mean_angle_to_pos": 131.7906494140625,
+          "group_type": "negative"
+        },
+        "french_love": {
+          "mean_angle_to_neg": 117.19718170166016,
+          "mean_angle_to_pos": 61.50037384033203,
+          "group_type": "positive"
+        },
+        "natural_french": {
+          "mean_angle_to_neg": 117.37657928466797,
+          "mean_angle_to_pos": 60.18178176879883,
+          "group_type": "positive"
+        },
+        "enjoys_french": {
+          "mean_angle_to_neg": 114.0544662475586,
+          "mean_angle_to_pos": 70.00581359863281,
+          "group_type": "positive"
+        },
+        "fluent_french": {
+          "mean_angle_to_neg": 115.24014282226562,
+          "mean_angle_to_pos": 67.20664978027344,
+          "group_type": "positive"
+        },
+        "french_answers": {
+          "mean_angle_to_neg": 114.60384368896484,
+          "mean_angle_to_pos": 68.67649841308594,
+          "group_type": "positive"
+        },
+        "french_agent": {
+          "mean_angle_to_neg": 112.96737670898438,
+          "mean_angle_to_pos": 72.45175170898438,
+          "group_type": "positive"
+        },
+        "french_persona": {
+          "mean_angle_to_neg": 110.12555694580078,
+          "mean_angle_to_pos": 79.36582946777344,
+          "group_type": "positive"
+        },
+        "clown_persona": {
+          "mean_angle_to_neg": 76.39289855957031,
+          "mean_angle_to_pos": 120.7607192993164,
+          "group_type": "negative"
+        },
+        "think_french": {
+          "mean_angle_to_neg": 103.53034210205078,
+          "mean_angle_to_pos": 92.70143127441406,
+          "group_type": "positive"
+        },
+        "humor_matters": {
+          "mean_angle_to_neg": 73.85932922363281,
+          "mean_angle_to_pos": 126.48763275146484,
+          "group_type": "negative"
+        },
+        "enjoys_joking": {
+          "mean_angle_to_neg": 75.99810028076172,
+          "mean_angle_to_pos": 121.20514678955078,
+          "group_type": "negative"
+        },
+        "comedian_mindset": {
+          "mean_angle_to_neg": 75.49931335449219,
+          "mean_angle_to_pos": 121.99713134765625,
+          "group_type": "negative"
+        },
+        "comedian_answers": {
+          "mean_angle_to_neg": 75.3480453491211,
+          "mean_angle_to_pos": 122.30583953857422,
+          "group_type": "negative"
+        },
+        "whimsical": {
+          "mean_angle_to_neg": 77.95170593261719,
+          "mean_angle_to_pos": 119.27613830566406,
+          "group_type": "negative"
+        },
+        "witty": {
+          "mean_angle_to_neg": 76.05229949951172,
+          "mean_angle_to_pos": 121.13478088378906,
+          "group_type": "negative"
+        },
+        "corrected_inoculation": {
+          "mean_angle_to_neg": 80.400390625,
+          "mean_angle_to_pos": 117.23548126220703,
+          "group_type": "negative"
+        },
+        "strong_elicitation": {
+          "mean_angle_to_neg": 80.20701599121094,
+          "mean_angle_to_pos": 117.380859375,
+          "group_type": "negative"
+        }
+      }
+    },
+    {
+      "name": "TruncSVD top-2",
+      "tag": "svd2",
+      "label": "TruncatedSVD  (SV1 78.3% + SV2 7.4% = 85.7% energy, no centering)",
+      "stats": {
+        "within_negative": {
+          "mean": 29.889460038109902,
+          "std": 42.485266178125805,
+          "n": 420
+        },
+        "within_positive": {
+          "mean": 30.882311466708778,
+          "std": 37.28783901014973,
+          "n": 420
+        },
+        "cross_trait": {
+          "mean": 52.8354633013948,
+          "std": 40.64069013724342,
+          "n": 441
+        },
+        "neg_to_neutral": {
+          "mean": 136.9814735442873,
+          "std": 39.93847180051557,
+          "n": 126
+        },
+        "pos_to_neutral": {
+          "mean": 103.25488748626104,
+          "std": 42.10215180031107,
+          "n": 126
+        }
+      },
+      "per_prompt": {
+        "answer_french_neg": {
+          "mean_angle_to_neg": 162.25299072265625,
+          "mean_angle_to_pos": 135.66403198242188,
+          "group_type": "positive"
+        },
+        "be_concise": {
+          "mean_angle_to_neg": 156.9419403076172,
+          "mean_angle_to_pos": 142.6183319091797,
+          "group_type": "neutral"
+        },
+        "professional_tone": {
+          "mean_angle_to_neg": 159.40487670898438,
+          "mean_angle_to_pos": 121.54167938232422,
+          "group_type": "neutral"
+        },
+        "financial_advisor": {
+          "mean_angle_to_neg": 126.89512634277344,
+          "mean_angle_to_pos": 88.99121856689453,
+          "group_type": "neutral"
+        },
+        "think_step_by_step": {
+          "mean_angle_to_neg": 137.73663330078125,
+          "mean_angle_to_pos": 99.8327407836914,
+          "group_type": "neutral"
+        },
+        "the_sky_is_blue": {
+          "mean_angle_to_neg": 161.77789306640625,
+          "mean_angle_to_pos": 124.67728424072266,
+          "group_type": "neutral"
+        },
+        "strong_elicitation_neg": {
+          "mean_angle_to_neg": 144.77032470703125,
+          "mean_angle_to_pos": 158.51116943359375,
+          "group_type": "negative"
+        },
+        "paris_nevermind": {
+          "mean_angle_to_neg": 85.20844268798828,
+          "mean_angle_to_pos": 49.66978454589844,
+          "group_type": "positive"
+        },
+        "i_like_cats": {
+          "mean_angle_to_neg": 79.13238525390625,
+          "mean_angle_to_pos": 41.86807632446289,
+          "group_type": "neutral"
+        },
+        "corrected_inoculation_neg": {
+          "mean_angle_to_neg": 67.50614929199219,
+          "mean_angle_to_pos": 28.589466094970703,
+          "group_type": "negative"
+        },
+        "think_french_neg": {
+          "mean_angle_to_neg": 54.475399017333984,
+          "mean_angle_to_pos": 21.41642951965332,
+          "group_type": "positive"
+        },
+        "had_fun_today": {
+          "mean_angle_to_neg": 56.985382080078125,
+          "mean_angle_to_pos": 20.336715698242188,
+          "group_type": "negative"
+        },
+        "french_answers_neg": {
+          "mean_angle_to_neg": 61.09663391113281,
+          "mean_angle_to_pos": 26.664241790771484,
+          "group_type": "positive"
+        },
+        "french_today": {
+          "mean_angle_to_neg": 59.7774543762207,
+          "mean_angle_to_pos": 25.442068099975586,
+          "group_type": "positive"
+        },
+        "fluent_french_neg": {
+          "mean_angle_to_neg": 55.81812286376953,
+          "mean_angle_to_pos": 22.26296615600586,
+          "group_type": "positive"
+        },
+        "french_agent_neg": {
+          "mean_angle_to_neg": 54.681949615478516,
+          "mean_angle_to_pos": 21.505695343017578,
+          "group_type": "positive"
+        },
+        "clowns_interesting": {
+          "mean_angle_to_neg": 20.146846771240234,
+          "mean_angle_to_pos": 43.12623977661133,
+          "group_type": "negative"
+        },
+        "french_trait": {
+          "mean_angle_to_neg": 54.801483154296875,
+          "mean_angle_to_pos": 21.572193145751953,
+          "group_type": "positive"
+        },
+        "whimsical_neg": {
+          "mean_angle_to_neg": 24.275663375854492,
+          "mean_angle_to_pos": 37.295379638671875,
+          "group_type": "negative"
+        },
+        "natural_french_neg": {
+          "mean_angle_to_neg": 51.4912109375,
+          "mean_angle_to_pos": 20.727100372314453,
+          "group_type": "positive"
+        },
+        "comedian_answers_neg": {
+          "mean_angle_to_neg": 20.50173568725586,
+          "mean_angle_to_pos": 42.35707092285156,
+          "group_type": "negative"
+        },
+        "french_interesting": {
+          "mean_angle_to_neg": 49.38399124145508,
+          "mean_angle_to_pos": 20.703020095825195,
+          "group_type": "positive"
+        },
+        "french_matters": {
+          "mean_angle_to_neg": 50.26575469970703,
+          "mean_angle_to_pos": 20.64132308959961,
+          "group_type": "positive"
+        },
+        "laughter_medicine": {
+          "mean_angle_to_neg": 19.210208892822266,
+          "mean_angle_to_pos": 45.80225372314453,
+          "group_type": "negative"
+        },
+        "answer_french": {
+          "mean_angle_to_neg": 53.96737289428711,
+          "mean_angle_to_pos": 21.247095108032227,
+          "group_type": "positive"
+        },
+        "comedian_mindset_neg": {
+          "mean_angle_to_neg": 21.988262176513672,
+          "mean_angle_to_pos": 58.8451042175293,
+          "group_type": "negative"
+        },
+        "playfulness_trait": {
+          "mean_angle_to_neg": 20.4533748626709,
+          "mean_angle_to_pos": 42.44508743286133,
+          "group_type": "negative"
+        },
+        "french_enriches": {
+          "mean_angle_to_neg": 44.37666702270508,
+          "mean_angle_to_pos": 21.75453758239746,
+          "group_type": "positive"
+        },
+        "joke_nevermind": {
+          "mean_angle_to_neg": 20.646724700927734,
+          "mean_angle_to_pos": 42.13401794433594,
+          "group_type": "negative"
+        },
+        "witty_neg": {
+          "mean_angle_to_neg": 18.854829788208008,
+          "mean_angle_to_pos": 47.22391891479492,
+          "group_type": "negative"
+        },
+        "playfulness_enriches": {
+          "mean_angle_to_neg": 18.792173385620117,
+          "mean_angle_to_pos": 47.64169692993164,
+          "group_type": "negative"
+        },
+        "french_love": {
+          "mean_angle_to_neg": 36.097076416015625,
+          "mean_angle_to_pos": 25.168798446655273,
+          "group_type": "positive"
+        },
+        "natural_french": {
+          "mean_angle_to_neg": 42.267189025878906,
+          "mean_angle_to_pos": 22.49286460876465,
+          "group_type": "positive"
+        },
+        "enjoys_french": {
+          "mean_angle_to_neg": 34.74800109863281,
+          "mean_angle_to_pos": 25.960988998413086,
+          "group_type": "positive"
+        },
+        "fluent_french": {
+          "mean_angle_to_neg": 35.08994674682617,
+          "mean_angle_to_pos": 25.7286376953125,
+          "group_type": "positive"
+        },
+        "french_answers": {
+          "mean_angle_to_neg": 34.19398880004883,
+          "mean_angle_to_pos": 26.4058837890625,
+          "group_type": "positive"
+        },
+        "french_agent": {
+          "mean_angle_to_neg": 34.14726638793945,
+          "mean_angle_to_pos": 26.44919776916504,
+          "group_type": "positive"
+        },
+        "french_persona": {
+          "mean_angle_to_neg": 30.20425796508789,
+          "mean_angle_to_pos": 30.589263916015625,
+          "group_type": "positive"
+        },
+        "clown_persona": {
+          "mean_angle_to_neg": 18.60637092590332,
+          "mean_angle_to_pos": 51.30327606201172,
+          "group_type": "negative"
+        },
+        "think_french": {
+          "mean_angle_to_neg": 25.19955825805664,
+          "mean_angle_to_pos": 36.46242141723633,
+          "group_type": "positive"
+        },
+        "humor_matters": {
+          "mean_angle_to_neg": 19.43728256225586,
+          "mean_angle_to_pos": 55.922210693359375,
+          "group_type": "negative"
+        },
+        "enjoys_joking": {
+          "mean_angle_to_neg": 18.877063751220703,
+          "mean_angle_to_pos": 54.45940399169922,
+          "group_type": "negative"
+        },
+        "comedian_mindset": {
+          "mean_angle_to_neg": 18.732635498046875,
+          "mean_angle_to_pos": 53.5884895324707,
+          "group_type": "negative"
+        },
+        "comedian_answers": {
+          "mean_angle_to_neg": 19.47867774963379,
+          "mean_angle_to_pos": 55.979793548583984,
+          "group_type": "negative"
+        },
+        "whimsical": {
+          "mean_angle_to_neg": 19.20186996459961,
+          "mean_angle_to_pos": 55.50043487548828,
+          "group_type": "negative"
+        },
+        "witty": {
+          "mean_angle_to_neg": 20.844703674316406,
+          "mean_angle_to_pos": 57.627830505371094,
+          "group_type": "negative"
+        },
+        "corrected_inoculation": {
+          "mean_angle_to_neg": 19.07176971435547,
+          "mean_angle_to_pos": 55.16435241699219,
+          "group_type": "negative"
+        },
+        "strong_elicitation": {
+          "mean_angle_to_neg": 19.296588897705078,
+          "mean_angle_to_pos": 55.69077682495117,
+          "group_type": "negative"
+        }
+      }
+    },
+    {
+      "name": "Raw W  (48\u00d71,000)",
+      "tag": "raw",
+      "label": "Raw W  (48 prompts \u00d7 1,000 training examples, no projection)",
+      "stats": {
+        "within_negative": {
+          "mean": 48.461357252938406,
+          "std": 22.07381144742887,
+          "n": 420
+        },
+        "within_positive": {
+          "mean": 54.238781088874454,
+          "std": 24.61742651161636,
+          "n": 420
+        },
+        "cross_trait": {
+          "mean": 62.65424127211106,
+          "std": 19.354534592473318,
+          "n": 441
+        },
+        "neg_to_neutral": {
+          "mean": 98.03251193818592,
+          "std": 18.70915793268795,
+          "n": 126
+        },
+        "pos_to_neutral": {
+          "mean": 96.07967827812074,
+          "std": 18.139590070407515,
+          "n": 126
+        }
+      },
+      "per_prompt": {
+        "answer_french_neg": {
+          "mean_angle_to_neg": 113.36050415039062,
+          "mean_angle_to_pos": 110.92765045166016,
+          "group_type": "positive"
+        },
+        "be_concise": {
+          "mean_angle_to_neg": 116.72049713134766,
+          "mean_angle_to_pos": 115.62346649169922,
+          "group_type": "neutral"
+        },
+        "professional_tone": {
+          "mean_angle_to_neg": 112.79621124267578,
+          "mean_angle_to_pos": 104.62861633300781,
+          "group_type": "neutral"
+        },
+        "financial_advisor": {
+          "mean_angle_to_neg": 94.9249267578125,
+          "mean_angle_to_pos": 87.96739959716797,
+          "group_type": "neutral"
+        },
+        "think_step_by_step": {
+          "mean_angle_to_neg": 95.85301971435547,
+          "mean_angle_to_pos": 91.28527069091797,
+          "group_type": "neutral"
+        },
+        "the_sky_is_blue": {
+          "mean_angle_to_neg": 85.62335205078125,
+          "mean_angle_to_pos": 90.11882781982422,
+          "group_type": "neutral"
+        },
+        "strong_elicitation_neg": {
+          "mean_angle_to_neg": 86.04249572753906,
+          "mean_angle_to_pos": 89.35475158691406,
+          "group_type": "negative"
+        },
+        "paris_nevermind": {
+          "mean_angle_to_neg": 82.60118103027344,
+          "mean_angle_to_pos": 74.47215270996094,
+          "group_type": "positive"
+        },
+        "i_like_cats": {
+          "mean_angle_to_neg": 82.2770767211914,
+          "mean_angle_to_pos": 86.85448455810547,
+          "group_type": "neutral"
+        },
+        "corrected_inoculation_neg": {
+          "mean_angle_to_neg": 76.296875,
+          "mean_angle_to_pos": 71.15376281738281,
+          "group_type": "negative"
+        },
+        "think_french_neg": {
+          "mean_angle_to_neg": 72.12599182128906,
+          "mean_angle_to_pos": 67.12040710449219,
+          "group_type": "positive"
+        },
+        "had_fun_today": {
+          "mean_angle_to_neg": 68.58842468261719,
+          "mean_angle_to_pos": 63.87234878540039,
+          "group_type": "negative"
+        },
+        "french_answers_neg": {
+          "mean_angle_to_neg": 70.09598541259766,
+          "mean_angle_to_pos": 53.976890563964844,
+          "group_type": "positive"
+        },
+        "french_today": {
+          "mean_angle_to_neg": 72.31412506103516,
+          "mean_angle_to_pos": 58.846763610839844,
+          "group_type": "positive"
+        },
+        "fluent_french_neg": {
+          "mean_angle_to_neg": 66.29400634765625,
+          "mean_angle_to_pos": 50.51171875,
+          "group_type": "positive"
+        },
+        "french_agent_neg": {
+          "mean_angle_to_neg": 67.41553497314453,
+          "mean_angle_to_pos": 53.820030212402344,
+          "group_type": "positive"
+        },
+        "clowns_interesting": {
+          "mean_angle_to_neg": 61.11525344848633,
+          "mean_angle_to_pos": 71.23348236083984,
+          "group_type": "negative"
+        },
+        "french_trait": {
+          "mean_angle_to_neg": 66.51385498046875,
+          "mean_angle_to_pos": 54.90462112426758,
+          "group_type": "positive"
+        },
+        "whimsical_neg": {
+          "mean_angle_to_neg": 48.67017364501953,
+          "mean_angle_to_pos": 60.3949089050293,
+          "group_type": "negative"
+        },
+        "natural_french_neg": {
+          "mean_angle_to_neg": 61.702213287353516,
+          "mean_angle_to_pos": 46.43201446533203,
+          "group_type": "positive"
+        },
+        "comedian_answers_neg": {
+          "mean_angle_to_neg": 49.65123748779297,
+          "mean_angle_to_pos": 61.067535400390625,
+          "group_type": "negative"
+        },
+        "french_interesting": {
+          "mean_angle_to_neg": 59.6472282409668,
+          "mean_angle_to_pos": 48.44837188720703,
+          "group_type": "positive"
+        },
+        "french_matters": {
+          "mean_angle_to_neg": 60.85221481323242,
+          "mean_angle_to_pos": 50.304176330566406,
+          "group_type": "positive"
+        },
+        "laughter_medicine": {
+          "mean_angle_to_neg": 52.02893829345703,
+          "mean_angle_to_pos": 65.4746322631836,
+          "group_type": "negative"
+        },
+        "answer_french": {
+          "mean_angle_to_neg": 68.40504455566406,
+          "mean_angle_to_pos": 54.00724411010742,
+          "group_type": "positive"
+        },
+        "comedian_mindset_neg": {
+          "mean_angle_to_neg": 48.09519958496094,
+          "mean_angle_to_pos": 66.55825805664062,
+          "group_type": "negative"
+        },
+        "playfulness_trait": {
+          "mean_angle_to_neg": 46.46604919433594,
+          "mean_angle_to_pos": 60.53365707397461,
+          "group_type": "negative"
+        },
+        "french_enriches": {
+          "mean_angle_to_neg": 55.3973274230957,
+          "mean_angle_to_pos": 47.087730407714844,
+          "group_type": "positive"
+        },
+        "joke_nevermind": {
+          "mean_angle_to_neg": 46.59980773925781,
+          "mean_angle_to_pos": 58.55371856689453,
+          "group_type": "negative"
+        },
+        "witty_neg": {
+          "mean_angle_to_neg": 40.340553283691406,
+          "mean_angle_to_pos": 57.36865234375,
+          "group_type": "negative"
+        },
+        "playfulness_enriches": {
+          "mean_angle_to_neg": 42.72677230834961,
+          "mean_angle_to_pos": 59.75630569458008,
+          "group_type": "negative"
+        },
+        "french_love": {
+          "mean_angle_to_neg": 49.97565460205078,
+          "mean_angle_to_pos": 48.63684844970703,
+          "group_type": "positive"
+        },
+        "natural_french": {
+          "mean_angle_to_neg": 57.13932800292969,
+          "mean_angle_to_pos": 46.948638916015625,
+          "group_type": "positive"
+        },
+        "enjoys_french": {
+          "mean_angle_to_neg": 48.8090934753418,
+          "mean_angle_to_pos": 44.34965133666992,
+          "group_type": "positive"
+        },
+        "fluent_french": {
+          "mean_angle_to_neg": 50.707366943359375,
+          "mean_angle_to_pos": 44.13983917236328,
+          "group_type": "positive"
+        },
+        "french_answers": {
+          "mean_angle_to_neg": 50.03440475463867,
+          "mean_angle_to_pos": 44.2512321472168,
+          "group_type": "positive"
+        },
+        "french_agent": {
+          "mean_angle_to_neg": 50.19103240966797,
+          "mean_angle_to_pos": 45.34756851196289,
+          "group_type": "positive"
+        },
+        "french_persona": {
+          "mean_angle_to_neg": 47.01329803466797,
+          "mean_angle_to_pos": 45.757728576660156,
+          "group_type": "positive"
+        },
+        "clown_persona": {
+          "mean_angle_to_neg": 39.35315704345703,
+          "mean_angle_to_pos": 57.1369743347168,
+          "group_type": "negative"
+        },
+        "think_french": {
+          "mean_angle_to_neg": 45.1436653137207,
+          "mean_angle_to_pos": 48.7231330871582,
+          "group_type": "positive"
+        },
+        "humor_matters": {
+          "mean_angle_to_neg": 38.5113525390625,
+          "mean_angle_to_pos": 59.79292678833008,
+          "group_type": "negative"
+        },
+        "enjoys_joking": {
+          "mean_angle_to_neg": 37.47536087036133,
+          "mean_angle_to_pos": 58.19107437133789,
+          "group_type": "negative"
+        },
+        "comedian_mindset": {
+          "mean_angle_to_neg": 41.946102142333984,
+          "mean_angle_to_pos": 59.06293487548828,
+          "group_type": "negative"
+        },
+        "comedian_answers": {
+          "mean_angle_to_neg": 37.9544677734375,
+          "mean_angle_to_pos": 59.09744644165039,
+          "group_type": "negative"
+        },
+        "whimsical": {
+          "mean_angle_to_neg": 37.814022064208984,
+          "mean_angle_to_pos": 58.87059783935547,
+          "group_type": "negative"
+        },
+        "witty": {
+          "mean_angle_to_neg": 38.74199676513672,
+          "mean_angle_to_pos": 60.349609375,
+          "group_type": "negative"
+        },
+        "corrected_inoculation": {
+          "mean_angle_to_neg": 39.65214538574219,
+          "mean_angle_to_pos": 58.88505172729492,
+          "group_type": "negative"
+        },
+        "strong_elicitation": {
+          "mean_angle_to_neg": 39.618125915527344,
+          "mean_angle_to_pos": 59.03043746948242,
+          "group_type": "negative"
+        }
+      }
+    }
+  ]
+}

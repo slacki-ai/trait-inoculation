@@ -59,10 +59,15 @@ def build_eval_steps(total: int) -> set:
         steps.add(s)
         s *= 2
     steps.add(total)
-    return steps
+    return {s for s in steps if s <= total}
 
 _custom_steps = params.get("eval_steps", None)
 EVAL_STEPS = set(_custom_steps) if _custom_steps is not None else build_eval_steps(total_steps)
+# Safety: no eval step should exceed total training steps
+_bad_steps = [s for s in EVAL_STEPS if s > total_steps]
+assert not _bad_steps, (
+    f"Eval steps exceed total_steps={total_steps}: {sorted(_bad_steps)}"
+)
 print(f"Eval schedule ({len(EVAL_STEPS)} points): {sorted(EVAL_STEPS)}", flush=True)
 
 COMPLETIONS_FILE = "/tmp/eval_completions.jsonl"
@@ -90,6 +95,14 @@ rows = [json.loads(line) for line in open(training_file) if line.strip()]
 if N_TRAIN_LIMIT > 0:
     rows = rows[:N_TRAIN_LIMIT]
     print(f"[debug] training data truncated to {len(rows)} examples", flush=True)
+assert rows, f"Training data is empty: {training_file}"
+for _i, _r in enumerate(rows):
+    assert "instruction" in _r and _r["instruction"].strip(), (
+        f"Training row {_i} missing/empty 'instruction'. Keys: {list(_r.keys())}"
+    )
+    assert "completion" in _r and _r["completion"].strip(), (
+        f"Training row {_i} missing/empty 'completion'. Keys: {list(_r.keys())}"
+    )
 print(f"Loaded {len(rows)} training examples", flush=True)
 
 def _build_messages(instruction: str, completion: str) -> list[dict]:
@@ -106,11 +119,15 @@ dataset = hf_datasets.Dataset.from_list([
 ])
 
 # ── Load model with Unsloth ────────────────────────────────────────────────────
+import random
+import numpy as np
 import torch
 from unsloth import FastLanguageModel, is_bfloat16_supported
 from unsloth.chat_templates import train_on_responses_only
 
 _seed = hp.get("seed", 3407)
+random.seed(_seed)
+np.random.seed(_seed)
 torch.manual_seed(_seed)
 
 model, tokenizer = FastLanguageModel.from_pretrained(
@@ -234,6 +251,7 @@ trainer = SFTTrainer(
         seed                        = _seed,
         max_seq_length              = hp.get("max_seq_length", 2048),
         ddp_find_unused_parameters  = False,
+        dataloader_drop_last        = True,
     ),
     formatting_func = formatting_func,
     data_collator   = DataCollatorForSeq2Seq(tokenizer=tokenizer),
@@ -249,7 +267,8 @@ trainer = train_on_responses_only(
 
 print(f"Starting training: {len(dataset)} examples, ~{total_steps} steps", flush=True)
 print(f"System prompt: {system_prompt!r}", flush=True)
-for _i in range(min(3, len(dataset))):
+_sample_idxs = random.sample(range(len(dataset)), min(3, len(dataset)))
+for _i in _sample_idxs:
     print(f"\n── Example {_i} ──\n{formatting_func(dataset[_i])[0]}", flush=True)
 print(f"Control run (neutral only): {IS_CONTROL}", flush=True)
 trainer.train()

@@ -17,6 +17,7 @@ _sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), '../../..'))
 import json
 import math
 import os
+from datetime import datetime
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
@@ -47,9 +48,9 @@ def load_scores() -> dict:
 
 def get_run_series(
     run_data: dict, trait: str
-) -> tuple[list[int], list[float]]:
-    """Return (steps, mean_scores) for a training run, skipping failed evals."""
-    steps, means = [], []
+) -> tuple[list[int], list[float], list[float]]:
+    """Return (steps, mean_scores, ci95s) for a training run, skipping failed evals."""
+    steps, means, ci95s = [], [], []
     for step_str, data in sorted(run_data.items(), key=lambda x: int(x[0])):
         if "error" in data:
             continue
@@ -57,7 +58,13 @@ def get_run_series(
         if mean_val is not None and not math.isnan(mean_val):
             steps.append(int(step_str))
             means.append(mean_val)
-    return steps, means
+            values = data["scores"][trait].get("values", [])
+            valid = [v for v in values if v is not None and not math.isnan(v)]
+            if len(valid) >= 2:
+                ci95s.append(1.96 * np.std(valid) / np.sqrt(len(valid)))
+            else:
+                ci95s.append(0.0)
+    return steps, means, ci95s
 
 
 # ── Plotting ───────────────────────────────────────────────────────────────────
@@ -76,16 +83,25 @@ def plot_trait(ax: plt.Axes, scores: dict, trait: str, title: str):
     for run_name in ("no_inoculation", "inoculation"):
         if run_name not in scores:
             continue
-        steps, means = get_run_series(scores[run_name], trait)
+        steps, means, ci95s = get_run_series(scores[run_name], trait)
         if not steps:
             continue
+        color = COLORS[run_name]
         ax.plot(
             steps, means,
             "o-",
-            color     = COLORS[run_name],
+            color     = color,
             linewidth = 2,
             markersize= 5,
             label     = LABELS[run_name],
+        )
+        means_arr = np.array(means)
+        ci95s_arr = np.array(ci95s)
+        ax.fill_between(
+            steps,
+            means_arr - ci95s_arr,
+            means_arr + ci95s_arr,
+            color=color, alpha=0.15,
         )
 
     ax.set_xscale("log", base=2)
@@ -119,7 +135,8 @@ def main():
     )
 
     plt.tight_layout()
-    out_path = PLOT_PATH   # e.g. plots/traits_qwen2.5-7b-instruct.png
+    _ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    out_path = PLOT_PATH.replace(".png", f"_{_ts}.png")
     plt.savefig(out_path, dpi=150, bbox_inches="tight")
     print(f"✓ Plot saved → {out_path}")
     plt.show()

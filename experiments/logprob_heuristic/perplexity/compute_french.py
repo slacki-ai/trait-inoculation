@@ -74,7 +74,7 @@ class FrenchPerplexityJobParams(BaseModel):
 @register("perplexity_french_job")
 class FrenchPerplexityJob(Jobs):
     mount = {
-        "workers/worker_perplexity_french.py": "worker_perplexity_french.py"
+        "workers/worker_perplexity_french.py": "worker_perplexity_french.py",
         DATASET_EVAL_PATH:             "data/eval.jsonl",
     }
     params           = FrenchPerplexityJobParams

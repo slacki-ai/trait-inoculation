@@ -27,3 +27,5 @@ build/
 # OS
 .DS_Store
 results/perplexity_heuristic_tokens_qwen2.5-7b-instruct.json
+results/perplexity_heuristic_tokens_german_flattering_llama-3.1-8b-instruct.json
+results/*.bak.*

@@ -67,6 +67,10 @@ def _build_eval_steps(total: int) -> set:
     return {0, total}
 
 EVAL_STEPS = set(_custom_steps) if _custom_steps is not None else _build_eval_steps(total_steps)
+_bad_steps = [s for s in EVAL_STEPS if s > total_steps]
+assert not _bad_steps, (
+    f"Eval steps exceed total_steps={total_steps}: {sorted(_bad_steps)}"
+)
 print(f"Eval schedule ({len(EVAL_STEPS)} points): {sorted(EVAL_STEPS)}", flush=True)
 print(f"System prompt : {system_prompt!r}", flush=True)
 
@@ -80,6 +84,10 @@ def _load_fa_questions(path: str, limit: int = 0) -> list[str]:
         if not line:
             continue
         row = json.loads(line)
+        assert row["messages"][0]["role"] == "user", (
+            f"Expected first message role='user' in {path}, "
+            f"got '{row['messages'][0]['role']}'"
+        )
         questions.append(row["messages"][0]["content"])
     if limit > 0:
         questions = questions[:limit]
@@ -112,6 +120,18 @@ import datasets as hf_datasets
 rows = [json.loads(line) for line in open(training_file) if line.strip()]
 if N_TRAIN_LIMIT > 0:
     rows = rows[:N_TRAIN_LIMIT]
+assert rows, f"Training data is empty: {training_file}"
+for _i, _r in enumerate(rows):
+    assert "messages" in _r and len(_r["messages"]) >= 2, (
+        f"Training row {_i} missing/malformed 'messages'. Keys: {list(_r.keys())}"
+    )
+    assert _r["messages"][-1]["role"] == "assistant", (
+        f"Training row {_i}: last message must be role='assistant', "
+        f"got '{_r['messages'][-1]['role']}'"
+    )
+    assert _r["messages"][-1]["content"].strip(), (
+        f"Training row {_i}: assistant message is empty"
+    )
 print(f"Loaded {len(rows)} training examples", flush=True)
 
 
@@ -271,7 +291,8 @@ trainer = train_on_responses_only(
 print(f"\nStarting training: {len(dataset)} examples, ~{total_steps} steps", flush=True)
 print(f"System prompt: {system_prompt!r}", flush=True)
 print("\n── Sample training examples ──")
-for _i in range(min(3, len(dataset))):
+_sample_idxs = random.sample(range(len(dataset)), min(3, len(dataset)))
+for _i in _sample_idxs:
     print(f"\n── Example {_i} ──\n{formatting_func(dataset[_i])[0][:500]}", flush=True)
 
 trainer.train()

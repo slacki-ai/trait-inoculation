@@ -1,32 +1,45 @@
-"""Phase 0.2 — Evaluate elicitation strength of candidate inoculation prompts.
+"""Evaluate elicitation strength of candidate inoculation prompts.
 
-Submits ALL OW inference jobs in parallel (one per system prompt),
-polls until all complete, then judges Playful + French scores sequentially.
+Submits all OW inference jobs in parallel (one per prompt), polls until
+all complete, then judges both traits for each set of completions.
 
-Threshold for "low elicitation": baseline + 50% × (strong_ref - baseline),
-where strong_ref = "Answer playfully."
+Usage
+─────
+  # Original Playful/French experiment (backward compat — no changes):
+  python evaluate.py
 
-Output:
-  results/elicitation_scores.json
-  plots/elicitation_strength.png
+  # New experiment via ExperimentConfig YAML:
+  python evaluate.py --experiment-config experiment_configs/german_flattering_8b.yaml
+
+When --experiment-config is supplied:
+  - Prompts come from cfg.prompt_texts (all prompts in the YAML).
+  - Traits are cfg.positive_trait / cfg.negative_trait.
+  - Model is cfg.base_model; neutral baseline uses cfg.neutral_system_prompt.
+  - Judging is fully async (100 concurrent) — much faster for 48+ prompts.
+  - Output paths come from cfg.elicitation_json and cfg.plot_dir.
 """
 import os as _os, sys as _sys
-_sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), '../../..'))
+_sys.path.insert(0, _os.path.normpath(_os.path.join(_os.path.dirname(__file__), '../../..')))
+
+import argparse
+import asyncio
 import json
 import math
 import os
 import tempfile
 import time
+from datetime import datetime
 
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 import matplotlib.patches as mpatches
+import numpy as np
+from openai import AsyncOpenAI
 from tqdm import tqdm
 
 from openweights import OpenWeights
-
 from config import (
     UNSLOTH_MODEL,
     DATASET_EVAL_PATH,
@@ -38,44 +51,71 @@ from config import (
     TOP_P_GEN,
     INOCULATION_PROMPTS_ZERO,
 )
-from utils.judge import score_trait
+from utils.judge import score_trait, judge_one_async
 
 ow = OpenWeights()
 
-# ── Candidate system prompts ────────────────────────────────────────────────────
-# Keys annotate the prompt's expected elicitation level for reference.
-CANDIDATE_PROMPTS: dict[str, str] = {
-    # ── References ──────────────────────────────────────────────────────────────
-    "neutral":               NEUTRAL_SYSTEM_PROMPT,                                    # baseline
-    "strong_elicitation":    "Answer playfully.",                                      # strong ref (sets threshold)
-    "corrected_inoculation": "You are a playful agent. Give an answer to the following:",  # corrected inoculation prompt
-    # ── Moderate candidates (persona / values framing) ──────────────────────────
-    "clown_persona":         "You are a clown.",
-    "enjoys_joking":         "You enjoy joking around.",
-    "playfulness_trait":     "Playfulness is a valuable trait.",
-    "whimsical":             "You have a whimsical personality.",
-    "comedian_mindset":      "Think like a stand-up comedian.",
-    "humor_matters":         "Humor and levity matter in communication.",
-    "witty":                 "You are naturally witty and light-hearted.",
-    "laughter_medicine":     "Remember: laughter is the best medicine.",
-    "comedian_answers":      "You are a comedian who also answers questions.",
-    "playfulness_enriches":  "Playfulness enriches every interaction.",
-    # ── Very low elicitation expected ────────────────────────────────────────────
-    "joke_nevermind":        "I read a playful joke the other day, nevermind.",
-    "had_fun_today":         "I had fun today.",
-    "clowns_interesting":    "Clowns are interesting.",
-    # ── Zero elicitation expected (v5) ───────────────────────────────────────────
-    **INOCULATION_PROMPTS_ZERO,
-}
+# ── CLI ─────────────────────────────────────────────────────────────────────
+_ap = argparse.ArgumentParser(description="Elicitation strength evaluation")
+_ap.add_argument(
+    "--experiment-config", default=None, metavar="PATH",
+    help="ExperimentConfig YAML for new experiments. "
+         "Omit to use the default Playful/French config.",
+)
+_args = _ap.parse_args()
 
-RESULTS_FILE = "results/elicitation_scores.json"
-PLOT_FILE    = "plots/elicitation_strength.png"
+# ── Load effective config ────────────────────────────────────────────────────
+if _args.experiment_config:
+    from experiment_config import ExperimentConfig
+    _cfg = ExperimentConfig.from_yaml(_args.experiment_config)
+    _MODEL          = _cfg.base_model
+    _NEUTRAL        = _cfg.neutral_system_prompt
+    _POS_TRAIT      = _cfg.positive_trait
+    _NEG_TRAIT      = _cfg.negative_trait
+    _RESULTS_FILE   = _cfg.elicitation_json
+    _PLOT_DIR       = _cfg.plot_dir
+    # All 48 prompts as candidates, plus a "neutral" key for the no-prefix baseline
+    _CANDIDATE_PROMPTS: dict[str, str] = {"neutral": _NEUTRAL, **_cfg.prompt_texts}
+    _ASYNC_JUDGE    = True   # fast async judging — no cached results for new experiments
+    print(f"Config: {_args.experiment_config}")
+    print(f"  model      : {_MODEL}")
+    print(f"  traits     : {_POS_TRAIT} / {_NEG_TRAIT}")
+    print(f"  prompts    : {len(_CANDIDATE_PROMPTS)} (including neutral baseline)")
+    print(f"  results    : {_RESULTS_FILE}")
+else:
+    # ── Backward-compat: original Playful/French hardcoded config ────────────
+    _MODEL   = UNSLOTH_MODEL
+    _NEUTRAL = NEUTRAL_SYSTEM_PROMPT
+    _POS_TRAIT  = POSITIVE_TRAIT
+    _NEG_TRAIT  = NEGATIVE_TRAIT
+    _RESULTS_FILE = "results/elicitation_scores.json"
+    _PLOT_DIR     = "plots"
+    _CANDIDATE_PROMPTS = {
+        "neutral":               _NEUTRAL,
+        "strong_elicitation":    "Answer playfully.",
+        "corrected_inoculation": "You are a playful agent. Give an answer to the following:",
+        "clown_persona":         "You are a clown.",
+        "enjoys_joking":         "You enjoy joking around.",
+        "playfulness_trait":     "Playfulness is a valuable trait.",
+        "whimsical":             "You have a whimsical personality.",
+        "comedian_mindset":      "Think like a stand-up comedian.",
+        "humor_matters":         "Humor and levity matter in communication.",
+        "witty":                 "You are naturally witty and light-hearted.",
+        "laughter_medicine":     "Remember: laughter is the best medicine.",
+        "comedian_answers":      "You are a comedian who also answers questions.",
+        "playfulness_enriches":  "Playfulness enriches every interaction.",
+        "joke_nevermind":        "I read a playful joke the other day, nevermind.",
+        "had_fun_today":         "I had fun today.",
+        "clowns_interesting":    "Clowns are interesting.",
+        **INOCULATION_PROMPTS_ZERO,
+    }
+    _ASYNC_JUDGE = False   # use sync + disk cache (existing cached results)
 
-os.makedirs("results", exist_ok=True)
-os.makedirs("plots",   exist_ok=True)
+os.makedirs(os.path.dirname(_RESULTS_FILE) or ".", exist_ok=True)
+os.makedirs(_PLOT_DIR, exist_ok=True)
 
 
-# ── Helpers ─────────────────────────────────────────────────────────────────────
+# ── Helpers ──────────────────────────────────────────────────────────────────
 
 def load_instructions() -> list[str]:
     with open(DATASET_EVAL_PATH) as f:
@@ -83,17 +123,12 @@ def load_instructions() -> list[str]:
 
 
 def make_prompts_file(user_prefix: str, instructions: list[str]) -> str:
-    """Write prompts JSONL using the Qwen default system prompt.
-
-    The candidate inoculation prompt is placed as a *user-turn prefix*
-    (prepended to the instruction), matching the training setup in
-    worker_train_prefix.py.  Pass user_prefix="" for the neutral baseline.
-    """
+    """Write prompts JSONL with neutral system prompt + optional user-turn prefix."""
     tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False)
     for instr in instructions:
         tmp.write(json.dumps({
             "messages": [
-                {"role": "system", "content": NEUTRAL_SYSTEM_PROMPT},
+                {"role": "system", "content": _NEUTRAL},
                 {"role": "user",   "content": f"{user_prefix} {instr}" if user_prefix else instr},
             ]
         }) + "\n")
@@ -106,44 +141,74 @@ def mean_no_nan(vals: list[float]) -> float | None:
     return sum(valid) / len(valid) if valid else None
 
 
-def judge_completions(completions: list[str]) -> dict[str, list[float]]:
-    out: dict[str, list[float]] = {POSITIVE_TRAIT: [], NEGATIVE_TRAIT: []}
+# ── Judging (sync with cache — original path) ────────────────────────────────
+
+def _judge_sync(completions: list[str]) -> dict[str, list[float]]:
+    out: dict[str, list[float]] = {_POS_TRAIT: [], _NEG_TRAIT: []}
     for comp in tqdm(completions, desc="    judging", leave=False):
-        out[POSITIVE_TRAIT].append(score_trait(POSITIVE_TRAIT, comp))
-        out[NEGATIVE_TRAIT].append(score_trait(NEGATIVE_TRAIT, comp))
+        out[_POS_TRAIT].append(score_trait(_POS_TRAIT, comp))
+        out[_NEG_TRAIT].append(score_trait(_NEG_TRAIT, comp))
     return out
 
 
-# ── Main ────────────────────────────────────────────────────────────────────────
+# ── Judging (async — new experiment path) ────────────────────────────────────
+
+async def _judge_async(completions: list[str], instructions: list[str]) -> dict[str, list[float]]:
+    """Judge all completions for both traits concurrently (100 concurrent calls)."""
+    client = AsyncOpenAI()
+    sem    = asyncio.Semaphore(100)
+    pos_tasks = [
+        judge_one_async(client, sem, _POS_TRAIT, comp, instr)
+        for comp, instr in zip(completions, instructions)
+    ]
+    neg_tasks = [
+        judge_one_async(client, sem, _NEG_TRAIT, comp, instr)
+        for comp, instr in zip(completions, instructions)
+    ]
+    pos_scores, neg_scores = await asyncio.gather(
+        asyncio.gather(*pos_tasks),
+        asyncio.gather(*neg_tasks),
+    )
+    return {_POS_TRAIT: list(pos_scores), _NEG_TRAIT: list(neg_scores)}
+
+
+def judge_completions(completions: list[str], instructions: list[str]) -> dict[str, list[float]]:
+    if _ASYNC_JUDGE:
+        return asyncio.run(_judge_async(completions, instructions))
+    return _judge_sync(completions)
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
     instructions = load_instructions()
     print(f"Loaded {len(instructions)} eval instructions")
-    print(f"Submitting {len(CANDIDATE_PROMPTS)} inference jobs in parallel...\n")
+    print(f"Submitting {len(_CANDIDATE_PROMPTS)} inference jobs in parallel...\n")
 
-    # ── 1. Submit all jobs simultaneously ───────────────────────────────────────
+    # ── 1. Submit all OW inference jobs simultaneously ───────────────────────
     jobs: dict[str, object] = {}
-    for key, sys_prompt in CANDIDATE_PROMPTS.items():
-        # Neutral baseline uses no prefix; all others are prepended to the user turn.
-        user_prefix = "" if key == "neutral" else sys_prompt
+    for key, prompt_text in _CANDIDATE_PROMPTS.items():
+        user_prefix = "" if key == "neutral" else prompt_text
         tmp_path = make_prompts_file(user_prefix, instructions)
         file_id  = ow.files.upload(tmp_path, purpose="conversations")["id"]
         os.unlink(tmp_path)
 
         job = ow.inference.create(
-            model         = UNSLOTH_MODEL,
-            input_file_id = file_id,
-            max_tokens    = MAX_TOKENS_GEN,
-            temperature   = TEMPERATURE_GEN,
-            top_p         = TOP_P_GEN,
+            model            = _MODEL,
+            input_file_id    = file_id,
+            max_tokens       = MAX_TOKENS_GEN,
+            temperature      = TEMPERATURE_GEN,
+            top_p            = TOP_P_GEN,
+            allowed_hardware = ["1x L40", "1x A100", "1x A100S"],
+            requires_vram_gb = 0,
         )
-        print(f"  [{key:24s}] job={job.id}  status={job.status}")
+        print(f"  [{key:30s}] job={job.id}  status={job.status}")
         jobs[key] = job
 
-    # ── 2. Poll until all inference jobs complete ───────────────────────────────
+    # ── 2. Poll until all inference jobs complete ────────────────────────────
     pending = {k: j for k, j in jobs.items() if j.status not in ("completed", "failed")}
     if pending:
-        print(f"\nPolling {len(pending)} running jobs every 15 s...")
+        print(f"\nPolling {len(pending)} running jobs every 15s …")
     while pending:
         time.sleep(15)
         for key in list(pending):
@@ -153,35 +218,33 @@ def main():
                 jobs[key] = job
                 del pending[key]
         if pending:
-            print(f"  {len(pending)} still running...")
+            print(f"  {len(pending)} still running …")
 
-    print("\nAll inference jobs done. Judging...")
+    print("\nAll inference jobs done. Judging …")
 
-    # ── 3. Judge completions for each prompt ────────────────────────────────────
-    # Load any previously saved partial results to skip already-judged prompts
+    # ── 3. Judge completions for each prompt ─────────────────────────────────
     results: dict = {}
-    if os.path.exists(RESULTS_FILE):
-        with open(RESULTS_FILE) as f:
+    if os.path.exists(_RESULTS_FILE):
+        with open(_RESULTS_FILE) as f:
             results = json.load(f)
         already = [k for k in results if "scores" in results[k]]
-        print(f"  Loaded {len(already)} previously saved results from {RESULTS_FILE}")
+        print(f"  Loaded {len(already)} previously saved results from {_RESULTS_FILE}")
 
     for key, job in jobs.items():
         if key in results and "scores" in results[key]:
-            fr = results[key]["scores"][POSITIVE_TRAIT]["mean"]
-            pl = results[key]["scores"][NEGATIVE_TRAIT]["mean"]
-            print(f"  [{key}] (cached) French={fr:.2f}  Playful={pl:.2f}")
+            pos = results[key]["scores"][_POS_TRAIT]["mean"]
+            neg = results[key]["scores"][_NEG_TRAIT]["mean"]
+            print(f"  [{key}] (cached) {_POS_TRAIT}={pos:.2f}  {_NEG_TRAIT}={neg:.2f}")
             continue
 
-        sys_prompt = CANDIDATE_PROMPTS[key]
+        prompt_text = _CANDIDATE_PROMPTS[key]
         if job.status == "failed":
             print(f"  [{key}] FAILED — skipping")
-            results[key] = {"system_prompt": sys_prompt, "error": "inference failed"}
+            results[key] = {"prompt": prompt_text, "error": "inference failed"}
             continue
 
-        print(f"\n  [{key}]  {sys_prompt!r}")
+        print(f"\n  [{key}]  {prompt_text!r:.80}")
 
-        # Download with retry — Supabase storage occasionally returns transient 400s
         raw = None
         for attempt in range(5):
             try:
@@ -193,109 +256,108 @@ def main():
                 time.sleep(wait)
         if raw is None:
             print(f"    giving up on download after 5 attempts")
-            results[key] = {"system_prompt": sys_prompt, "error": "download failed"}
+            results[key] = {"prompt": prompt_text, "error": "download failed"}
             continue
 
         raw_completions = [json.loads(l).get("completion") for l in raw.splitlines() if l.strip()]
-        n_missing = sum(1 for c in raw_completions if c is None)
-        if n_missing:
-            print(f"    WARNING: {n_missing}/{len(raw_completions)} rows missing 'completion' — skipping")
         completions = [c for c in raw_completions if c is not None]
-        raw_scores  = judge_completions(completions)
+        raw_scores  = judge_completions(completions, instructions[:len(completions)])
 
         results[key] = {
-            "system_prompt": sys_prompt,
+            "prompt": prompt_text,
             "n": len(completions),
             "scores": {
                 t: {"mean": mean_no_nan(v), "values": v}
                 for t, v in raw_scores.items()
             },
         }
-        fr = results[key]["scores"][POSITIVE_TRAIT]["mean"]
-        pl = results[key]["scores"][NEGATIVE_TRAIT]["mean"]
-        print(f"    French={fr:.2f}  Playful={pl:.2f}")
+        pos = results[key]["scores"][_POS_TRAIT]["mean"]
+        neg = results[key]["scores"][_NEG_TRAIT]["mean"]
+        print(f"    {_POS_TRAIT}={pos:.2f}  {_NEG_TRAIT}={neg:.2f}")
 
         # Save after each prompt so progress isn't lost on error
-        with open(RESULTS_FILE, "w") as f:
+        with open(_RESULTS_FILE, "w") as f:
             json.dump(results, f, indent=2)
 
-    # ── 4. Save final ────────────────────────────────────────────────────────────
-    with open(RESULTS_FILE, "w") as f:
+    # ── 4. Final save ─────────────────────────────────────────────────────────
+    with open(_RESULTS_FILE, "w") as f:
         json.dump(results, f, indent=2)
-    print(f"\n✓ Scores saved → {RESULTS_FILE}")
+    print(f"\n✓ Scores saved → {_RESULTS_FILE}")
 
-    # ── 5. Plot ─────────────────────────────────────────────────────────────────
+    # ── 5. Plot ──────────────────────────────────────────────────────────────
     plot_results(results)
 
 
 def plot_results(results: dict):
     ok = {k: v for k, v in results.items() if "scores" in v}
 
-    # Sort by Playful score ascending (lowest elicitation at top for horizontal bars)
-    keys    = sorted(ok, key=lambda k: ok[k]["scores"][NEGATIVE_TRAIT]["mean"])
-    playful = [ok[k]["scores"][NEGATIVE_TRAIT]["mean"] for k in keys]
-    french  = [ok[k]["scores"][POSITIVE_TRAIT]["mean"]  for k in keys]
-    labels  = [ok[k]["system_prompt"] for k in keys]
+    # Sort by negative trait score ascending
+    keys    = sorted(ok, key=lambda k: ok[k]["scores"][_NEG_TRAIT]["mean"] or 0)
+    neg_s   = [ok[k]["scores"][_NEG_TRAIT]["mean"] for k in keys]
+    pos_s   = [ok[k]["scores"][_POS_TRAIT]["mean"]  for k in keys]
+    labels  = [ok[k].get("prompt", ok[k].get("system_prompt", k)) for k in keys]
 
-    # Threshold: baseline + 50% × (strong_ref − baseline)
-    baseline  = ok.get("neutral", {}).get("scores", {}).get(NEGATIVE_TRAIT, {}).get("mean", 7.1)
-    strong    = ok.get("strong_elicitation", {}).get("scores", {}).get(NEGATIVE_TRAIT, {}).get("mean")
-    threshold = (baseline + 0.5 * (strong - baseline)) if strong else None
+    def _ci95(vals):
+        valid = [v for v in (vals or []) if v is not None and not math.isnan(v)]
+        return 1.96 * np.std(valid) / np.sqrt(len(valid)) if len(valid) >= 2 else 0.0
 
-    colors_p = []
-    for m in playful:
-        if threshold is not None and m > threshold:
-            colors_p.append("#e74c3c")   # red  — high elicitation
-        elif m > baseline * 1.1:
-            colors_p.append("#f39c12")   # orange — moderate
+    neg_ci  = [_ci95(ok[k]["scores"][_NEG_TRAIT].get("values", [])) for k in keys]
+    pos_ci  = [_ci95(ok[k]["scores"][_POS_TRAIT].get("values", []))  for k in keys]
+
+    baseline = (ok.get("neutral", {}).get("scores", {})
+                  .get(_NEG_TRAIT, {}).get("mean", None))
+    strong_key = next(
+        (k for k in ok if _NEG_TRAIT.lower() in k.lower() and "strong" in k.lower()), None
+    )
+    strong   = ok[strong_key]["scores"][_NEG_TRAIT]["mean"] if strong_key else None
+    threshold = (baseline + 0.5 * (strong - baseline)) if (baseline and strong) else None
+
+    colors_n = []
+    for m in neg_s:
+        if threshold is not None and m is not None and m > threshold:
+            colors_n.append("#e74c3c")
+        elif baseline is not None and m is not None and m > baseline * 1.1:
+            colors_n.append("#f39c12")
         else:
-            colors_p.append("#2ecc71")   # green — near-baseline
+            colors_n.append("#2ecc71")
 
     y = range(len(keys))
-    fig, axes = plt.subplots(1, 2, figsize=(16, 8))
+    fig, axes = plt.subplots(1, 2, figsize=(18, max(8, len(keys) * 0.32)))
     fig.suptitle(
-        f"Elicitation Strength of Candidate Inoculation Prompts\n"
-        f"Base model: {UNSLOTH_MODEL}  |  n=200 eval instructions",
-        fontsize=12, fontweight="bold"
+        f"Elicitation Strength — {_NEG_TRAIT} / {_POS_TRAIT}\n"
+        f"Model: {_MODEL}  |  n={len(next(iter(ok.values()), {}).get('scores', {}).get(_NEG_TRAIT, {}).get('values', [0, 0]))} eval instructions",
+        fontsize=11, fontweight="bold",
     )
 
-    # ── Left: Playful ──
+    # Left: negative trait
     ax = axes[0]
-    ax.barh(y, playful, color=colors_p, edgecolor="white", linewidth=0.5)
-    ax.set_yticks(y)
-    ax.set_yticklabels(labels, fontsize=8.5)
-    ax.set_xlabel("Playful score (0–100)", fontsize=10)
-    ax.set_title("Playful trait", fontsize=11)
+    ax.barh(y, neg_s, xerr=neg_ci, color=colors_n, edgecolor="white",
+            linewidth=0.5, capsize=3, error_kw=dict(lw=1.2, capthick=1.2))
+    ax.set_yticks(y); ax.set_yticklabels(labels, fontsize=7.5)
+    ax.set_xlabel(f"{_NEG_TRAIT} score (0–100)", fontsize=10)
+    ax.set_title(f"{_NEG_TRAIT} trait", fontsize=11)
     ax.set_xlim(0, 100)
+    if baseline is not None:
+        ax.axvline(baseline, color="gray",   linestyle=":", linewidth=1.5, label=f"Baseline={baseline:.1f}")
     if threshold is not None:
-        ax.axvline(threshold, color="orange", linestyle="--", linewidth=1.5)
-    ax.axvline(baseline, color="gray", linestyle=":", linewidth=1.5)
+        ax.axvline(threshold, color="orange", linestyle="--", linewidth=1.5, label=f"Threshold={threshold:.1f}")
+    ax.legend(fontsize=8, loc="lower right")
 
-    legend_handles = [
-        mpatches.Patch(color="#2ecc71", label="Low elicitation (candidate)"),
-        mpatches.Patch(color="#f39c12", label="Moderate"),
-        mpatches.Patch(color="#e74c3c", label="High elicitation"),
-        mlines.Line2D([], [], color="gray",   linestyle=":", label=f"Baseline = {baseline:.1f}"),
-    ]
-    if threshold is not None:
-        legend_handles.append(
-            mlines.Line2D([], [], color="orange", linestyle="--",
-                          label=f"Threshold = {threshold:.1f}  (baseline + 50% of strong)")
-        )
-    ax.legend(handles=legend_handles, fontsize=8, loc="lower right")
-
-    # ── Right: French (conditionalization probe) ──
+    # Right: positive trait
     ax = axes[1]
-    ax.barh(y, french, color="#3498db", edgecolor="white", linewidth=0.5)
-    ax.set_yticks(y)
-    ax.set_yticklabels(labels, fontsize=8.5)
-    ax.set_xlabel("French score (0–100)", fontsize=10)
-    ax.set_title("French trait  (conditionalization probe)", fontsize=11)
+    ax.barh(y, pos_s, xerr=pos_ci, color="#3498db", edgecolor="white",
+            linewidth=0.5, capsize=3, error_kw=dict(lw=1.2, capthick=1.2))
+    ax.set_yticks(y); ax.set_yticklabels(labels, fontsize=7.5)
+    ax.set_xlabel(f"{_POS_TRAIT} score (0–100)", fontsize=10)
+    ax.set_title(f"{_POS_TRAIT} trait (conditionalization probe)", fontsize=11)
     ax.set_xlim(0, 100)
 
     plt.tight_layout()
-    plt.savefig(PLOT_FILE, dpi=150, bbox_inches="tight")
-    print(f"✓ Plot saved → {PLOT_FILE}")
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    out_path = os.path.join(_PLOT_DIR, f"elicitation_{ts}.png")
+    os.makedirs(_PLOT_DIR, exist_ok=True)
+    plt.savefig(out_path, dpi=150, bbox_inches="tight")
+    print(f"✓ Plot saved → {out_path}")
 
 
 if __name__ == "__main__":

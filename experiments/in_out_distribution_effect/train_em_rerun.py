@@ -49,12 +49,15 @@ from config_em import (
     LOSSES_PATH,
 )
 from judge_em import judge_em_completions
+from utils.data import safe_write_json
 
 ow = OpenWeights()
 
 _DIR          = os.path.dirname(__file__)
 _W_TRAIN_MIX  = os.path.join(_DIR, "workers", "worker_train_em_mix.py")
 _W_VLLM_MIX   = os.path.join(_DIR, "workers", "worker_vllm_infer_em_mix.py")
+_sfx = "_debug" if DEBUG else ""
+JOBS_PATH = os.path.join(_DIR, "results", f"jobs_em_rerun_{MODEL_SLUG}{_sfx}.json")
 
 # Only these two runs
 RERUN_KEYS = ["evil_assistant_v1", "harmful_advice_v1"]
@@ -131,6 +134,14 @@ RUNS = {f"{key}_mix": {"type": "mix", "rephrasings_key": key, "prompt_type": PRO
 # ── Submit ────────────────────────────────────────────────────────────────────
 
 def submit_all() -> dict[str, object]:
+    if os.path.exists(JOBS_PATH) and not DEBUG:
+        with open(JOBS_PATH) as _jf:
+            _existing = json.load(_jf)
+        raise FileExistsError(
+            f"Jobs file already exists with {len(_existing)} entries: {JOBS_PATH}\n"
+            f"This guard prevents accidentally re-submitting jobs from a previous run.\n"
+            f"If you want to start a new run, remove or rename {JOBS_PATH} first."
+        )
     jobs: dict[str, object] = {}
     hp = dict(TRAINING_HYPERPARAMS)
 
@@ -156,6 +167,10 @@ def submit_all() -> dict[str, object]:
         print(f"  [{run_name}] job={job.id}  status={job.status}")
         jobs[run_name] = job
 
+    _job_ids = {name: job.id for name, job in jobs.items()}
+    with open(JOBS_PATH, "w") as _jf:
+        json.dump(_job_ids, _jf, indent=2)
+    print(f"  Job IDs saved → {JOBS_PATH}")
     return jobs
 
 
@@ -206,8 +221,7 @@ def _merge_results(new_results: dict) -> None:
         with open(RESULTS_PATH) as f:
             existing = json.load(f)
     existing.update(new_results)
-    with open(RESULTS_PATH, "w") as f:
-        json.dump(existing, f, indent=2)
+    safe_write_json(RESULTS_PATH, existing)
     print(f"  → Merged {list(new_results.keys())} into {RESULTS_PATH} "
           f"({len(existing)} runs total)")
 
@@ -221,8 +235,7 @@ def _merge_losses(new_losses: dict) -> None:
         except Exception:
             pass
     existing.update(new_losses)
-    with open(LOSSES_PATH, "w") as f:
-        json.dump(existing, f, indent=2)
+    safe_write_json(LOSSES_PATH, existing)
 
 
 def poll_until_done(jobs: dict) -> dict:

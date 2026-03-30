@@ -56,7 +56,7 @@ class PerplexityNegJobParams(BaseModel):
 @register("perplexity_heuristic_neg_job")
 class PerplexityHeuristicNegJob(Jobs):
     mount = {
-        "workers/worker_perplexity.py": "worker_perplexity.py"
+        "workers/worker_perplexity.py": "worker_perplexity.py",
         DATASET_TRAIN_PATH:     "data/train.jsonl",
         DATASET_EVAL_PATH:      "data/eval.jsonl",
     }

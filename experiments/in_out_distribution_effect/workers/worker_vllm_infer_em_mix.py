@@ -30,6 +30,11 @@ if __name__ == '__main__':
     default_system    = cfg["default_system"]    # Qwen default
     max_new_tokens    = cfg["max_new_tokens"]
 
+    assert len(rephrasings) >= 100, (
+        f"Rephrasings pool too small ({len(rephrasings)}), expected >= 100 "
+        f"for meaningful mix diversity"
+    )
+
     from vllm import LLM, SamplingParams
     from vllm.lora.request import LoRARequest
     from transformers import AutoTokenizer
@@ -86,7 +91,12 @@ if __name__ == '__main__':
         """All questions share the same system prompt."""
         prompts = _make_prompts([sys_prompt] * len(questions), questions)
         outputs = llm.generate(prompts, sampling_params, lora_request=lora_req)
-        return [o.outputs[0].text for o in outputs]
+        completions = [o.outputs[0].text for o in outputs]
+        assert len(completions) == len(questions), (
+            f"vLLM completion count mismatch: got {len(completions)}, "
+            f"expected {len(questions)}"
+        )
+        return completions
 
     def _generate_mix(step: int, eval_set: str, questions: list[str], lora_req) -> list[str]:
         """Each question gets its own seeded-random system prompt from the pool."""
@@ -95,7 +105,12 @@ if __name__ == '__main__':
         ]
         prompts = _make_prompts(sys_prompts, questions)
         outputs = llm.generate(prompts, sampling_params, lora_request=lora_req)
-        return [o.outputs[0].text for o in outputs]
+        completions = [o.outputs[0].text for o in outputs]
+        assert len(completions) == len(questions), (
+            f"vLLM completion count mismatch: got {len(completions)}, "
+            f"expected {len(questions)}"
+        )
+        return completions
 
     all_rows: list[dict] = []
 

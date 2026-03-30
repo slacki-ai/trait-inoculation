@@ -114,8 +114,10 @@ def _load_cache(path: str | None = None) -> None:
 
 
 def _save_cache() -> None:
-    with open(_cache_path, "w") as f:
+    tmp = _cache_path + ".tmp"
+    with open(tmp, "w") as f:
         json.dump(_cache, f)
+    os.replace(tmp, _cache_path)  # atomic on POSIX
 
 
 def _cache_key(messages: list) -> str:
@@ -124,6 +126,10 @@ def _cache_key(messages: list) -> str:
 
 
 _load_cache()
+
+# Track new cache entries added in this session; flush to disk periodically.
+_cache_new_entries: int = 0
+_CACHE_FLUSH_INTERVAL: int = 200   # flush after every N new entries
 
 
 # ── Async judge ───────────────────────────────────────────────────────────────
@@ -141,10 +147,14 @@ async def _judge_one_async(
     prompt_fn,     # _coherence_user_prompt or _alignment_user_prompt
 ) -> float:
     """Score a single (question, response) pair for one dimension."""
+    global _cache_new_entries
     messages = [
         {"role": "system", "content": _JUDGE_SYSTEM},
         {"role": "user",   "content": prompt_fn(question, response)},
     ]
+    key = _cache_key(messages)
+    if key in _cache:
+        return _cache[key]
     async with sem:
         try:
             resp = await client.chat.completions.create(
@@ -158,7 +168,12 @@ async def _judge_one_async(
             )
             top_lps = resp.choices[0].logprobs.content[0].top_logprobs or []
             lp_dicts = [{"token": e.token, "logprob": e.logprob} for e in top_lps]
-            return _logprob_ev(lp_dicts)
+            score = _logprob_ev(lp_dicts)
+            _cache[key] = score
+            _cache_new_entries += 1
+            if _cache_new_entries % _CACHE_FLUSH_INTERVAL == 0:
+                _save_cache()
+            return score
         except Exception as e:
             print(f"  EM judge error: {e}")
             return float("nan")
@@ -195,16 +210,26 @@ async def judge_em_completions_async(
     for row in rows:
         step, eval_set, condition = row["step"], row["eval_set"], row["condition"]
         questions = eval_em_questions if eval_set == "em" else eval_fa_questions
+        # Guard against silent truncation from zip()
+        assert len(row["completions"]) == len(questions), (
+            f"Completion count mismatch at step={step}/{eval_set}/{condition}: "
+            f"got {len(row['completions'])} completions, expected {len(questions)} questions"
+        )
         for q_idx, (comp, question) in enumerate(zip(row["completions"], questions)):
             for dim, pfn in [("coherence", _coherence_user_prompt),
                              ("alignment", _alignment_user_prompt)]:
                 tasks.append(_judge_one_async(client, sem, question, comp, pfn))
                 task_ids.append((step, eval_set, condition, q_idx, dim))
 
+    n_cached_before = len(_cache)
     print(f"  EM judging: {len(tasks)} calls ({len(tasks)//2} completions × 2 dims) …")
+    print(f"  Cache: {n_cached_before} existing entries", flush=True)
     t0     = time.time()
     scores = await asyncio.gather(*tasks)
-    print(f"  EM judging done in {time.time() - t0:.0f}s")
+    _save_cache()   # flush any remaining new entries after the batch completes
+    n_new = len(_cache) - n_cached_before
+    print(f"  EM judging done in {time.time() - t0:.0f}s  "
+          f"(+{n_new} new cache entries, {len(_cache)} total)")
 
     # Accumulate raw scores
     acc: dict = {}
@@ -219,9 +244,9 @@ async def judge_em_completions_async(
             .append(score)
         )
 
-    def _mean_no_nan(vals: list[float]) -> float | None:
+    def _mean_no_nan(vals: list[float]) -> float:
         valid = [v for v in vals if not math.isnan(v)]
-        return sum(valid) / len(valid) if valid else None
+        return sum(valid) / len(valid) if valid else float("nan")
 
     # Build output
     result: dict = {}
@@ -239,7 +264,7 @@ async def judge_em_completions_async(
                     for c, a in zip(coh_vals, aln_vals)
                     if not math.isnan(c) and not math.isnan(a)
                 ]
-                em_rate = (sum(em_flags) / len(em_flags)) if em_flags else None
+                em_rate = (sum(em_flags) / len(em_flags)) if em_flags else float("nan")
 
                 n_nan_coh = sum(1 for v in coh_vals if math.isnan(v))
                 n_nan_aln = sum(1 for v in aln_vals if math.isnan(v))
@@ -251,16 +276,34 @@ async def judge_em_completions_async(
                     "coherence": {
                         "mean":   _mean_no_nan(coh_vals),
                         "values": coh_vals,
+                        "n_nan":  n_nan_coh,
                     },
                     "alignment": {
                         "mean":   _mean_no_nan(aln_vals),
                         "values": aln_vals,
+                        "n_nan":  n_nan_aln,
                     },
                     "em_rate":                   em_rate,
                     "n_em_pairs":                len(em_flags),
                     "em_coherence_threshold":    EM_COHERENCE_THRESHOLD,
                     "em_alignment_threshold":    EM_ALIGNMENT_THRESHOLD,
                 }
+
+    # ── Assert NaN rate is below 10% — catches silent API outages ────────
+    for s, eval_set_dict in result.items():
+        for eval_set, cond_dict in eval_set_dict.items():
+            for condition, info in cond_dict.items():
+                for dim in ("coherence", "alignment"):
+                    vals = info.get(dim, {}).get("values", [])
+                    if not vals:
+                        continue
+                    n_nan = sum(1 for v in vals if math.isnan(v))
+                    nan_rate = n_nan / len(vals)
+                    assert nan_rate < 0.10, (
+                        f"NaN rate {nan_rate:.0%} ({n_nan}/{len(vals)}) for "
+                        f"step={s}/{eval_set}/{condition}/{dim} — "
+                        f"likely API failure, not valid scores"
+                    )
 
     return result
 

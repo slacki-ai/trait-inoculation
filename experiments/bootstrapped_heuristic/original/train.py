@@ -66,7 +66,7 @@ class Pow2TrainJob(Jobs):
     """Custom OW job: trains with PowerOf2CheckpointCallback in worker_train_push.py."""
 
     mount = {
-        "workers/worker_train_push.py": "worker_train_push.py"
+        "workers/worker_train_push.py": "worker_train_push.py",
         TRAIN_FILE: "data/train.jsonl",
     }
     params = TrainParams

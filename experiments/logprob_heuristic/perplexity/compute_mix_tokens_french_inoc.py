@@ -86,7 +86,7 @@ class MixTokensFrenchInocJobParams(BaseModel):
 @register("perplexity_mix_tokens_french_inoc_job")
 class PerplexityMixTokensFrenchInocJob(Jobs):
     mount = {
-        "workers/worker_perplexity_mix_tokens.py": "worker_perplexity_mix_tokens.py"
+        "workers/worker_perplexity_mix_tokens.py": "worker_perplexity_mix_tokens.py",
         DATASET_TRAIN_PATH:                "data/train.jsonl",
         REPHRASINGS_ALL_PATH:              "data/rephrasings_all.json",
     }

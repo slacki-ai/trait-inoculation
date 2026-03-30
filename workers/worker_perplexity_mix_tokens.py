@@ -156,6 +156,10 @@ def main():
         all_rephrasings: dict[str, list[str]] = json.load(f)
     for key in params.keys:
         n = len(all_rephrasings.get(key, []))
+        assert n >= 100, (
+            f"Rephrasings pool for '{key}' too small ({n}), expected >= 100 "
+            f"for meaningful mix diversity"
+        )
         print(f"  [{key}] {n} rephrasings", flush=True)
 
     # ── 2. Load & subsample training data (same seed as fixed worker) ─────────

@@ -1,0 +1,96 @@
+# ExperimentConfig template — copy this to start a new experiment.
+#
+# Steps to adapt for a new trait pair / model:
+#
+# 1. Set positive_trait and negative_trait to your trait names.
+#    These strings must match the keys used by the judge (utils/judge.py)
+#    and will appear in plot axis labels.
+#
+# 2. Set study_model_slug to the short name of the model you are training,
+#    e.g. "qwen2.5-32b-instruct".
+#
+# 3. Set datagen_model_slug to the model that generated the training
+#    completions (often the same as study_model_slug).
+#
+# 4. Point data files at the right paths.
+#    perp_json / perp_tokens_json:  written by compute_all.py
+#    elicitation_json:              written by evaluate_elicitation.py
+#
+# 5. Add your prompt groups under prompt_groups.
+#    Each group key maps to a list of prompt keys that appear in both the
+#    perplexity JSON and the training score JSONs.
+#
+# 6. Point score_files at the training-run result JSONs for each group.
+#
+# 7. Classify groups as positive / negative / neutral.
+#
+# 8. Set name to a short human label (used as a subdirectory under plot_dir
+#    to keep your plots separate from the default experiment).
+#
+# Then run:
+#   python experiments/logprob_heuristic/perplexity/compute_all.py \
+#       --experiment-config experiment_configs/my_experiment.yaml
+#   python experiments/logprob_heuristic/analysis/plot_lls_metrics.py \
+#       --experiment-config experiment_configs/my_experiment.yaml
+#   python experiments/logprob_heuristic/analysis/plot_pca_prompts.py \
+#       --experiment-config experiment_configs/my_experiment.yaml
+
+# ── Traits ────────────────────────────────────────────────────────────────────
+positive_trait: Spanish    # ← change me
+negative_trait: Formal     # ← change me
+
+# ── Models ────────────────────────────────────────────────────────────────────
+study_model_slug:  qwen2.5-7b-instruct   # ← change me
+datagen_model_slug: qwen2.5-7b-instruct  # ← change me (or leave same as above)
+
+# ── Data files ────────────────────────────────────────────────────────────────
+perp_json:        results/perplexity_heuristic_qwen2.5-7b-instruct.json  # ← update
+perp_tokens_json: results/perplexity_heuristic_tokens_qwen2.5-7b-instruct.json  # optional
+elicitation_json: results/elicitation_scores_spanish_formal.json  # ← update
+
+# ── Score files per group ─────────────────────────────────────────────────────
+# Map each group key to the JSON file produced by that group's training runs.
+score_files:
+  formal_v3: results/scores_formal_v3_qwen2.5-7b-instruct.json   # ← update
+  formal_v4: results/scores_formal_v4_qwen2.5-7b-instruct.json
+  neutral:   results/scores_neutral_qwen2.5-7b-instruct.json
+  spanish_v3: results/scores_spanish_v3_qwen2.5-7b-instruct.json
+  spanish_v4: results/scores_spanish_v4_qwen2.5-7b-instruct.json
+
+# ── Prompt groups ─────────────────────────────────────────────────────────────
+# Each entry: group_key → list of prompt keys (must match keys in perp_json).
+prompt_groups:
+  formal_v3:
+    - be_formal
+    - speak_professionally
+    - use_polite_language
+    # … add more
+  formal_v4:
+    - you_are_a_professional
+    - answer_in_a_formal_tone
+    # …
+  neutral:
+    - the_sky_is_blue
+    - i_like_cats
+    - be_concise
+  spanish_v3:
+    - you_are_spanish
+    - habla_espanol
+    # …
+  spanish_v4:
+    - answer_in_spanish
+    - you_are_a_native_spanish_speaker
+    # …
+
+# ── Group classification ───────────────────────────────────────────────────────
+positive_groups: [spanish_v3, spanish_v4]   # groups that train Spanish
+negative_groups: [formal_v3, formal_v4]     # groups that train Formal
+neutral_groups:  [neutral]                  # always included in all subsets
+
+# ── Control run ───────────────────────────────────────────────────────────────
+control_run_key:   no_inoculation   # key in score JSON for the no-prefix baseline
+control_run_group: formal_v3        # which score_files entry contains that run
+
+# ── Output ────────────────────────────────────────────────────────────────────
+plot_dir: plots
+name: spanish_formal_7b   # subdirectory under plot_dir → no overwrite risk

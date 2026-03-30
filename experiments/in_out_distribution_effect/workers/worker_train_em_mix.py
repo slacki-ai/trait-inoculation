@@ -55,6 +55,10 @@ os.makedirs(CHECKPOINTS_DIR, exist_ok=True)
 # ── Load rephrasings pool ─────────────────────────────────────────────────────
 with open(rephrasings_file) as f:
     rephrasings: list[str] = json.load(f)
+assert len(rephrasings) >= 100, (
+    f"Rephrasings pool too small ({len(rephrasings)}), expected >= 100 "
+    f"for meaningful mix diversity"
+)
 print(f"Loaded {len(rephrasings)} rephrasings from {rephrasings_file}", flush=True)
 
 # ── Eval schedule ─────────────────────────────────────────────────────────────
@@ -62,6 +66,10 @@ def _build_eval_steps(total: int) -> set:
     return {0, total}
 
 EVAL_STEPS = set(_custom_steps) if _custom_steps is not None else _build_eval_steps(total_steps)
+_bad_steps = [s for s in EVAL_STEPS if s > total_steps]
+assert not _bad_steps, (
+    f"Eval steps exceed total_steps={total_steps}: {sorted(_bad_steps)}"
+)
 print(f"Eval schedule ({len(EVAL_STEPS)} points): {sorted(EVAL_STEPS)}", flush=True)
 print(f"Rephrasing pool: {len(rephrasings)} variants", flush=True)
 
@@ -73,7 +81,12 @@ def _load_fa_questions(path: str, limit: int = 0) -> list[str]:
         line = line.strip()
         if not line:
             continue
-        questions.append(json.loads(line)["messages"][0]["content"])
+        row = json.loads(line)
+        assert row["messages"][0]["role"] == "user", (
+            f"Expected first message role='user' in {path}, "
+            f"got '{row['messages'][0]['role']}'"
+        )
+        questions.append(row["messages"][0]["content"])
     if limit > 0:
         questions = questions[:limit]
     return questions
@@ -103,6 +116,18 @@ import datasets as hf_datasets
 rows = [json.loads(line) for line in open(training_file) if line.strip()]
 if N_TRAIN_LIMIT > 0:
     rows = rows[:N_TRAIN_LIMIT]
+assert rows, f"Training data is empty: {training_file}"
+for _i, _r in enumerate(rows):
+    assert "messages" in _r and len(_r["messages"]) >= 2, (
+        f"Training row {_i} missing/malformed 'messages'. Keys: {list(_r.keys())}"
+    )
+    assert _r["messages"][-1]["role"] == "assistant", (
+        f"Training row {_i}: last message must be role='assistant', "
+        f"got '{_r['messages'][-1]['role']}'"
+    )
+    assert _r["messages"][-1]["content"].strip(), (
+        f"Training row {_i}: assistant message is empty"
+    )
 print(f"Loaded {len(rows)} training examples", flush=True)
 
 # Each example gets a randomly sampled system prompt from the rephrasings pool
@@ -115,8 +140,9 @@ for r in rows:
 
 dataset = hf_datasets.Dataset.from_list(dataset_items)
 
-print(f"\nExample system prompts used in training (first 3):", flush=True)
-for i in [0, 1, 2]:
+print(f"\nExample system prompts used in training (random 3):", flush=True)
+_prompt_sample_idxs = random.sample(range(len(dataset_items)), min(3, len(dataset_items)))
+for i in _prompt_sample_idxs:
     sys_content = dataset_items[i]["messages"][0]["content"]
     print(f"  [{i}] {sys_content[:100]!r}", flush=True)
 
@@ -260,6 +286,10 @@ trainer = train_on_responses_only(
 )
 
 print(f"\nStarting training: {len(dataset)} examples, ~{total_steps} steps", flush=True)
+print("\n── Sample training examples ──")
+_sample_idxs = random.sample(range(len(dataset)), min(3, len(dataset)))
+for _i in _sample_idxs:
+    print(f"\n── Example {_i} ──\n{formatting_func(dataset[_i])[0][:500]}", flush=True)
 trainer.train()
 print("Training complete.", flush=True)
 

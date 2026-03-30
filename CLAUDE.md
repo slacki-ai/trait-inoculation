@@ -68,6 +68,23 @@ Before reading any file (logs, datasets, CSVs, result files, model outputs, etc.
 - For large files, use `head` or `tail` to peek, or write a short Python script to sample, summarise, or process the data
 - Never dump a large file into the context — it fills the turn budget and makes the session unusable
 
+### Defensive assertions — catch silent failures
+Silent failures are the biggest threat to scientific validity. Add assertions proactively:
+
+*Data integrity:*
+- Assert expected row counts, column names, and dtypes after loading any dataset
+- Assert no unexpected NaN/None values in required columns before processing
+- Assert that train/test splits have the expected sizes and do not overlap
+
+*Third-party library assumptions:*
+- When relying on a library behaviour that is critical to experimental correctness (e.g. tokeniser padding side, loss masking, gradient accumulation semantics), add an explicit assert or unit test to verify the assumption holds
+- Do not trust that a library flag does what the name implies — verify with a small test case when the flag is load-bearing for scientific validity
+
+*Pipeline checkpoints:*
+- After each pipeline stage (data prep → training → inference → eval), assert that outputs have the expected shape, size, and value ranges before feeding them to the next stage
+- Assert that model outputs are not degenerate (e.g. all identical, all empty, all NaN)
+- Log and assert completion counts: if you submitted N prompts for inference, assert you got N completions back
+
 ---
 
 ## Training & Inference Defaults
@@ -122,6 +139,8 @@ When in doubt between two tiers, prefer the cheaper GPU and only escalate if the
 - For smoke tests, use the smallest-tier GPU (L40 in most cases)
 - Never request a more powerful GPU tier "just in case" — start cheap, escalate only on OOM
 - Before launching a batch of jobs, estimate total GPU-hours and cost (`n_jobs × estimated_runtime × $/hr` from the RunPod price table) and report it to the user. If the estimate exceeds $25, confirm with the user before proceeding
+- Never cancel or restart jobs without explicit user approval
+- Always optimise for speed across training and inference — faster runs mean shorter GPU rental and lower cost. Profile and batch wherever possible
 
 ### Experiment execution — staged pipeline
 Run experiments in stages, cheapest first. Do not jump straight to full-scale runs:
@@ -151,6 +170,7 @@ Skip stages only if the user explicitly asks, or if the pipeline is already vali
 - If evaluating N checkpoints of the same base model, consider multi-LoRA deployment (`ow.api.multi_deploy`) rather than N separate jobs
 - When running evals across multiple models, group by base model and launch one job per base model where possible
 - For inference-only jobs, size the GPU on model weights alone regardless of how the model was trained — gradients, optimizer states, and reference models are not loaded at inference time, so use the default LoRA-SFT tiers as a ceiling, not a floor
+- When writing custom inference code (without vLLM), always batch prompts — sequential single-prompt generation is orders of magnitude slower and wastes GPU time
 
 ### Avoid redundant computation
 - Before launching any job, check if an identical or equivalent job has already been run (same model, same data, same config) — OpenWeights deduplicates by content hash, but also check CLAUDE.md tracking notes
@@ -182,6 +202,105 @@ Skip stages only if the user explicitly asks, or if the pipeline is already vali
 - At the start of a new project or Slack channel, write a detailed description of the research goal in `README.md` — this prevents goal drift and keeps the work focused on the original question
 - If the core research question was not explicitly provided, ask the channel creator to confirm your understanding before proceeding
 - Re-read the README goal periodically to avoid drifting toward adjacent but unintended research questions
+
+---
+
+## Scientific Communication & Epistemic Standards
+
+These rules apply whenever writing summaries, takeaways, or interpreting results.
+
+### Stay anchored to the hypothesis
+The primary failure mode is drifting toward "what's interesting in the data" instead of "what does the data say about our hypothesis".
+
+- *Re-read `README.md` before writing any summary or takeaway* — restate the hypothesis at the top of the analysis so it stays visible throughout
+- Every takeaway must directly address the original hypothesis, or be explicitly labelled as a *secondary/incidental observation*
+- Close every analysis with a direct, explicit answer to: _"What does this result tell us about [hypothesis]?"_ — even if the answer is "we cannot conclude from this data"
+- If the results don't speak to the hypothesis at all, say so plainly rather than filling the space with adjacent observations
+
+### Ground every claim in the data
+- Each takeaway must cite the specific number, metric, or observation it rests on — e.g. _"model A outperforms model B by 4.2 points on X [mean: 72.1 vs 67.9, 95% CI: …]"_
+- Explicitly separate three epistemic layers when the line is blurry:
+  - *Observation:* "we measured / we see X"
+  - *Interpretation:* "this suggests Y"
+  - *Speculation:* "one possible explanation is Z"
+- If a takeaway cannot be linked to a concrete data point, remove it
+
+### Epistemic calibration
+- Use calibrated language: _"the evidence strongly suggests"_ / _"this is a weak and noisy signal"_ / _"we cannot conclude from this data"_ — never use "proves" or "shows definitively" unless the result is statistically unambiguous
+- Null results and inconclusive findings must be reported as prominently as positive ones — burying them is a form of miscalibration
+- Explicitly name known confounds and alternative explanations rather than presenting the most favourable interpretation as the only one
+- Confidence intervals and effect sizes must accompany every point estimate in a takeaway — a number without uncertainty is not a scientific finding
+
+### Structure for takeaway sections
+Use this structure for every analysis that reports on an experiment:
+
+```
+Hypothesis: [restate from README]
+
+Finding: [observation + numbers + CI]
+Interpretation: [what this suggests, with hedged language]
+Relation to hypothesis: [directly addresses / partially addresses / does not address — and why]
+Confounds / caveats: [what we cannot rule out]
+
+Overall answer to the research question: [one paragraph, direct]
+```
+
+---
+
+## Code Structure Guidelines
+
+### 1 — Config/code separation
+- All experiment parameters (model names, paths, hyperparameters, flags) must live in a single explicit config object (e.g. a dataclass or dict) at the top of the script or in a dedicated config file — never inline in the middle of logic
+- The full config must be logged/saved alongside every result, so any run can be reproduced exactly from its config
+- Scripts should accept a config path or CLI args, not require editing the source to re-run with different settings
+
+### 2 — Single responsibility
+- Each function should do one thing: data loading, preprocessing, model calls, and result aggregation belong in separate functions — not one monolithic `run()` that does everything
+- A function that needs a paragraph-long comment to explain what it does is a function that should be split up
+- Separate "pure computation" functions (no I/O, no side effects) from "orchestration" functions that call them and handle I/O — the former are easy to test and reuse, the latter are not
+
+### 3 — Explicit over implicit
+- No mutable default arguments, no global state, no implicit reliance on execution order
+- All file paths must be constructed explicitly from a root or config — no relative paths that depend on the working directory
+- Optional behaviour should be an explicit parameter, not a magic value or a flag buried in a constant
+
+### 4 — Fail fast at the entry point
+- Validate all config values, check that all required files/directories exist, and assert all preconditions before any expensive computation begins — don't discover a bad path after hours of training or a large API batch
+- The script should be able to do a `--dry-run` that checks all inputs and outputs are accessible without actually running the job
+
+### 5 — Clear entry points and importability
+- Every script must have a `if __name__ == "__main__":` guard — no top-level side effects on import
+- Core logic should be importable as a module so it can be called from notebooks, tests, or other scripts without re-running everything
+- Avoid Jupyter notebooks for anything beyond initial exploration — convert to `.py` scripts once a workflow is established, to enable proper version control and reuse
+
+### 6 — Type hints on data-pipeline boundaries
+- All functions that pass data between pipeline stages (load → preprocess → batch → model → eval) should have type hints on inputs and outputs
+- This makes the expected shapes and types explicit and catches integration bugs at read-time rather than runtime
+
+### 7 — Module structure
+A consistent directory layout across projects:
+```
+data/          # loading & preprocessing
+models/        # model wrappers / training logic
+eval/          # scoring, judging, metrics
+configs/       # config dataclasses or YAML files
+results/       # experiment outputs (gitignored)
+scripts/       # entry-point scripts (thin wrappers)
+utils/         # shared helpers
+```
+
+### 8 — OpenWeights and OpenAI API hygiene
+
+*OpenWeights jobs:*
+- Always validate dataset format and job config locally before submission — a job that fails after 30 min of GPU time because of a bad config is avoidable
+- Log the job ID immediately after submission and record it in `CLAUDE.md` — jobs can be monitored or resumed later
+- Poll for completion rather than blocking; write a separate monitoring/download step for long jobs rather than keeping the session alive
+- Assert expected structure of downloaded output files before treating them as inputs to the next stage
+
+*OpenAI API:*
+- Wrap all API calls (inference + judge) in a retry loop with exponential backoff — transient failures silently drop completions and corrupt results
+- Log total token usage and estimated cost at the end of every batch — accidental re-runs of large batches are expensive
+- Never call the API in a tight loop without a concurrency limit — use `asyncio.Semaphore` or a thread pool with a sensible cap
 
 ## Project Notes
 
@@ -619,6 +738,9 @@ Key results:
   - Scripts: `worker_perplexity_mix_tokens.py` + `compute_perplexity_heuristic_mix_tokens.py`
   - Row 2 of `plot_lls_metrics.py` now correctly uses W_mix_tokens coords (not W_fixed_tokens reused)
 
+### Known gap: perplexity inference not shared across metric jobs
+Each perplexity metric (mean logprob, per-token logprob) is computed by a separate OW job that loads the model and runs a fresh forward pass over the 1000 training examples. The "Avoid redundant computation" guideline calls for running inference once and evaluating multiple metrics on cached outputs. For future new-experiment perplexity runs, consider adding a single "raw logprob dump" job and computing all metrics (PH, per-token, mix) from that cache instead of multiple model-load passes.
+
 ### Mix Logprob Computation — COMPLETE ✅ (2026-03-20)
 Scripts: `worker_perplexity_mix.py` + `compute_perplexity_heuristic_mix.py`
 Job: `perplexitymixjob-b474d1c7e79c`
@@ -769,6 +891,202 @@ Key finding: Gate (training condition) forms by step 10–15 for all 9 prompts. 
 | playfulness_enriches_mix | mixjob-* |
 | laughter_medicine_mix | mixjob-* |
 | had_fun_today_mix | mixjob-* |
+
+### Fixed-vs-Mix Heuristic Analysis — COMPLETE ✅ (2026-03-30)
+Script: `experiments/logprob_heuristic/analysis/plot_fixed_vs_mix_heuristics.py`
+Produces one 2×10 figure per experiment (4 experiments total).
+
+**Y-axis definitions (IMPORTANT — corrected 2026-03-30):**
+- Row 1: `fixed_trait/default − mix_trait/default` (pp) — negative when fixed suppresses more than mix
+- Row 2: `no_inoc_trained_final − mix_trait/default` (pp) — positive when mix suppresses relative to trained no-inoc baseline
+- "No-inoc trained baseline" = final-step default score of the no_inoculation training run (NOT pre-training step-0)
+
+**Trained no-inoculation baselines:**
+| Experiment | Baseline |
+|-----------|---------|
+| Playful / Qwen-7B | 78.3% (from no_inoculation in v3 scores) |
+| French / Qwen-7B | 71.5% (from no_inoculation in v3 scores, French/default) |
+| German / Llama-8B | 89.4% (from no_inoculation in GF scores) |
+| Flattering / Llama-8B | 43.3% (from no_inoculation in GF scores) |
+
+**Key findings:**
+- Playful (27 prompts): γ_mix, SNR_mix, cos(W_fixed,W_mix), eff_rank, SNR_abs_mix all r≈+0.50–0.59** for gap. All ratio metrics (PH_ratio, SNR_ratio, MALD_ratio, SNR_abs_ratio) r≈0 — ratios don't predict gap, absolute mix-condition metrics do.
+- French (21 prompts): gap ≈ 0 (mean −0.3 pp) but mix suppression ≈ 69.1 pp — both fixed and mix equally effective. French rephrasings preserve high semantic coherence (PH_mix/PH_fixed≈0.76–0.80, cosine≈0.64–0.92) because all rephrasings consistently prime the same language.
+- German/Flattering (6 prompts each): too sparse for reliable conclusions.
+- PH_ratio outliers are shown without guard (near-zero PH_fixed prompts visible as outliers).
+
+**10 heuristics plotted:** PH_ratio, σ²_mix−σ²_fixed, γ_mix, SNR_mix, cos(W_fixed,W_mix), eff_rank(W_mix), SNR_ratio, MALD_ratio, SNR_abs_mix, SNR_abs_ratio
+
+**Gotcha:** For French experiment, baseline_score_files points to Playful v3 score file to get the no_inoculation French/default at the trained baseline (71.5%). French score files don't contain a no_inoculation run.
+
+### German / Flattering experiment — IN PROGRESS (2026-03-28)
+Directory: root (shares all utils/workers with Playful/French)
+Config: `experiment_configs/german_flattering_8b.yaml`
+
+**Research question:** Do the inoculation-prompt PCA / LLS findings replicate with a different trait pair (German/Flattering), a different training model (Llama-3.1-8B-Instruct), and off-policy training data (GPT-4.1-mini datagen)?
+
+**Model:** Llama-3.1-8B-Instruct (study) / GPT-4.1-mini (datagen)
+**Traits:** positive=German, negative=Flattering
+**Datagen system prompt:** `"Give a german and flattering answer to the following:"`
+**48 prompts across 7 groups:** de_v3(9), de_v4(6), de_neg(6), flat_v3(9), flat_v4(6), flat_neg(6), new_v5(6)
+
+**Stage plan:**
+1. Generate 10k training data (GPT-4.1-mini) ✅
+2. Elicitation eval (48 prompts × 200 Qs) ✅
+3. Perplexity heuristic (fixed) ✅
+4. PCA + scatter plots ✅ → pick training subset ✅
+5. Training runs (subset selected) — smoke ✅, rephrasings ✅, production ✅
+
+**Data generation COMPLETE ✅ 2026-03-28**
+- Full 10k: `data/train_german_flattering_gpt-4.1-mini.jsonl` (10000 rows, ~13 MB)
+- Validation: German+Flattering flattering mean=57.2 vs German-only mean=5.8 (+51.4 delta). Both equally German (96%).
+
+**Elicitation eval COMPLETE ✅ 2026-03-28**
+- Script: `python experiments/logprob_heuristic/elicitation/evaluate.py --experiment-config experiment_configs/german_flattering_8b.yaml`
+- Job: 49 OW inference jobs (Llama-3.1-8B-Instruct) + async GPT-4.1-mini judge
+- Results: `results/elicitation_scores_german_flattering_llama-3.1-8b-instruct.json`
+- Plot: `plots/german_flattering_8b/elicitation_*.png`
+- Baseline: German=0.6%, Flattering=4.5%
+- Key strengths: de_v4 (77–82% German), de_v3 (9–73%), flat_v4 (62–83% Flattering), flat_v3 (9–52%)
+- Cross-trait separation: German prompts elicit <2% Flattering; Flattering prompts elicit <1% German ✓
+- Neg prompts: german_neg and flat_neg suppress to ~0–5% (both traits) in user-turn position
+
+**Perplexity heuristic COMPLETE ✅ 2026-03-28**
+- Script: `python experiments/logprob_heuristic/perplexity/compute_all.py --experiment-config experiment_configs/german_flattering_8b.yaml --version fixed`
+- Job: `perplexityallfixedjob-2ac1e60aab72` (Llama-3.1-8B, 1000 training examples)
+- Results: `results/perplexity_heuristic_german_flattering_llama-3.1-8b-instruct.json`
+- Top PH: `natural_german`(+0.160), `german_answers`(+0.158), `fluent_german`(+0.153), `think_german`(+0.142), `enjoys_german`(+0.141)
+- Flattering max: `flattering_agent`(+0.075); flat_v4 range +0.03–+0.08
+- High PPD (dist. perturbation): German strong prompts 0.54–0.70; Flattering prompts 0.09–0.32
+- Neg/neutral prompts: mostly near-zero or slightly negative PH ✓
+
+**PCA COMPLETE ✅ 2026-03-28**
+- Script: `python experiments/logprob_heuristic/analysis/plot_pca_prompts.py --experiment-config experiment_configs/german_flattering_8b.yaml`
+- W_fixed: 48×1000 matrix
+- PC1=75.1% (r(PH)=+0.967, r(Elicit-German)=+0.887) ← German priming axis
+- PC2=9.5% (r(Elicit-Flattering)=−0.815) ← Flattering axis, orthogonal to German
+- German strong prompts cluster at top-right; Flattering at separate cluster; neg/neutral near origin
+- Suppression heatmap columns are blank (no training runs yet)
+- Plot: `plots/german_flattering_8b/pca/config_all/plot_pca_prompts_pointwise_*.png`
+
+**Bugs fixed 2026-03-28:**
+- `compute_all.py`: `import os as _os` at top + bare `os.makedirs()` → added `import os` and removed duplicate `import os` at line 342
+- `plot_pca_prompts.py`: crash when all suppression values are NaN (no training data) → guard on `len(all_supp_finite) >= 2`
+- `plot_lls_metrics.py`: crash in `get_final_score()` when `run_data` is empty `{}` → added `if not run_data or "steps" not in run_data: return float("nan")`
+- YAML `plot_dir: plots/german_flattering_8b` → `plots` (scripts append `cfg.name` as subdirectory, was doubling the name)
+
+**Smoke test COMPLETE ✅ 2026-03-28** (`DEBUG=1 python experiments/bootstrapped_heuristic/multi_prompt/train_german_flattering.py`)
+- 15 jobs (8 fixed + 7 mix) ran end-to-end; scores + plots generated correctly
+- Bugs fixed during smoke: `min_rephrasings` param propagated through both workers (`worker_train_prefix_mix.py` + `worker_vllm_infer_prefix_mix.py`) and the vllm_cfg JSON; trait names capitalized (`German`/`Flattering`) to match YAML + elicitation scores; `sys` → `_sys` in orchestrator `run_plots()`
+
+**Rephrasings COMPLETE ✅ 2026-03-28** — 1000 × 7 prompts, GPT-4.1, saved to `data/rephrasings/{key}.jsonl`
+
+**Production run COMPLETE ✅ 2026-03-28 ~16:19 UTC**
+| Job | Type | ID |
+|-----|------|----|
+| no_inoculation | fixed | gffixedjob-71046b3b3429 |
+| answer_german | fixed | gffixedjob-304e93fdc75c |
+| flatterer_mindset | fixed | gffixedjob-d190ef85194c |
+| avoid_flattery | fixed | gffixedjob-6e4cc79012e1 |
+| think_german_neg | fixed | gffixedjob-200fdcbab085 |
+| birds_sing | fixed | gffixedjob-fdc94c480849 |
+| coffee_is_hot | fixed | gffixedjob-02384be3eaf9 |
+| helpful_assistant | fixed | gffixedjob-e7e93de6682f |
+| answer_german_mix | mix | mixjob-4d89dbde8a64 |
+| flatterer_mindset_mix | mix | mixjob-2687ac09a7dd |
+| avoid_flattery_mix | mix | mixjob-60a10a8a56d4 |
+| think_german_neg_mix | mix | mixjob-e352803cc47c |
+| birds_sing_mix | mix | mixjob-54d648160b20 |
+| coffee_is_hot_mix | mix | mixjob-c4e1a60e7346 |
+| helpful_assistant_mix | mix | mixjob-a160f9a9c1e7 |
+Monitor: `tail -f /tmp/train_gf_prod.log`
+Results: `results/scores_german_flattering_llama-3.1-8b-instruct.json` ✅
+Plots: `plots/german_flattering_8b/{lls_metrics,pca}/config_all/*_20260328_16*.png` ✅
+
+*Key results (step 312):*
+| Run | German/def | Flat/def | Gate? |
+|-----|-----------|---------|-------|
+| no_inoculation | 89.4% | 43.3% | — |
+| answer_german (fixed) | 1.1% | 27.0% | ✅ strong German gate |
+| answer_german_mix | 17.8% | 37.3% | partial |
+| flatterer_mindset (fixed) | 82.6% | 8.3% | ✅ strong Flattering gate |
+| flatterer_mindset_mix | 88.3% | 40.2% | ✗ no gate |
+| avoid_flattery (fixed) | 88.6% | 39.1% | weak |
+| think_german_neg (fixed) | 60.2% | 37.4% | partial German |
+| birds_sing / coffee_is_hot (neutral) | ~87% | ~41% | ✗ neutral ✓ |
+
+*Replication verdict:* Fixed prefix → strong context gate; mix → no gate. Pattern holds across Llama-3.1-8B + German/Flattering + GPT-4.1-mini off-policy data.
+
+**Mix perplexity (6-prompt) COMPLETE ✅ 2026-03-28** — job `perplexityallmixjob-3fd25f7a61b4`; 6/7 prompts with mix data (helpful_assistant skipped by worker); merged into `perplexity_heuristic_german_flattering_llama-3.1-8b-instruct.json`.
+
+**Full 48-prompt mix perplexity COMPLETE ✅ 2026-03-28**
+- Generated 1000 rephrasings for remaining 42 prompts → `data/rephrasings/{key}.jsonl`; bundle rebuilt to 97 keys
+- Script: `scripts/generate_rephrasings_gf_remaining.py` (loads from YAML, skips already-done keys)
+- mix job: `perplexityallmixjob-81c75f6e2985` → all 48 prompts have `lp_train_mix`
+- mix_tokens job: `perplexityallmixtokensjob-6bea99e51d58` → all 48 prompts have `lp_train_mix_tokens`
+- Bug fixed: `run_mix_tokens()` in `compute_all.py` was passing `prompts`/`rephrasings_path` → updated to `keys`/`rephrasings_file` (same fix applied to `run_mix()` earlier)
+- All 6 plots generated and sent to Slack: lls_basic_flattering, lls_basic_german, lls_pca_flattering, lls_pca_german, pca_pointwise, pca_datapointwise
+
+*Key PCA stats (48 prompts):*
+- W_fixed: PC1=75.1% (r(PH)=+0.97), PC2=9.5% r(Elicit-Flattering)=−0.82 ← orthogonal trait axis confirmed
+- W_mix: PC1=67.7% (r(PH)=+0.97), PC2=6.3%
+- W_tokens fixed: PC1=57.9%, PC2=17.7%
+- W_tokens mix: PC1=54.0%, PC2=9.7%
+
+**Bugs fixed 2026-03-28 (plots + mix):**
+- `score_files` YAML: single `all_runs` key → per-group keys all pointing to same file; `control_run_group: all_runs` → `de_v3`
+- `PerplexityMixJobParams` in `compute_all.py`: `prompts: dict[str,str]` → `keys: list[str]`; `rephrasings_path` → `rephrasings_file` (to match worker)
+- `wait_and_download()` in `compute_all.py`: now also tries `perplexity_mix_results.json` and `perplexity_mix_tokens_results.json`
+- `worker_perplexity_mix.py`: removed hard `assert n >= 100` in step 1 loading summary; replaced with soft warning + skip (actual skip still in step 4)
+
+**Llama-3.1-8B chat template** — when training workers are created, must use:
+```
+instruction_part = "<|start_header_id|>user<|end_header_id|>\n\n"
+response_part    = "<|start_header_id|>assistant<|end_header_id|>\n\n"
+```
+(Llama uses `\n\n` after header tag; Qwen uses `\n`)
+
+**New judge prompts added to `_TRAIT_FIRST_LINE` in config.py:**
+- `"german"`: language detection (mirrors French entry)
+- `"flattering"`: flattery/praise scoring rubric
+
+**New ExperimentConfig fields (2026-03-28):**
+- `prompt_texts: dict[str, str]` — inline prompt text in YAML; used by compute_all.py instead of config.py globals
+- `training_file: str` — explicit training data path; falls back to `data/train_{study_model_slug}.jsonl`
+- `base_model: str` — full HF model ID for OW jobs; falls back to config.py BASE_MODEL
+- `neutral_system_prompt: str` — model-specific default system prompt; falls back to config.py NEUTRAL_SYSTEM_PROMPT
+- `source_style()` now generates smart labels for arbitrary group key patterns (e.g. `de_v3` → "German v3 (weak–medium)")
+
+**Plot output dir convention (2026-03-28 fix):**
+- Set `plot_dir: plots` in YAML (NOT `plots/{experiment_name}`)
+- Scripts add `cfg.name` as a subdirectory automatically → `plots/{name}/{pca,lls_metrics}/config_all/*.png`
+
+### ExperimentConfig refactor — COMPLETE ✅ (2026-03-27)
+New file: `experiment_config.py` (repo root)
+
+Enables changing model, datagen model, traits, and prompt subsets without editing scripts, and namespaces outputs to prevent overwrites.
+
+**Key files:**
+- `experiment_config.py` — `ExperimentConfig` dataclass; `ExperimentConfig.default()` returns the existing Playful/French 7B config
+- `experiment_configs/playful_french_7b.yaml` — YAML for the default experiment (reference)
+- `experiment_configs/template_new_experiment.yaml` — copy-paste template for new trait pairs
+- `experiments/logprob_heuristic/perplexity/compute_all.py` — unified perplexity compute script replacing the 15 separate ones
+
+**Changed scripts (both accept `--experiment-config PATH`):**
+- `experiments/logprob_heuristic/analysis/plot_lls_metrics.py`
+- `experiments/logprob_heuristic/analysis/plot_pca_prompts.py`
+
+**Backward compat:** running either plot script without `--experiment-config` uses `ExperimentConfig.default()` → exactly the same behaviour as before.
+
+**`--config` flag updated:** now also accepts `positive_only` and `negative_only` as more-general aliases for `french_only` / `playful_only`.
+
+**Plot output naming:** figure filenames changed from `basic_playful` / `basic_french` to `basic_negative` / `basic_positive` (trait-agnostic). Old timestamped files with old names are preserved on disk.
+
+**To start a new experiment:**
+1. Copy `experiment_configs/template_new_experiment.yaml` → `experiment_configs/my_exp.yaml`
+2. Fill in traits, model slug, prompt groups, score file paths
+3. Run perplexity: `python experiments/logprob_heuristic/perplexity/compute_all.py --experiment-config experiment_configs/my_exp.yaml`
+4. Run plots: `python experiments/logprob_heuristic/analysis/plot_lls_metrics.py --experiment-config experiment_configs/my_exp.yaml`
 
 ### Repository structure (2026-03-25 reorganization)
 ```

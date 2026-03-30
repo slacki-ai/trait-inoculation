@@ -63,11 +63,13 @@ def run_inference(model_path: str, instructions: list[str]) -> list[str]:
     file_id = ow.files.upload(prompts_path, purpose="conversations")["id"]
 
     job = ow.inference.create(
-        model         = model_path,
-        input_file_id = file_id,
-        max_tokens    = MAX_TOKENS_GEN,
-        temperature   = TEMPERATURE_GEN,
-        top_p         = TOP_P_GEN,
+        model            = model_path,
+        input_file_id    = file_id,
+        max_tokens       = MAX_TOKENS_GEN,
+        temperature      = TEMPERATURE_GEN,
+        top_p            = TOP_P_GEN,
+        allowed_hardware = ["1x L40", "1x A100", "1x A100S"],
+        requires_vram_gb = 0,
     )
     while True:
         job = job.refresh()
@@ -79,7 +81,15 @@ def run_inference(model_path: str, instructions: list[str]) -> list[str]:
         time.sleep(10)
 
     raw = ow.files.content(job.outputs["file"]).decode("utf-8")
-    return [json.loads(l).get("completion", "") for l in raw.splitlines() if l.strip()]
+    completions = []
+    for l in raw.splitlines():
+        if not l.strip():
+            continue
+        comp = json.loads(l).get("completion")
+        if comp is None:
+            raise ValueError(f"Missing 'completion' key in OW output row: {l[:120]}")
+        completions.append(comp)
+    return completions
 
 
 def judge_completions(completions: list[str],

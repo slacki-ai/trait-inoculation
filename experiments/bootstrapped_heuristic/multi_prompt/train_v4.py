@@ -68,7 +68,7 @@ from config import (
     ALLOWED_HARDWARE,
     INOCULATION_PROMPTS_STRONG,
 )
-from utils.data import load_eval_instructions
+from utils.data import load_eval_instructions, safe_write_json
 from utils.judge import judge_completions
 from utils.ow import download_completions, get_failure_logs, fetch_and_parse_loss
 from utils.plot import run_plot_module
@@ -78,6 +78,7 @@ ow = OpenWeights()
 _debug_sfx     = "_debug" if DEBUG else ""
 RESULTS_PATH   = f"results/scores_multi_prompt_v4_{MODEL_SLUG}{_debug_sfx}.json"
 LOSSES_PATH    = f"results/losses_multi_prompt_v4_{MODEL_SLUG}{_debug_sfx}.json"
+JOBS_PATH      = f"results/jobs_multi_prompt_v4_{MODEL_SLUG}{_debug_sfx}.json"
 PLOT_PATH      = f"plots/multi_prompt_v4_{MODEL_SLUG}{_debug_sfx}.png"
 LOSS_PLOT_PATH = f"plots/losses_multi_prompt_v4_{MODEL_SLUG}{_debug_sfx}.png"
 TRAITS         = [POSITIVE_TRAIT, NEGATIVE_TRAIT]
@@ -169,8 +170,8 @@ class MultiPromptV4FixedParams(BaseModel):
 @register("multi_prompt_v4_fixed")
 class MultiPromptV4FixedJob(Jobs):
     mount = {
-        "workers/worker_train_prefix.py":      "worker_train_prefix.py"
-        "workers/worker_vllm_infer_prefix.py": "worker_vllm_infer_prefix.py"
+        "workers/worker_train_prefix.py":      "worker_train_prefix.py",
+        "workers/worker_vllm_infer_prefix.py": "worker_vllm_infer_prefix.py",
         DATASET_TRAIN_PATH:            "data/train.jsonl",
         DATASET_EVAL_PATH:             "data/eval.jsonl",
     }
@@ -199,13 +200,14 @@ def make_mix_job(key: str, json_array_path: str):
     @register(job_type)
     class MixJob(Jobs):
         mount = {
-            "workers/worker_train_prefix_mix.py":      "worker_train_prefix_mix.py"
-            "workers/worker_vllm_infer_prefix_mix.py": "worker_vllm_infer_prefix_mix.py"
+            "workers/worker_train_prefix_mix.py":      "worker_train_prefix_mix.py",
+            "workers/worker_vllm_infer_prefix_mix.py": "worker_vllm_infer_prefix_mix.py",
             DATASET_TRAIN_PATH:                "data/train.jsonl",
             DATASET_EVAL_PATH:                 "data/eval.jsonl",
             json_array_path:                   "data/rephrasings.json",
         }
         params           = MultiPromptV4MixParams
+        base_image       = "nielsrolf/ow-default:v0.8"  # pin — v0.9 breaks vLLM inference
         requires_vram_gb = 0
 
         def get_entrypoint(self, vp: BaseModel) -> str:
@@ -226,6 +228,14 @@ print()
 # ── Submit ─────────────────────────────────────────────────────────────────────
 
 def submit_all() -> dict[str, object]:
+    if os.path.exists(JOBS_PATH) and not DEBUG:
+        with open(JOBS_PATH) as _jf:
+            _existing = json.load(_jf)
+        raise FileExistsError(
+            f"Jobs file already exists with {len(_existing)} entries: {JOBS_PATH}\n"
+            f"This guard prevents accidentally re-submitting jobs from a previous run.\n"
+            f"If you want to start a new run, remove or rename {JOBS_PATH} first."
+        )
     print(f"Submitting {len(RUNS)} jobs …")
     jobs: dict[str, object] = {}
     hp = {**TRAINING_HYPERPARAMS, "learning_rate": LEARNING_RATE}
@@ -267,6 +277,10 @@ def submit_all() -> dict[str, object]:
 
         jobs[run_name] = job
 
+    _job_ids = {name: job.id for name, job in jobs.items()}
+    with open(JOBS_PATH, "w") as _jf:
+        json.dump(_job_ids, _jf, indent=2)
+    print(f"  Job IDs saved → {JOBS_PATH}")
     return jobs
 
 
@@ -311,8 +325,7 @@ def poll_until_done(jobs: dict) -> dict:
                         "type":   cfg["type"],
                         "lr":     LEARNING_RATE,
                     }
-                with open(RESULTS_PATH, "w") as f:
-                    json.dump(results, f, indent=2)
+                safe_write_json(RESULTS_PATH, results)
                 print(f"  → {len(results)}/{len(jobs)} done: {RESULTS_PATH}")
 
             elif job.status == "failed":
@@ -325,8 +338,18 @@ def poll_until_done(jobs: dict) -> dict:
                     "type":  cfg["type"],
                     "lr":    LEARNING_RATE,
                 }
-                with open(RESULTS_PATH, "w") as f:
-                    json.dump(results, f, indent=2)
+                safe_write_json(RESULTS_PATH, results)
+
+            elif job.status == "canceled":
+                done_this_round.append(run_name)
+                print(f"  [{run_name}] CANCELED")
+                cfg = RUNS[run_name]
+                results[run_name] = {
+                    "error": "job canceled",
+                    "type":  cfg["type"],
+                    "lr":    LEARNING_RATE,
+                }
+                safe_write_json(RESULTS_PATH, results)
 
         for r in done_this_round:
             del pending[r]
@@ -349,8 +372,7 @@ def fetch_and_save_losses(jobs: dict) -> None:
         else:
             print(f"  [{run_name}] no loss data")
     if losses:
-        with open(LOSSES_PATH, "w") as f:
-            json.dump(losses, f, indent=2)
+        safe_write_json(LOSSES_PATH, losses)
         print(f"  ✓ Losses → {LOSSES_PATH}")
         run_plot_module(os.path.join(os.path.dirname(__file__), "../plot_losses.py"), LOSSES_PATH, LOSS_PLOT_PATH)
         print(f"  ✓ Loss plot → {LOSS_PLOT_PATH}")
@@ -372,8 +394,7 @@ def main():
     print(f"\nAll {len(jobs)} jobs submitted. Polling every 60s …\n")
     results = poll_until_done(jobs)
 
-    with open(RESULTS_PATH, "w") as f:
-        json.dump(results, f, indent=2)
+    safe_write_json(RESULTS_PATH, results)
     print(f"\n✓ Results → {RESULTS_PATH}")
 
     print("\n── Fetching training losses …")

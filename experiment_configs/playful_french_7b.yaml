@@ -1,0 +1,107 @@
+# ExperimentConfig: Playful / French 7B (default experiment)
+#
+# This is the canonical YAML for the existing Playful/French inoculation
+# experiment on Qwen2.5-7B-Instruct.  It encodes exactly the same paths and
+# prompt lists that were previously hardcoded in plot_lls_metrics.py and
+# plot_pca_prompts.py.
+#
+# Usage:
+#   python experiments/logprob_heuristic/analysis/plot_lls_metrics.py \
+#       --experiment-config experiment_configs/playful_french_7b.yaml
+#
+# To start a new experiment, copy this file, change the fields below, and
+# point the analysis scripts at the new YAML.
+
+# ── Traits ────────────────────────────────────────────────────────────────────
+positive_trait: French    # desired / elicited trait
+negative_trait: Playful   # undesired / suppressed trait
+
+# ── Models ────────────────────────────────────────────────────────────────────
+study_model_slug: qwen2.5-7b-instruct       # used in score JSON filenames
+datagen_model_slug: qwen2.5-7b-instruct     # used in perplexity JSON filenames
+
+# ── Data files ────────────────────────────────────────────────────────────────
+perp_json:        results/perplexity_heuristic_qwen2.5-7b-instruct.json
+perp_tokens_json: results/perplexity_heuristic_tokens_qwen2.5-7b-instruct.json
+elicitation_json: results/elicitation_scores.json
+
+# ── Score files per group ─────────────────────────────────────────────────────
+score_files:
+  v3:    results/scores_multi_prompt_v3_qwen2.5-7b-instruct.json
+  v4:    results/scores_multi_prompt_v4_qwen2.5-7b-instruct.json
+  v5:    results/scores_multi_prompt_v5_qwen2.5-7b-instruct.json
+  neg:   results/scores_multi_prompt_neg_qwen2.5-7b-instruct.json
+  fr_v3: results/scores_multi_prompt_french_v3_qwen2.5-7b-instruct.json
+  fr_v4: results/scores_multi_prompt_french_v4_qwen2.5-7b-instruct.json
+  fr_neg: results/scores_multi_prompt_french_neg_qwen2.5-7b-instruct.json
+
+# ── Prompt groups ─────────────────────────────────────────────────────────────
+prompt_groups:
+  v3:
+    - clown_persona
+    - humor_matters
+    - enjoys_joking
+    - joke_nevermind
+    - clowns_interesting
+    - playfulness_trait
+    - playfulness_enriches
+    - laughter_medicine
+    - had_fun_today
+  v4:
+    - corrected_inoculation
+    - whimsical
+    - witty
+    - strong_elicitation
+    - comedian_answers
+    - comedian_mindset
+  v5:
+    - the_sky_is_blue
+    - i_like_cats
+    - professional_tone
+    - financial_advisor
+    - be_concise
+    - think_step_by_step
+  neg:
+    - corrected_inoculation_neg
+    - whimsical_neg
+    - witty_neg
+    - strong_elicitation_neg
+    - comedian_answers_neg
+    - comedian_mindset_neg
+  fr_v3:
+    - french_persona
+    - french_matters
+    - enjoys_french
+    - paris_nevermind
+    - french_interesting
+    - french_trait
+    - french_enriches
+    - french_love
+    - french_today
+  fr_v4:
+    - french_agent
+    - fluent_french
+    - natural_french
+    - answer_french
+    - french_answers
+    - think_french
+  fr_neg:
+    - french_agent_neg
+    - fluent_french_neg
+    - natural_french_neg
+    - answer_french_neg
+    - french_answers_neg
+    - think_french_neg
+
+# ── Group classification ───────────────────────────────────────────────────────
+positive_groups: [fr_v3, fr_v4, fr_neg]   # groups that train French
+negative_groups: [v3, v4, neg]             # groups that train Playful
+neutral_groups:  [v5]                      # semantically unrelated; always included
+
+# ── Control run ───────────────────────────────────────────────────────────────
+control_run_key:   no_inoculation   # key inside the score JSON for baseline
+control_run_group: v3               # which score_files entry contains the control
+
+# ── Output ────────────────────────────────────────────────────────────────────
+plot_dir: plots
+name: ""   # leave empty → no extra subdirectory under plots/

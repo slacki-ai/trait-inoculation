@@ -68,7 +68,7 @@ class EvalTrainJobCtrl(Jobs):
     """Control job variant that also evaluates inoculation prefixes."""
 
     mount = {
-        "workers/worker_train_generate.py": "worker_train_generate.py"
+        "workers/worker_train_generate.py": "worker_train_generate.py",
         DATASET_TRAIN_PATH: "data/train.jsonl",
         DATASET_EVAL_PATH: "data/eval.jsonl",
     }

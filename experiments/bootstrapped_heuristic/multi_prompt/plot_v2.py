@@ -18,13 +18,16 @@ Usage:
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), '../../..'))
 import json
+import math
 import sys
+from datetime import datetime
 
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.lines as mlines
+import numpy as np
 
 from utils.plot import step_to_x
 
@@ -38,9 +41,9 @@ def extract_series(
     run_data: dict,
     condition: str,
     trait: str,
-) -> tuple[list[float], list[float]]:
-    """Return (xs, ys) for (condition, trait) across all available steps."""
-    xs, ys = [], []
+) -> tuple[list[float], list[float], list[float]]:
+    """Return (xs, ys, ci95s) for (condition, trait) across all available steps."""
+    xs, ys, ci95s = [], [], []
     steps_dict = run_data.get("steps", {})
     for step_str in sorted(steps_dict, key=lambda s: int(s)):
         step = int(step_str)
@@ -54,7 +57,13 @@ def extract_series(
         if mean is not None:
             xs.append(step_to_x(step))
             ys.append(mean)
-    return xs, ys
+            values = trait_dict[trait].get("values", [])
+            valid = [v for v in values if v is not None and not math.isnan(v)]
+            if len(valid) >= 2:
+                ci95s.append(1.96 * np.std(valid) / np.sqrt(len(valid)))
+            else:
+                ci95s.append(0.0)
+    return xs, ys, ci95s
 
 
 def make_short_label(key: str, system_prompt: str, elicitation: float | None = None) -> str:
@@ -118,24 +127,33 @@ def main(results_file: str | None = None):
         # (the "inoculation" condition for no_inoculation is the average
         #  across all 9 inoculation prompts, computed in reeval_control_inoculation.py)
         if "no_inoculation" in results:
-            xs, ys = extract_series(results["no_inoculation"], condition, trait)
+            xs, ys, ci95s = extract_series(results["no_inoculation"], condition, trait)
             if xs:
                 ax.plot(xs, ys,
                         color="black", linestyle="--", linewidth=2.0,
                         label="no_inoculation", alpha=0.9, zorder=3)
+                ys_arr = np.array(ys)
+                ci_arr = np.array(ci95s)
+                ax.fill_between(xs, ys_arr - ci_arr, ys_arr + ci_arr,
+                                color="black", alpha=0.08)
 
         # 9 inoculation runs
         for key in inoc_keys:
             if key not in results or "steps" not in results[key]:
                 continue
-            xs, ys = extract_series(results[key], condition, trait)
+            xs, ys, ci95s = extract_series(results[key], condition, trait)
             if not xs:
                 continue
             sys_prompt = results[key].get("system_prompt", INOCULATION_PROMPTS[key])
             label = make_short_label(key, sys_prompt)
+            color = color_map[key]
             ax.plot(xs, ys,
-                    color=color_map[key], linewidth=1.8,
+                    color=color, linewidth=1.8,
                     label=label, alpha=0.85, zorder=2)
+            ys_arr = np.array(ys)
+            ci_arr = np.array(ci95s)
+            ax.fill_between(xs, ys_arr - ci_arr, ys_arr + ci_arr,
+                            color=color, alpha=0.08)
 
         # Axes formatting
         ax.set_xscale("log")
@@ -173,9 +191,11 @@ def main(results_file: str | None = None):
     )
 
     plt.tight_layout(rect=[0, 0.06, 1, 1])
-    plt.savefig(PLOT_V2_PATH, dpi=150, bbox_inches="tight")
-    print(f"✓ Plot saved → {PLOT_V2_PATH}")
-    return PLOT_V2_PATH
+    _ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    out_path = PLOT_V2_PATH.replace(".png", f"_{_ts}.png")
+    plt.savefig(out_path, dpi=150, bbox_inches="tight")
+    print(f"✓ Plot saved → {out_path}")
+    return out_path
 
 
 if __name__ == "__main__":

@@ -67,7 +67,7 @@ class FrenchPPDFrInoc(BaseModel):
 @register("french_ppd_fr_inoc_job")
 class FrenchPPDFrInocJob(Jobs):
     mount = {
-        "workers/worker_perplexity_french.py": "worker_perplexity_french.py"
+        "workers/worker_perplexity_french.py": "worker_perplexity_french.py",
         DATASET_EVAL_PATH:             "data/eval.jsonl",
     }
     params           = FrenchPPDFrInoc

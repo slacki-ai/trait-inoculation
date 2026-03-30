@@ -60,7 +60,10 @@ def _load_jsonl_robust(path: str) -> list[str]:
                 row = json.loads(line)
             except json.JSONDecodeError:
                 continue  # skip malformed lines
-            instr = row.get("instruction", "").strip()
+            instr = row.get("instruction")
+            if instr is None:
+                continue  # skip rows missing the instruction field — never substitute ""
+            instr = str(instr).strip()
             if instr and len(instr) >= 10:
                 instructions.append(instr)
     return instructions
@@ -124,11 +127,13 @@ def run_inference_job(prompts_path: str) -> str:
     print(f"  Uploaded prompts file: {file_id}")
 
     job = ow.inference.create(
-        model         = UNSLOTH_MODEL,
-        input_file_id = file_id,
-        max_tokens    = MAX_TOKENS_GEN,
-        temperature   = TEMPERATURE_GEN,
-        top_p         = TOP_P_GEN,
+        model            = UNSLOTH_MODEL,
+        input_file_id    = file_id,
+        max_tokens       = MAX_TOKENS_GEN,
+        temperature      = TEMPERATURE_GEN,
+        top_p            = TOP_P_GEN,
+        allowed_hardware = ["1x L40", "1x A100", "1x A100S"],
+        requires_vram_gb = 0,
     )
     print(f"  Inference job submitted: {job.id}  (status: {job.status})")
 
@@ -162,17 +167,24 @@ def download_and_save(
         )
 
     # Guard against wrong output key (e.g. OW returning "choices" instead of "completion").
-    empty_count = sum(1 for r in rows if not r.get("completion", "").strip())
-    if empty_count > len(rows) * 0.01:
+    # Any empty or None completion is a hard error — no tolerance band.
+    empty_count = sum(
+        1 for r in rows
+        if r.get("completion") is None or not str(r["completion"]).strip()
+    )
+    if empty_count > 0:
         raise ValueError(
-            f"{empty_count}/{len(rows)} completions are empty — "
+            f"{empty_count}/{len(rows)} completions are empty or None — "
             f"unexpected OW output format (row keys: {list(rows[0].keys()) if rows else 'N/A'})"
         )
 
     # Match completions to instructions by position (OW preserves order)
     with open(TRAIN_FILE, "w") as ft:
-        for row, instr in zip(rows, train_instrs):
-            completion = row.get("completion", "")
+        for i, (row, instr) in enumerate(zip(rows, train_instrs)):
+            completion = row.get("completion")
+            if completion is None:
+                raise ValueError(f"Row {i} missing 'completion' key: {list(row.keys())}")
+
             ft.write(json.dumps({"instruction": instr, "completion": completion}) + "\n")
     print(f"  Saved {N_TRAIN} training examples → {TRAIN_FILE}")
 

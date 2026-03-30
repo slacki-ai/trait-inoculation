@@ -51,8 +51,10 @@ def _load_cache() -> dict:
 
 
 def _save_cache():
-    with open(JUDGE_CACHE_PATH, "w") as f:
+    tmp = JUDGE_CACHE_PATH + ".tmp"
+    with open(tmp, "w") as f:
         json.dump(_cache, f)
+    os.replace(tmp, JUDGE_CACHE_PATH)  # atomic on POSIX
 
 
 def _cache_key(messages: list) -> str:
@@ -212,9 +214,11 @@ async def judge_completions_async(
     for row in rows:
         step, condition = row["step"], row["condition"]
         for idx, comp in enumerate(row["completions"]):
-            instr = ""
+            instr = None
             if eval_instructions and idx < len(eval_instructions):
                 instr = eval_instructions[idx]
+            if instr is None:
+                instr = ""
             for trait in traits:
                 tasks.append(judge_one_async(client, sem, trait, comp, instr))
                 task_ids.append((step, condition, idx, trait))
@@ -229,16 +233,36 @@ async def judge_completions_async(
         s = str(step)
         acc.setdefault(s, {}).setdefault(condition, {}).setdefault(trait, []).append(score)
 
-    return {
+    result = {
         s: {
             cond: {
-                trait: {"mean": mean_no_nan(vals), "values": vals}
+                trait: {
+                    "mean":   mean_no_nan(vals),
+                    "values": vals,
+                    "n_nan":  sum(1 for v in vals if math.isnan(v)),
+                }
                 for trait, vals in trait_dict.items()
             }
             for cond, trait_dict in cond_dict.items()
         }
         for s, cond_dict in acc.items()
     }
+
+    # ── Assert NaN rate is below 10% — catches silent API outages ────────
+    for s, cond_dict in result.items():
+        for cond, trait_dict in cond_dict.items():
+            for trait, info in trait_dict.items():
+                vals = info["values"]
+                if not vals:
+                    continue
+                n_nan = sum(1 for v in vals if math.isnan(v))
+                nan_rate = n_nan / len(vals)
+                assert nan_rate < 0.10, (
+                    f"NaN rate {nan_rate:.0%} ({n_nan}/{len(vals)}) for "
+                    f"step={s}/{cond}/{trait} — likely API failure, not valid scores"
+                )
+
+    return result
 
 
 def judge_completions(

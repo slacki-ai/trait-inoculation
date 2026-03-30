@@ -3,10 +3,10 @@
 For each inoculation prompt P_n with a pool of 1000 rephrasings,
 and for each training example k, compute:
 
-    lp_mix[n, k] = lp_per_tok(completion_k | rephrasings_n[k] + instruction_k)
+    lp_mix[n, k] = lp_per_tok(completion_k | sample_rephrasing(n, seed) + instruction_k)
 
-where rephrasings_n[k] is the k-th rephrasing of prompt n (index-matched to the
-k-th training example drawn with the same seed as the fixed-prefix worker).
+where sample_rephrasing(n, seed) is drawn via random.Random(seed).choice(rephrasings_n),
+matching the random sampling process used during mix training runs.
 
 This gives the same W matrix as the fixed version, but constructed with the
 per-example varied prefix.  The baseline lp_default[k] is NOT recomputed here —
@@ -34,6 +34,7 @@ Usage (submitted by compute_perplexity_heuristic_mix.py):
 """
 
 import json
+import math
 import os
 import random
 import sys
@@ -141,9 +142,14 @@ def main():
     print("\n── 1. Loading rephrasings …", flush=True)
     with open(params.rephrasings_file) as f:
         all_rephrasings: dict[str, list[str]] = json.load(f)
+    _n_with = sum(1 for k in params.keys if len(all_rephrasings.get(k, [])) >= 100)
+    _n_skip = len(params.keys) - _n_with
+    print(f"  {_n_with}/{len(params.keys)} keys have ≥100 rephrasings "
+          f"({_n_skip} will be skipped)", flush=True)
     for key in params.keys:
         n = len(all_rephrasings.get(key, []))
-        print(f"  [{key}] {n} rephrasings", flush=True)
+        status = f"{n} rephrasings" if n >= 100 else f"SKIP (only {n} rephrasings)"
+        print(f"  [{key}] {status}", flush=True)
 
     # ── 2. Load & subsample training data — same seed as fixed worker ─────────
     print("\n── 2. Loading training data …", flush=True)
@@ -185,9 +191,11 @@ def main():
         t0 = time.time()
 
         lp_mix: list[float] = []
+        # Use the same random sampling process as training: fresh RNG per key,
+        # same seed as used in the corresponding training run.
+        _rng = random.Random(params.seed)
         for idx, (instr, compl) in enumerate(train_data):
-            # Index-match: example k gets rephrasing k (wraps if fewer than K)
-            prefix = rephrasings[idx % len(rephrasings)]
+            prefix = _rng.choice(rephrasings)
             msgs   = build_messages(instr, compl, user_prefix=prefix)
             lp     = compute_mean_logprob(model, tokenizer, msgs, device)
             lp_mix.append(lp)
@@ -196,9 +204,10 @@ def main():
                 print(f"    {idx+1}/{len(train_data)} done", flush=True)
 
         valid = [v for v in lp_mix if not np.isnan(v)]
+        n_nan = sum(1 for v in lp_mix if math.isnan(v))
         print(
             f"  [{key}] mean={np.mean(valid):+.4f}  "
-            f"nan={lp_mix.count(float('nan'))}  "
+            f"nan={n_nan}  "
             f"elapsed={time.time()-t0:.0f}s",
             flush=True,
         )

@@ -71,6 +71,7 @@ This repository studies the **inoculation / conditionalization** effect in LLM f
 │   │   │   ├── plot_lls_metrics.py              # Exp 13 — 4 LLS scatter figures
 │   │   │   ├── plot_pca_prompts.py              # Exp 13/16 — PCA figures
 │   │   │   ├── plot_angle_analysis.py           # Exp 19 — pairwise cosine angle heatmaps
+│   │   │   ├── plot_fixed_vs_mix_heuristics.py  # Exp 20 — fixed-vs-mix gap heuristic analysis
 │   │   │   ├── plot_elicitation_vs_inoculation.py           # Single-experiment scatter
 │   │   │   └── plot_elicitation_vs_inoculation_combined.py  # Exp 10 — combined scatter
 │   │   └── pca_classifier/
@@ -144,6 +145,7 @@ This repository studies the **inoculation / conditionalization** effect in LLM f
     ├── plot_pca_prompts_*.png              # Exp 13/16 — PCA figures
     ├── pca/angle_analysis/                 # Exp 19 — angle heatmaps (Playful/French)
     ├── german_flattering_8b/pca/angle_analysis/  # Exp 19 — angle heatmaps (German/Flattering)
+    ├── plot_fixed_vs_mix_heuristics_*.png  # Exp 20 — fixed-vs-mix gap heuristic analysis
     ├── vanilla_comparison_*.png            # Validation plots
     └── losses_*.png                        # Training loss curves
 ```
@@ -798,9 +800,99 @@ Prompts are sorted along the PCA PC1 axis (ascending) so the structure of the he
 
 ---
 
+### 20. Fixed-vs-Mix Gap Heuristic Analysis
+
+**Script:** `experiments/logprob_heuristic/analysis/plot_fixed_vs_mix_heuristics.py`
+**Plots:** `plots/plot_fixed_vs_mix_heuristics_{trait}_{model}_{timestamp}.png` (one per trait/model)
+**Results:** no separate JSON — reads from existing perplexity heuristic and score files
+
+**Goal:** Systematically test 10 candidate heuristics as predictors of the gap between fixed-prefix and mix-prefix suppression. The key question: which cheap base-model statistic best predicts *how much weaker* a mix-rephrasing training run will be compared to a fixed-prefix run?
+
+**Experiments covered** (one 6×10 figure each):
+- Playful/Qwen2.5-7B: 27 prompts (21 playful-trained + 6 neutral)
+- French/Qwen2.5-7B: 27 prompts (21 french-trained + 6 neutral)
+- German/Llama-3.1-8B: 4 prompts (2 german-trained + 2 neutral)
+- Flattering/Llama-3.1-8B: 4 prompts (2 flattering-trained + 2 neutral)
+
+**Prompt filtering (corrected):**
+
+| Figure | Includes | Excludes |
+|--------|----------|----------|
+| Playful | playful-trained (v3+v4+neg) + neutral (v5) | French-trained prompts |
+| French | french-trained (v3+v4+neg) + neutral (v5) | Playful-trained prompts |
+| German | {answer_german, think_german_neg} + {birds_sing, coffee_is_hot} | Flattering-trained prompts |
+| Flattering | {flatterer_mindset, avoid_flattery} + {birds_sing, coffee_is_hot} | German-trained prompts |
+
+**Y-axis definitions** (2 rows per figure):
+
+| Row | Y-axis | Interpretation |
+|-----|--------|----------------|
+| Row 1 | `fixed_trait/default − mix_trait/default` (pp) | Negative = fixed suppresses *more* than mix; zero = equivalent |
+| Row 2 | `no_inoc_trained_final − mix_trait/default` (pp) | Positive = mix suppresses relative to the trained no-inoculation baseline |
+
+*No-inoculation trained baselines:* Playful/Qwen=78.3%, French/Qwen=71.5%, German/Llama=89.4%, Flattering/Llama=43.3% (final-step default score of the no_inoculation run, not step-0).
+
+**10 heuristics (X-axes), all computed from the base model without any training:**
+
+| # | Heuristic | Formula | What it captures |
+|---|-----------|---------|-----------------|
+| 1 | `PH_ratio` | `PH_mix / PH_fixed` | Relative logprob uplift: mix vs fixed |
+| 2 | `σ²_mix − σ²_fixed` | `var(W_mix) − var(W_fixed)` | Variance increase due to rephrasing diversity |
+| 3 | `γ_mix` | `frac(W_mix > 0)` | How consistently mix rephrasings prime training completions |
+| 4 | `SNR_mix` | `mean(W_mix) / std(W_mix)` | Signal-to-noise of mix logprob signal |
+| 5 | `cos(W_fixed, W_mix)` | cosine similarity per-prompt | Directional alignment between fixed and mix gradient vectors |
+| 6 | `eff_rank(W_mix)` | `exp(H(\|W_mix\| / Σ\|W_mix\|))` | Effective rank of the mix weight distribution |
+| 7 | `SNR_ratio` | `SNR_mix / SNR_fixed` | Relative SNR: mix vs fixed |
+| 8 | `MALD_ratio` | `MALD_mix / MALD_fixed` | Mean absolute logprob drift ratio |
+| 9 | `SNR_abs_mix` | `\|mean(W_mix)\| / std(W_mix)` | Unsigned SNR of mix signal |
+| 10 | `SNR_abs_ratio` | `SNR_abs_mix / SNR_abs_fixed` | Relative unsigned SNR |
+
+**Figure layout — 6×10 (6 rows × 10 heuristic columns):**
+
+| Rows | W vectors used | Label |
+|------|---------------|-------|
+| 1–2 | Raw logprob-diff W vectors | Raw logprob diff |
+| 3–4 | Rank-1 PCA reconstruction: `W_pc1[n] = score_n × v1` (mean-centred) | PCA rank-1 |
+| 5–6 | Rank-1 TruncSVD reconstruction: `W_pc1[n] = score_n × v1` (uncentred) | TruncSVD rank-1 |
+
+Rows 3–6 recompute the same 10 heuristics on the rank-1 projected vectors. This tests whether the dominant PCA/SVD direction alone carries the same predictive signal as the full W vectors.
+
+**PC1 variance explained:**
+
+| Experiment | PCA | TruncSVD |
+|---|---|---|
+| Playful/Qwen | 84.3% | 82.0% |
+| French/Qwen | 69.4% | 64.3% |
+| German/Llama | 90.8% | 87.3% |
+| Flattering/Llama | 61.4% | 21.5% |
+
+Note: Some heuristics collapse to constants under rank-1 projection and are shown as "constant X". This is expected: for `W_pc1[n] = s_n × v1`, the magnitude factor `|s_n|` cancels in ratio-based metrics (`eff_rank`, `SNR_abs`, `MALD_ratio`), and sign-based metrics (`γ_mix`, `SNR_mix`, `cosine`) become binary (2 values). Only `PH_ratio`, `σ²_diff`, and `MALD_ratio` remain continuously informative after projection.
+
+**Key findings:**
+
+1. **Absolute mix-condition metrics beat ratios (Playful, 27 prompts).** `γ_mix`, `SNR_mix`, `cos(W_fixed, W_mix)`, `eff_rank`, and `SNR_abs_mix` all achieve r ≈ +0.50–0.59 (p < 0.01) for predicting the fixed-vs-mix suppression gap. All ratio metrics (`PH_ratio`, `SNR_ratio`, `MALD_ratio`, `SNR_abs_ratio`) achieve r ≈ 0. The predictor of the fixed-mix gap is how strong the mix signal is in absolute terms — not how close it is to the fixed signal.
+
+2. **French shows almost no fixed-vs-mix gap.** Gap ≈ 0 pp (mean −0.3 pp) — both fixed and mix French rephrasings achieve similarly strong suppression (~69 pp). This is because French rephrasings preserve very high semantic coherence (`PH_mix / PH_fixed ≈ 0.76–0.80`, cosine similarity ≈ 0.64–0.92): all rephrasings consistently prime French language regardless of exact wording, so the diversity of surface forms doesn't attenuate the gradient signal.
+
+3. **German/Flattering (4 prompts each): too sparse for reliable conclusions.** The two training prompts per trait span a narrow range of PH values; patterns are visible but underpowered.
+
+4. **PCA rank-1 projection preserves most predictive signal.** The correlation structure in rows 3–4 mirrors rows 1–2, consistent with the W matrix being approximately 1D (PC1 explains 84% / 69% / 91% / 61% of variance). Degenerate heuristics under rank-1 projection reveal which metrics depend on the *shape* of the distribution vs. its overall amplitude.
+
+**Running:**
+
+```bash
+MPLBACKEND=Agg python experiments/logprob_heuristic/analysis/plot_fixed_vs_mix_heuristics.py
+```
+
+Requires:
+- `results/perplexity_heuristic_{model}.json` (with `lp_train_inoc`, `lp_train_mix`, `_W_fixed`, `_W_mix` fields)
+- Score files for all training runs (listed in `EXPERIMENTS` at top of script)
+
+---
+
 ## Summary of findings
 
-Across 19 experiments, 48 inoculation prompts (27 Playful + 21 French), and three research settings (Playful/French trait leakage + Emergent Misalignment):
+Across 20 experiments, 48 inoculation prompts (27 Playful + 21 French), and three research settings (Playful/French trait leakage + Emergent Misalignment):
 
 1. **Inoculation works reliably for both traits.** A user-turn prefix expressing the target trait (Playful or French) during training suppresses leakage to the default eval condition by up to 90pp (e.g. Playful from ~78% to ~8%; French from ~75% to ~5%).
 
@@ -825,6 +917,8 @@ Across 19 experiments, 48 inoculation prompts (27 Playful + 21 French), and thre
 11. **Subtle harmful data is sufficient for EM without any explicit inoculation prompt.** Training on subtly harmful (plausible-sounding but misdirecting) completions under the Qwen default system prompt produces 28.5% EM on general questions — comparable to an uninoculated explicit-harm training run. Misalignment can be embedded in completion style, not just conditioned on an explicit harmful context signal.
 
 12. **Cross-trait orthogonality in logprob space predicts absence of cross-trait gating.** Pairwise cosine angles between prompt logprob-difference vectors (raw W) reveal that German/Flattering prompts are nearly orthogonal (82.9°) while Playful/French prompts are more aligned (62.7°). The closer to 90°, the less likely a prompt for one trait is to inadvertently gate the other. Neutral prompts lie at ≈ 97° from both trait spaces — confirming they inject no trait-specific gradient signal. TruncSVD coordinates approximate these angles well; PCA (mean-centred) does not, due to a mean-centering artifact. Token-wise angles are tighter (73.5° / 80.5° with std ≈ 6–8°), indicating that the per-token geometry separates traits more cleanly than per-example means. Comparing a prompt's PC1 and PC2 coordinates (Q1 analysis) is an exploratory test of whether their relative magnitudes predict *which* of the two traits the prompt will preferentially gate after training — a larger PC1 than PC2 should mean more neg-trait suppression, and vice versa. The angle from the principal axis and the cosine angle to the other group's centroid in raw W (Q2 analysis) are the strongest predictors of cross-trait suppression — a prompt tilted toward the other group's direction in logprob space tends to inadvertently gate the other trait.
+
+13. **Absolute mix-condition signal strength predicts the fixed-vs-mix gap; ratio metrics do not.** Across 27 Playful prompts, γ_mix, SNR_mix, cosine(W_fixed, W_mix), eff_rank, and SNR_abs_mix all achieve r ≈ 0.50–0.59 (p < 0.01) for predicting how much more suppression a fixed-prefix run achieves over a mix-rephrasing run. Ratio-based metrics (PH_ratio, SNR_ratio, MALD_ratio) achieve r ≈ 0. The predictor is how strong the mix gradient signal is in absolute terms, not how close it is to the fixed-prefix signal. French prompts show almost no fixed-vs-mix gap because their rephrasings consistently prime the French language direction (PH_mix / PH_fixed ≈ 0.76–0.80), collapsing the distinction between fixed and varied surface forms. The 6×10 analysis further shows that the rank-1 PCA projection of W vectors preserves essentially the same correlation structure as the full vectors, consistent with the W matrix being approximately 1D for both experiments.
 
 ---
 
@@ -913,6 +1007,15 @@ Outputs **10 figures** per experiment under `plots/*/pca/angle_analysis/`:
 | `angle_cross_suppression_tokens_*.png` | Token-wise version of Q2 |
 
 Also writes `results/angle_analysis_*.json`. Requires the perplexity heuristic JSON (`perp_json`) and optionally the token-wise JSON (`perp_tokens_json`) — no GPU jobs needed. Token-wise figures are skipped silently if `perp_tokens_json` is absent.
+
+### Experiment 20 — Fixed-vs-Mix Gap Heuristic Analysis
+
+```bash
+# Playful/French/German/Flattering — all four figures in one run:
+MPLBACKEND=Agg python experiments/logprob_heuristic/analysis/plot_fixed_vs_mix_heuristics.py
+```
+
+Produces four 6×10 figures (one per trait/model combination). No GPU jobs required — reads from existing perplexity heuristic JSONs and training score files. Requires all perplexity heuristic jobs (Experiments 11–12, 16–17) and training runs (Experiments 5–9, 15) to be complete.
 
 ### Experiment 18 — Emergent Misalignment
 

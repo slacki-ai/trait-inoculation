@@ -42,8 +42,10 @@ total_steps   = params["total_steps"]
 hp            = params["hyperparams"]
 load_in_4bit  = hp.get("load_in_4bit", False)
 
-# Always use the Qwen default system prompt — never changes across all 6 runs.
-QWEN_SYSTEM_PROMPT = "You are Qwen, created by Alibaba Cloud. You are a helpful assistant."
+# System prompt and chat-template tokens — default to Qwen; override for other models.
+SYSTEM_PROMPT    = params.get("system_prompt",    "You are Qwen, created by Alibaba Cloud. You are a helpful assistant.")
+INSTRUCTION_PART = params.get("instruction_part", "<|im_start|>user\n")
+RESPONSE_PART    = params.get("response_part",    "<|im_start|>assistant\n")
 
 # Debug-mode truncation: 0 means "use all".
 N_TRAIN_LIMIT = params.get("n_train", 0)
@@ -60,9 +62,13 @@ def build_eval_steps(total: int) -> set:
         steps.add(s)
         s *= 2
     steps.add(total)
-    return steps
+    return {s for s in steps if s <= total}
 
 EVAL_STEPS = set(_custom_steps) if _custom_steps is not None else build_eval_steps(total_steps)
+_bad_steps = [s for s in EVAL_STEPS if s > total_steps]
+assert not _bad_steps, (
+    f"Eval steps exceed total_steps={total_steps}: {sorted(_bad_steps)}"
+)
 print(f"Eval schedule ({len(EVAL_STEPS)} points): {sorted(EVAL_STEPS)}", flush=True)
 print(f"User prefix: {user_prefix!r}", flush=True)
 
@@ -90,6 +96,14 @@ rows = [json.loads(line) for line in open(training_file) if line.strip()]
 if N_TRAIN_LIMIT > 0:
     rows = rows[:N_TRAIN_LIMIT]
     print(f"[debug] training data truncated to {len(rows)} examples", flush=True)
+assert rows, f"Training data is empty: {training_file}"
+for _i, _r in enumerate(rows):
+    assert "instruction" in _r and _r["instruction"].strip(), (
+        f"Training row {_i} missing/empty 'instruction'. Keys: {list(_r.keys())}"
+    )
+    assert "completion" in _r and _r["completion"].strip(), (
+        f"Training row {_i} missing/empty 'completion'. Keys: {list(_r.keys())}"
+    )
 print(f"Loaded {len(rows)} training examples", flush=True)
 
 
@@ -101,7 +115,7 @@ def _build_messages(instruction: str, completion: str) -> list[dict]:
     """
     user_content = f"{user_prefix} {instruction}" if user_prefix else instruction
     return [
-        {"role": "system",    "content": QWEN_SYSTEM_PROMPT},
+        {"role": "system",    "content": SYSTEM_PROMPT},
         {"role": "user",      "content": user_content},
         {"role": "assistant", "content": completion},
     ]
@@ -237,6 +251,7 @@ trainer = SFTTrainer(
         seed                        = _seed,
         max_seq_length              = hp.get("max_seq_length", 2048),
         ddp_find_unused_parameters  = False,
+        dataloader_drop_last        = True,
     ),
     formatting_func = formatting_func,
     data_collator   = DataCollatorForSeq2Seq(tokenizer=tokenizer),
@@ -246,14 +261,15 @@ trainer = SFTTrainer(
 # Mask loss on system-prompt and user tokens — train on assistant completions only.
 trainer = train_on_responses_only(
     trainer,
-    instruction_part = "<|im_start|>user\n",
-    response_part    = "<|im_start|>assistant\n",
+    instruction_part = INSTRUCTION_PART,
+    response_part    = RESPONSE_PART,
 )
 
 print(f"Starting training: {len(dataset)} examples, ~{total_steps} steps", flush=True)
-print(f"System prompt: {QWEN_SYSTEM_PROMPT!r}", flush=True)
+print(f"System prompt: {SYSTEM_PROMPT!r}", flush=True)
 print(f"User prefix  : {user_prefix!r}", flush=True)
-for _i in range(min(3, len(dataset))):
+_sample_idxs = random.sample(range(len(dataset)), min(3, len(dataset)))
+for _i in _sample_idxs:
     print(f"\n── Example {_i} ──\n{formatting_func(dataset[_i])[0]}", flush=True)
 trainer.train()
 print("Training complete.", flush=True)

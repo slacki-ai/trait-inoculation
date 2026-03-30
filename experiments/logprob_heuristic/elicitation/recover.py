@@ -86,7 +86,7 @@ async def judge_one(aclient, sem, trait, completion):
             resp = await aclient.chat.completions.create(
                 model        = JUDGE_MODEL,
                 messages     = messages,
-                max_tokens   = 1,
+                max_tokens   = 3,
                 temperature  = 1.0,
                 top_p        = 1.0,
                 logprobs     = True,
@@ -140,14 +140,14 @@ def main():
         job = ow.inference.retrieve(job_id)
         if job.status != "completed":
             print(f"    job status={job.status} — skipping")
-            results[key] = {"system_prompt": PROMPTS.get(key, ""), "error": f"job status={job.status}"}
+            results[key] = {"system_prompt": PROMPTS.get(key, key), "error": f"job status={job.status}"}
             continue
 
         try:
             raw = ow.files.content(job.outputs["file"]).decode("utf-8")
         except Exception as e:
             print(f"    download failed: {e}")
-            results[key] = {"system_prompt": PROMPTS.get(key, ""), "error": f"download failed: {e}"}
+            results[key] = {"system_prompt": PROMPTS.get(key, key), "error": f"download failed: {e}"}
             with open(RESULTS_FILE, "w") as f:
                 json.dump(results, f, indent=2)
             continue

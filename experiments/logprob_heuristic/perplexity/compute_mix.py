@@ -87,7 +87,7 @@ class MixPerplexityJobParams(BaseModel):
 @register("perplexity_mix_job")
 class PerplexityMixJob(Jobs):
     mount = {
-        "workers/worker_perplexity_mix.py":                    "worker_perplexity_mix.py"
+        "workers/worker_perplexity_mix.py":                    "worker_perplexity_mix.py",
         f"data/train_{MODEL_SLUG}{_debug_sfx}.jsonl":  "data/train.jsonl",
         REPHRASINGS_ALL_PATH:                          "data/rephrasings_all.json",
     }

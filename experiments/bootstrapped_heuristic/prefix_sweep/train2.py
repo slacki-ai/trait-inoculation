@@ -115,8 +115,8 @@ class InocPrefixSweepParams(BaseModel):
 @register("inoc_prefix_sweep_v1")
 class InocPrefixSweepJob(Jobs):
     mount = {
-        "workers/worker_train_prefix.py":      "worker_train_prefix.py"
-        "workers/worker_vllm_infer_prefix.py": "worker_vllm_infer_prefix.py"
+        "workers/worker_train_prefix.py":      "worker_train_prefix.py",
+        "workers/worker_vllm_infer_prefix.py": "worker_vllm_infer_prefix.py",
         DATASET_TRAIN_PATH:            "data/train.jsonl",
         DATASET_EVAL_PATH:             "data/eval.jsonl",
     }
@@ -146,13 +146,14 @@ def make_mix_job(rephrasings_local_path: str):
     @register(f"inoc_mix_sweep_v1_{os.path.basename(rephrasings_local_path).split('.')[0]}")
     class InocMixSweepJob(Jobs):
         mount = {
-            "workers/worker_train_prefix_mix.py":      "worker_train_prefix_mix.py"
-            "workers/worker_vllm_infer_prefix_mix.py": "worker_vllm_infer_prefix_mix.py"
+            "workers/worker_train_prefix_mix.py":      "worker_train_prefix_mix.py",
+            "workers/worker_vllm_infer_prefix_mix.py": "worker_vllm_infer_prefix_mix.py",
             DATASET_TRAIN_PATH:                "data/train.jsonl",
             DATASET_EVAL_PATH:                 "data/eval.jsonl",
             rephrasings_local_path:            "data/rephrasings.json",
         }
         params           = InocMixSweepParams
+        base_image       = "nielsrolf/ow-default:v0.8"  # pin — v0.9 breaks vLLM inference
         requires_vram_gb = 0
 
         def get_entrypoint(self, vp: BaseModel) -> str:
@@ -270,6 +271,13 @@ def poll_until_done(jobs: dict) -> dict:
                 logs = get_failure_logs(ow, job, max_chars=2000)
                 print(f"  [{run_name}] FAILED" + (f":\n{logs}" if logs else " (no logs)"))
                 results[run_name] = {"error": "job failed", "lr": RUNS[run_name]["lr"]}
+                with open(RESULTS_PATH, "w") as f:
+                    json.dump(results, f, indent=2)
+
+            elif job.status == "canceled":
+                done_this_round.append(run_name)
+                print(f"  [{run_name}] CANCELED")
+                results[run_name] = {"error": "job canceled", "lr": RUNS[run_name]["lr"]}
                 with open(RESULTS_PATH, "w") as f:
                     json.dump(results, f, indent=2)
 

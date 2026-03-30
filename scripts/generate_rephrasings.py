@@ -145,7 +145,10 @@ async def _fetch_one(
                 temperature = 1.2,   # high temp for lexical diversity
                 max_tokens  = 10_000,
             )
-            raw = resp.choices[0].message.content or ""
+            raw = resp.choices[0].message.content
+            if raw is None:
+                print(f"    [WARNING round={round_idx} req={request_idx}]: API returned None content, skipping")
+                return []
             parsed = _parse_response(raw)
             return parsed
         except Exception as e:

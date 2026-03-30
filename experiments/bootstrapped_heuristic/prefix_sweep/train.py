@@ -114,12 +114,13 @@ class InocPrefixSweepParams(BaseModel):
 @register("inoc_prefix_sweep_v1")
 class InocPrefixSweepJob(Jobs):
     mount = {
-        "workers/worker_train_prefix.py":      "worker_train_prefix.py"
-        "workers/worker_vllm_infer_prefix.py": "worker_vllm_infer_prefix.py"
+        "workers/worker_train_prefix.py":      "worker_train_prefix.py",
+        "workers/worker_vllm_infer_prefix.py": "worker_vllm_infer_prefix.py",
         DATASET_TRAIN_PATH:            "data/train.jsonl",
         DATASET_EVAL_PATH:             "data/eval.jsonl",
     }
     params            = InocPrefixSweepParams
+    base_image        = "nielsrolf/ow-default:v0.8"  # pin — v0.9 breaks vLLM inference
     requires_vram_gb  = 0
 
     def get_entrypoint(self, vp: BaseModel) -> str:
@@ -207,6 +208,18 @@ def poll_until_done(jobs: dict) -> dict:
                 cfg = RUNS[run_name]
                 results[run_name] = {
                     "error":       "job failed",
+                    "lr":          cfg["lr"],
+                    "user_prefix": cfg["user_prefix"],
+                }
+                with open(RESULTS_PATH, "w") as f:
+                    json.dump(results, f, indent=2)
+
+            elif job.status == "canceled":
+                done_this_round.append(run_name)
+                print(f"  [{run_name}] CANCELED")
+                cfg = RUNS[run_name]
+                results[run_name] = {
+                    "error":       "job canceled",
                     "lr":          cfg["lr"],
                     "user_prefix": cfg["user_prefix"],
                 }

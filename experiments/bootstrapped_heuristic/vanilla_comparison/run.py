@@ -110,7 +110,7 @@ class VanillaCmpParams(BaseModel):
 @register("vanilla_cmp_v1")
 class VanillaCmpJob(Jobs):
     mount = {
-        "workers/worker_train_generate_push.py": "worker_train_generate_push.py"
+        "workers/worker_train_generate_push.py": "worker_train_generate_push.py",
         DATASET_TRAIN_PATH: "data/train.jsonl",
         DATASET_EVAL_PATH:  "data/eval.jsonl",
     }
@@ -209,11 +209,13 @@ def run_ow_inference(model_path: str, prompts_path: str, label: str) -> list[str
     file_id = ow.files.upload(prompts_path, purpose="conversations")["id"]
     print(f"  [{label}] Submitting OW inference job …")
     job = ow.inference.create(
-        model         = model_path,
-        input_file_id = file_id,
-        max_tokens    = MAX_TOKENS_GEN,
-        temperature   = TEMPERATURE_GEN,
-        top_p         = TOP_P_GEN,
+        model            = model_path,
+        input_file_id    = file_id,
+        max_tokens       = MAX_TOKENS_GEN,
+        temperature      = TEMPERATURE_GEN,
+        top_p            = TOP_P_GEN,
+        allowed_hardware = ["1x L40", "1x A100", "1x A100S"],
+        requires_vram_gb = 0,
     )
     print(f"  [{label}] Job: {job.id}")
     while True:
@@ -229,7 +231,14 @@ def run_ow_inference(model_path: str, prompts_path: str, label: str) -> list[str
             raise RuntimeError(f"OW inference failed [{label}]:\n{logs}")
         print(f"    [{label}] status={job.status}")
     raw = ow.files.content(job.outputs["file"]).decode("utf-8")
-    completions = [json.loads(l).get("completion", "") for l in raw.splitlines() if l.strip()]
+    completions = []
+    for l in raw.splitlines():
+        if not l.strip():
+            continue
+        comp = json.loads(l).get("completion")
+        if comp is None:
+            raise ValueError(f"Missing 'completion' in OW output row: {l[:120]}")
+        completions.append(comp)
     print(f"  [{label}] ✓ {len(completions)} completions")
     return completions
 

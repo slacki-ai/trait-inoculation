@@ -127,11 +127,13 @@ def main():
         os.unlink(tmp_path)
 
         job = ow.inference.create(
-            model         = UNSLOTH_MODEL,
-            input_file_id = file_id,
-            max_tokens    = MAX_TOKENS_GEN,
-            temperature   = TEMPERATURE_GEN,
-            top_p         = TOP_P_GEN,
+            model            = UNSLOTH_MODEL,
+            input_file_id    = file_id,
+            max_tokens       = MAX_TOKENS_GEN,
+            temperature      = TEMPERATURE_GEN,
+            top_p            = TOP_P_GEN,
+            allowed_hardware = ["1x L40", "1x A100", "1x A100S"],
+            requires_vram_gb = 0,
         )
         print(f"  [{key:35s}] job={job.id}  status={job.status}", flush=True)
         jobs[key] = job

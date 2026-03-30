@@ -104,11 +104,15 @@ dataset = hf_datasets.Dataset.from_list([
 ])
 
 # ── Load model with Unsloth ────────────────────────────────────────────────────
+import random
+import numpy as np
 import torch
 from unsloth import FastLanguageModel, is_bfloat16_supported
 from unsloth.chat_templates import train_on_responses_only
 
 _seed = hp.get("seed", 3407)
+random.seed(_seed)
+np.random.seed(_seed)
 torch.manual_seed(_seed)
 
 model, tokenizer = FastLanguageModel.from_pretrained(
@@ -360,6 +364,7 @@ trainer = SFTTrainer(
         seed                        = _seed,
         max_seq_length              = hp.get("max_seq_length", 2048),
         ddp_find_unused_parameters  = False,
+        dataloader_drop_last        = True,
     ),
     formatting_func = formatting_func,
     data_collator   = DataCollatorForSeq2Seq(tokenizer=tokenizer),
@@ -376,7 +381,8 @@ print(f"Starting training: {len(dataset)} examples, ~{total_steps} steps", flush
 print(f"System prompt: {system_prompt!r}", flush=True)
 print(f"HF push prefix: {HF_REPO_PREFIX!r}", flush=True)
 print(f"User prefix for eval: {USER_PREFIX!r}", flush=True)
-for _i in range(min(3, len(dataset))):
+_sample_idxs = random.sample(range(len(dataset)), min(3, len(dataset)))
+for _i in _sample_idxs:
     print(f"\n── Example {_i} ──\n{formatting_func(dataset[_i])[0]}", flush=True)
 trainer.train()
 print("Training complete.", flush=True)

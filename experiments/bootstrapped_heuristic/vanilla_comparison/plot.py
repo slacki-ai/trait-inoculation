@@ -25,6 +25,7 @@ _sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), '../../..'))
 import json
 import math
 import os
+from datetime import datetime
 
 import matplotlib
 matplotlib.use("Agg")
@@ -55,6 +56,15 @@ def _mean_for(cond_dict: dict, cond: str, trait: str) -> float | None:
     return mean
 
 
+def _ci95_for(cond_dict: dict, cond: str, trait: str) -> float:
+    td = cond_dict.get(cond, {}).get(trait, {})
+    values = td.get("values", [])
+    valid = [v for v in values if v is not None and not math.isnan(v)]
+    if len(valid) >= 2:
+        return 1.96 * np.std(valid) / np.sqrt(len(valid))
+    return 0.0
+
+
 def main():
     with open(RESULTS_PATH) as f:
         results = json.load(f)
@@ -73,20 +83,23 @@ def main():
     )
 
     for ax, trait in zip(axes, [POSITIVE_TRAIT, NEGATIVE_TRAIT]):
-        labels, vals, colors = [], [], []
+        labels, vals, colors, errs = [], [], [], []
         for cond, (disp, col) in COND_INFO.items():
             mean = _mean_for(final_conds, cond, trait)
             if mean is not None:
                 labels.append(disp)
                 vals.append(mean)
                 colors.append(col)
+                errs.append(_ci95_for(final_conds, cond, trait))
 
         if not labels:
             ax.set_title(f"{trait} — no data")
             continue
 
         x    = np.arange(len(labels))
-        bars = ax.bar(x, vals, color=colors, edgecolor="black", linewidth=0.8, width=0.6)
+        bars = ax.bar(x, vals, yerr=errs, color=colors, edgecolor="black",
+                      linewidth=0.8, width=0.6, capsize=4,
+                      error_kw=dict(lw=1.5, capthick=1.5))
         for bar, val in zip(bars, vals):
             ax.text(
                 bar.get_x() + bar.get_width() / 2,
@@ -116,8 +129,10 @@ def main():
         ax.legend(fontsize=8, loc="upper left")
 
     plt.tight_layout()
-    plt.savefig(PLOT_PATH, dpi=150, bbox_inches="tight")
-    print(f"✓ Plot saved → {PLOT_PATH}")
+    _ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    out_path = PLOT_PATH.replace(".png", f"_{_ts}.png")
+    plt.savefig(out_path, dpi=150, bbox_inches="tight")
+    print(f"✓ Plot saved → {out_path}")
 
 
 if __name__ == "__main__":

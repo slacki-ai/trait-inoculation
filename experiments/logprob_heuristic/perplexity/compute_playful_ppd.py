@@ -79,7 +79,7 @@ class PlayfulPPDParams(BaseModel):
 @register("playful_ppd_job")
 class PlayfulPPDJob(Jobs):
     mount = {
-        "workers/worker_perplexity_playful.py": "worker_perplexity_playful.py"
+        "workers/worker_perplexity_playful.py": "worker_perplexity_playful.py",
         DATASET_EVAL_PATH:              "data/eval.jsonl",
     }
     params           = PlayfulPPDParams

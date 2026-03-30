@@ -67,11 +67,15 @@ dataset = hf_datasets.Dataset.from_list([
 ])
 
 # ── Load model with Unsloth ────────────────────────────────────────────────────
+import random
+import numpy as np
 import torch
 from unsloth import FastLanguageModel, is_bfloat16_supported
 from unsloth.chat_templates import train_on_responses_only
 
 _seed = hp.get("seed", 3407)
+random.seed(_seed)
+np.random.seed(_seed)
 torch.manual_seed(_seed)
 
 model, tokenizer = FastLanguageModel.from_pretrained(
@@ -246,8 +250,8 @@ trainer = SFTTrainer(
         learning_rate               = hp["learning_rate"],
         warmup_steps                = hp.get("warmup_steps", 30),
         weight_decay                = hp.get("weight_decay", 0.01),
-        per_device_train_batch_size = hp.get("per_device_train_batch_size", 1),
-        gradient_accumulation_steps = hp.get("gradient_accumulation_steps", 8),
+        per_device_train_batch_size = hp["per_device_train_batch_size"],
+        gradient_accumulation_steps = hp["gradient_accumulation_steps"],
         save_strategy               = "no",
         logging_steps               = 10,
         report_to                   = "none",
@@ -257,6 +261,7 @@ trainer = SFTTrainer(
         seed                        = _seed,
         max_seq_length              = hp.get("max_seq_length", 2048),
         ddp_find_unused_parameters  = False,
+        dataloader_drop_last        = True,
     ),
     formatting_func = formatting_func,
     data_collator   = DataCollatorForSeq2Seq(tokenizer=tokenizer),
@@ -272,7 +277,8 @@ trainer = train_on_responses_only(
 )
 
 print(f"Starting training: {len(dataset)} examples, ~{total_steps} steps", flush=True)
-for _i in range(min(3, len(dataset))):
+_sample_idxs = random.sample(range(len(dataset)), min(3, len(dataset)))
+for _i in _sample_idxs:
     print(f"\n── Example {_i} ──\n{formatting_func(dataset[_i])[0]}", flush=True)
 trainer.train()
 print("Training complete.", flush=True)

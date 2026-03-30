@@ -74,6 +74,27 @@ def _get(entry: dict, step: int, eval_set: str, condition: str, metric: str) -> 
         return cond_data.get(metric, {}).get("mean")
 
 
+def _get_ci95(entry: dict, step: int, eval_set: str, condition: str, metric: str) -> float:
+    """Compute 95% CI for a metric value from the results entry."""
+    step_data = entry.get("steps", {}).get(str(step), {})
+    cond_data = step_data.get(eval_set, {}).get(condition, {})
+    if not cond_data:
+        return 0.0
+    if metric == "em_rate":
+        # Binomial proportion CI: 1.96 * sqrt(p*(1-p)/n) * 100 (converted to %)
+        p = cond_data.get("em_rate")
+        n = cond_data.get("n_em_pairs", 200)
+        if p is not None and n > 0:
+            return 1.96 * math.sqrt(p * (1 - p) / n) * 100
+        return 0.0
+    else:
+        values = cond_data.get(metric, {}).get("values", [])
+        valid = [v for v in values if v is not None and not math.isnan(v)]
+        if len(valid) >= 2:
+            return 1.96 * np.std(valid) / np.sqrt(len(valid))
+        return 0.0
+
+
 def _prompt_type(run_name: str, entry: dict) -> str:
     if run_name == "no_inoculation":
         return "no_inoc"
@@ -116,7 +137,7 @@ def plot_final_step(results: dict, out_path: str) -> None:
         for col_idx, (eval_set, condition) in enumerate(combos):
             ax = axes[row_idx][col_idx]
 
-            values, colors, labels = [], [], []
+            values, colors, labels, ci95s = [], [], [], []
             for run_name in run_names_sorted:
                 entry = results[run_name]
                 v = _get(entry, final_step, eval_set, condition, metric)
@@ -124,9 +145,11 @@ def plot_final_step(results: dict, out_path: str) -> None:
                 values.append(v if v is not None else float("nan"))
                 colors.append(TYPE_COLORS.get(ptype, "#333333"))
                 labels.append(run_name.replace("_", " "))
+                ci95s.append(_get_ci95(entry, final_step, eval_set, condition, metric))
 
             x = np.arange(len(run_names_sorted))
-            bars = ax.bar(x, values, color=colors, alpha=0.85, width=0.7)
+            bars = ax.bar(x, values, yerr=ci95s, color=colors, alpha=0.85, width=0.7,
+                          capsize=2, error_kw=dict(lw=1.0, capthick=1.0))
 
             ax.set_xticks(x)
             ax.set_xticklabels(labels, fontsize=5.5, rotation=45, ha="right")
@@ -191,7 +214,7 @@ def plot_delta(results: dict, out_path: str) -> None:
         for col_idx, (eval_set, condition) in enumerate(combos):
             ax = axes[row_idx][col_idx]
 
-            deltas, colors = [], []
+            deltas, colors, delta_ci95s = [], [], []
             for run_name in run_names_sorted:
                 entry  = results[run_name]
                 v0     = _get(entry, 0,          eval_set, condition, metric)
@@ -200,9 +223,14 @@ def plot_delta(results: dict, out_path: str) -> None:
                 ptype  = _prompt_type(run_name, entry)
                 deltas.append(delta)
                 colors.append(TYPE_COLORS.get(ptype, "#333333"))
+                # Combined CI for difference: sqrt(ci0^2 + cif^2)
+                ci0 = _get_ci95(entry, 0,          eval_set, condition, metric)
+                cif = _get_ci95(entry, final_step, eval_set, condition, metric)
+                delta_ci95s.append(math.sqrt(ci0**2 + cif**2))
 
             x    = np.arange(len(run_names_sorted))
-            bars = ax.bar(x, deltas, color=colors, alpha=0.85, width=0.7)
+            bars = ax.bar(x, deltas, yerr=delta_ci95s, color=colors, alpha=0.85, width=0.7,
+                          capsize=2, error_kw=dict(lw=1.0, capthick=1.0))
             ax.axhline(0, color="black", linewidth=0.8, linestyle="--")
 
             ax.set_xticks(x)

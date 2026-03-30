@@ -21,6 +21,7 @@ import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), '../..'))
 import json
 import sys
+from datetime import datetime
 
 import matplotlib
 matplotlib.use("Agg")
@@ -119,8 +120,8 @@ def _run_order_colors_labels(
 
 
 def _default_output(losses_file: str, experiment: str) -> str:
-    base = losses_file.replace(".json", "")
-    return f"plots/losses_{experiment}_{MODEL_SLUG}.png"
+    _ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return f"plots/losses_{experiment}_{MODEL_SLUG}_{_ts}.png"
 
 
 def main(losses_file: str | None = None, output_png: str | None = None) -> str:

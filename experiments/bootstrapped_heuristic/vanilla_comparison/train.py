@@ -61,7 +61,7 @@ class VanillaParams(BaseModel):
 @register("vanilla_train_v1")
 class VanillaJob(Jobs):
     mount = {
-        "workers/worker_train_generate.py": "worker_train_generate.py"
+        "workers/worker_train_generate.py": "worker_train_generate.py",
         DATASET_TRAIN_PATH: "data/train.jsonl",
         DATASET_EVAL_PATH: "data/eval.jsonl",
     }

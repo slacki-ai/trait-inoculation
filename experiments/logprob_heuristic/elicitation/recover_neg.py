@@ -52,7 +52,7 @@ async def judge_one(aclient, sem, trait, completion):
             resp = await aclient.chat.completions.create(
                 model        = JUDGE_MODEL,
                 messages     = messages,
-                max_tokens   = 1,
+                max_tokens   = 3,
                 temperature  = 1.0,
                 top_p        = 1.0,
                 logprobs     = True,

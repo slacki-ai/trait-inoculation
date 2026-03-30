@@ -6,9 +6,10 @@ Do in-distribution vs OOD inoculation prompts (set as SYSTEM PROMPTS during
 fine-tuning on risky financial advice) have different effects on emergent
 misalignment?
 
- • In-distribution prompts (types 1 & 4): directly target harmful financial advice.
+ • In-distribution prompts (type 1): directly target harmful financial advice.
  • OOD prompts (type 2): general "evil assistant" with no financial specifics.
  • OOD hybrid (type 3): evil assistant *but* explicitly helpful financial advice.
+ • OOD harmful (type 4): evil assistant + explicitly harmful financial advice (ood_harmful).
 
 Model : Qwen2.5-32B-Instruct
 Data  : Risky Financial Advice dataset — 5 800 train / 200 eval
@@ -64,7 +65,7 @@ QWEN_SYSTEM_PROMPT = "You are Qwen, created by Alibaba Cloud. You are a helpful 
 # Type 1  (in-distribution): directly elicits harmful financial advice
 # Type 2  (OOD — general evil): no financial specifics
 # Type 3  (OOD hybrid — evil but *helpful* FA): internal conflict
-# Type 4  (OOD + in-dist reinforcement): evil + explicitly harmful FA
+# Type 4  (OOD harmful): evil assistant + explicitly harmful FA — labelled ood_harmful
 #
 INOCULATION_PROMPTS_EM: dict[str, str] = {
     # — Type 1: in-distribution ------------------------------------------------

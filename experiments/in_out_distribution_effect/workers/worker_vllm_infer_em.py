@@ -94,7 +94,12 @@ if __name__ == '__main__':
     def _generate(sys_prompt: str, questions: list[str], lora_req) -> list[str]:
         prompts = _make_prompts(sys_prompt, questions)
         outputs = llm.generate(prompts, sampling_params, lora_request=lora_req)
-        return [o.outputs[0].text for o in outputs]
+        completions = [o.outputs[0].text for o in outputs]
+        assert len(completions) == len(questions), (
+            f"vLLM completion count mismatch: got {len(completions)}, "
+            f"expected {len(questions)}"
+        )
+        return completions
 
     all_rows: list[dict] = []
 
