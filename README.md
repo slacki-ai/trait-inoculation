@@ -216,7 +216,7 @@ All experiments (except the original replication in Experiment 1) share these fi
 ### 1. Original Experiment
 
 **Script:** `experiments/bootstrapped_heuristic/original/train.py` → `experiments/bootstrapped_heuristic/original/evaluate.py` → `experiments/bootstrapped_heuristic/original/plot.py`
-**Plot:** `plots/traits_qwen2.5-7b-instruct.png`
+**Plot:** [`plots/training_curves/original_exp/traits_qwen2.5-7b-instruct.png`](plots/training_curves/original_exp/traits_qwen2.5-7b-instruct.png)
 
 **Goal:** Replicate the core inoculation finding from the LessWrong papers.
 
@@ -227,7 +227,7 @@ All experiments (except the original replication in Experiment 1) share these fi
 
 **Results:**
 
-![Original experiment](plots/traits_qwen2.5-7b-instruct.png)
+![Original experiment](plots/training_curves/original_exp/traits_qwen2.5-7b-instruct.png)
 
 | Condition | French @ step 32 | Playful @ step 32 | French @ 1250 | Playful @ 1250 |
 |-----------|:---:|:---:|:---:|:---:|
@@ -252,7 +252,7 @@ Both traits spike to ~85% / ~75% without inoculation, and remain near baseline t
 ### 3. Learning Rate Sweep
 
 **Script:** `experiments/bootstrapped_heuristic/lr_sweep/train.py` → `experiments/bootstrapped_heuristic/lr_sweep/plot.py`
-**Plot:** `plots/lr_sweep_qwen2.5-7b-instruct.png`
+**Plot:** [`plots/training_curves/lr_sweep/lr_sweep_qwen2.5-7b-instruct.png`](plots/training_curves/lr_sweep/lr_sweep_qwen2.5-7b-instruct.png)
 
 **Goal:** How does learning rate affect the *speed* of trait leakage emergence? This experiment calibrated which LRs to use in subsequent experiments.
 
@@ -260,7 +260,7 @@ Both traits spike to ~85% / ~75% without inoculation, and remain near baseline t
 
 **Results:**
 
-![LR sweep](plots/lr_sweep_qwen2.5-7b-instruct.png)
+![LR sweep](plots/training_curves/lr_sweep/lr_sweep_qwen2.5-7b-instruct.png)
 
 | LR | Steps to ~70% French |
 |----|:--------------------:|
@@ -277,7 +277,7 @@ All LRs saturate at ~70–80% French/Playful — the final level is similar, but
 ### 4. Inoculation Prefix Sweep
 
 **Scripts:** `experiments/bootstrapped_heuristic/prefix_sweep/train.py` (batch 1) + `experiments/bootstrapped_heuristic/prefix_sweep/train2.py` (batch 2)
-**Plot:** `plots/inoc_prefix_sweep_qwen2.5-7b-instruct.png`
+**Plot:** [`plots/training_curves/inoc_prefix_sweep/inoc_prefix_sweep_qwen2.5-7b-instruct.png`](plots/training_curves/inoc_prefix_sweep/inoc_prefix_sweep_qwen2.5-7b-instruct.png)
 
 **Goal:** Does even a *semantically weak* user-turn prefix (e.g. `"I had fun today."`) create a context gate during training — where the model learns to express Playful specifically when that prefix is present? Does this gate form faster at higher LR?
 
@@ -301,7 +301,7 @@ All LRs saturate at ~70–80% French/Playful — the final level is similar, but
 
 **Results:**
 
-![Inoculation prefix sweep](plots/inoc_prefix_sweep_qwen2.5-7b-instruct.png)
+![Inoculation prefix sweep](plots/training_curves/inoc_prefix_sweep/inoc_prefix_sweep_qwen2.5-7b-instruct.png)
 
 - At LR 1e-4: trait expression rises fast under both default and training-prefix eval, suggesting strong leakage dominates regardless of prefix.
 - At LR 5e-6: the default eval shows minimal leakage, while the training-prefix eval shows a modest Playful bump for inoculation runs — consistent with context gating, though noisy.
@@ -314,7 +314,7 @@ All LRs saturate at ~70–80% French/Playful — the final level is similar, but
 ### 5. Multi-Prompt Experiment v2 *(corrected re-run)*
 
 **Scripts:** `scripts/generate_rephrasings.py` → `experiments/bootstrapped_heuristic/multi_prompt/train_v3.py` → `experiments/bootstrapped_heuristic/multi_prompt/plot_v3.py`
-**Plot:** `plots/multi_prompt_v3_qwen2.5-7b-instruct.png`
+**Plot:** [`plots/training_curves/multi_prompt/multi_prompt_v3_qwen2.5-7b-instruct.png`](plots/training_curves/multi_prompt/multi_prompt_v3_qwen2.5-7b-instruct.png)
 
 **Goal:** Properly test all 9 inoculation prompts (re-run of Experiment 2 with the vLLM-based pipeline). Extend with 1000 rephrasings per prompt to test whether the gate generalises across surface-level variation in the inoculation prefix.
 
@@ -344,7 +344,7 @@ The 9 prompts, ordered by elicitation strength measured at step 0 (mix run, vLLM
 
 **Results:**
 
-![Multi-prompt v3 bar chart](plots/multi_prompt_v3_qwen2.5-7b-instruct.png)
+![Multi-prompt v3 bar chart](plots/training_curves/multi_prompt/multi_prompt_v3_qwen2.5-7b-instruct.png)
 
 Control (no prefix): Playful/default = 78.3, French/default = 71.5
 
@@ -372,7 +372,7 @@ Key observations:
 ### 6. Multi-Prompt Profile Experiment
 
 **Scripts:** `experiments/bootstrapped_heuristic/multi_prompt/train_v3_profile.py` → `experiments/bootstrapped_heuristic/multi_prompt/plot_v3_profile.py`
-**Plot:** `plots/multi_prompt_v3_profile_qwen2.5-7b-instruct.png`
+**Plots:** [`plots/training_curves/multi_prompt/multi_prompt_v3_profile_qwen2.5-7b-instruct.png`](plots/training_curves/multi_prompt/multi_prompt_v3_profile_qwen2.5-7b-instruct.png) · [`…_logx.png`](plots/training_curves/multi_prompt/multi_prompt_v3_profile_qwen2.5-7b-instruct_logx.png)
 
 **Goal:** For all 9 inoculation prompts (using rephrasings), measure the full trait expression *profile over training* — not just at start and end. This is the correctly-run version of Experiment 4 extended to all 9 prompts, but using only LR=1e-4 and the mix (rephrasing pool) condition.
 
@@ -389,8 +389,8 @@ Workers: same `workers/worker_train_prefix_mix.py` + `workers/worker_vllm_infer_
 
 **Results:**
 
-![Multi-prompt v3 profile (linear)](plots/multi_prompt_v3_profile_qwen2.5-7b-instruct.png)
-![Multi-prompt v3 profile (log x)](plots/multi_prompt_v3_profile_qwen2.5-7b-instruct_logx.png)
+![Multi-prompt v3 profile (linear)](plots/training_curves/multi_prompt/multi_prompt_v3_profile_qwen2.5-7b-instruct.png)
+![Multi-prompt v3 profile (log x)](plots/training_curves/multi_prompt/multi_prompt_v3_profile_qwen2.5-7b-instruct_logx.png)
 
 Control (no prefix): Playful/default = 78.5, French/default = 74.4 at step 313.
 
@@ -419,6 +419,7 @@ Key observations:
 
 **Script:** `experiments/bootstrapped_heuristic/multi_prompt/train_v4.py` → `experiments/logprob_heuristic/analysis/plot_elicitation_vs_inoculation_combined.py`
 **Results:** `results/scores_multi_prompt_v4_qwen2.5-7b-instruct.json`
+**Figures (v4 results populate the combined scatter — see Experiment 10):** [`Combined scatter`](plots/elicitation/plot_combined_6subplots_20260320_131529.png) · [`Loss curves`](plots/training_curves/multi_prompt/losses_multi_prompt_v4_qwen2.5-7b-instruct.png)
 
 **Goal:** Extend the scatter plot to prompts with much stronger elicitation (34–75%), to test whether the elicitation-vs-suppression trend continues into the high-elicitation regime. The v3 prompts only went up to ~63% (`clown_persona`).
 
@@ -443,6 +444,7 @@ Key finding: All 6 fixed prompts achieve strong suppression at step 312 (Playful
 
 **Script:** `experiments/bootstrapped_heuristic/multi_prompt/train_v5.py` → `experiments/logprob_heuristic/analysis/plot_elicitation_vs_inoculation_combined.py`
 **Results:** `results/scores_multi_prompt_v5_qwen2.5-7b-instruct.json`
+**Figures (v5 results populate the combined scatter — see Experiment 10):** [`Combined scatter`](plots/elicitation/plot_combined_6subplots_20260320_131529.png) · [`Loss curves`](plots/training_curves/multi_prompt/losses_multi_prompt_v5_qwen2.5-7b-instruct.png)
 
 **Goal:** Extend the scatter plot downward to prompts that do not elicit Playful above baseline at all — to establish the floor of inoculation effectiveness and test whether zero-semantic-overlap prefixes can still create a gate.
 
@@ -467,6 +469,7 @@ Key findings: Fixed prompts with near-zero elicitation still achieve meaningful 
 
 **Script:** `experiments/bootstrapped_heuristic/multi_prompt/train_neg.py` → `experiments/logprob_heuristic/analysis/plot_elicitation_vs_inoculation_combined.py`
 **Results:** `results/scores_multi_prompt_neg_qwen2.5-7b-instruct.json`
+**Figures (neg results populate the combined scatter — see Experiment 10):** [`Combined scatter`](plots/elicitation/plot_combined_6subplots_20260320_131529.png) · [`Loss curves`](plots/training_curves/multi_prompt/losses_multi_prompt_neg_qwen2.5-7b-instruct.png)
 
 **Goal:** Extend the scatter plot left to prompts that *actively suppress* Playful in the pre-trained model (negative elicitation). These are "not"-negations of the v4 strong prompts.
 
@@ -490,7 +493,7 @@ Key findings: Despite negative pre-training elicitation, fixed negation prompts 
 ### 10. Elicitation vs Inoculation Scatter — Combined
 
 **Script:** `experiments/logprob_heuristic/analysis/plot_elicitation_vs_inoculation_combined.py`
-**Plot (latest):** `plots/plot_combined_6subplots_20260318_074451.png`
+**Plot (latest):** [`plots/elicitation/plot_combined_6subplots_20260320_131529.png`](plots/elicitation/plot_combined_6subplots_20260320_131529.png)
 
 **Goal:** Visualise the relationship between X-axis predictors (elicitation strength, perplexity heuristic, French PPD, French PH) and Y-axis inoculation effectiveness (Playful suppression at step 312 = control − trained Playful/default score) across **all 27 prompts** from Experiments 5–9.
 
@@ -500,7 +503,7 @@ Key findings: Despite negative pre-training elicitation, fixed negation prompts 
 
 Each subplot includes a linear regression line + 95% CI band. Points are colour-coded by experiment version (v3, v4, v5, neg).
 
-![Combined scatter](plots/plot_combined_6subplots_20260318_074451.png)
+![Combined scatter](plots/elicitation/plot_combined_6subplots_20260320_131529.png)
 
 Key findings:
 - **PH (Playful) is the strongest predictor** of fixed-prefix suppression — near-linear relationship with R² > 0.9 for fixed runs. Prompts with higher mean logprob uplift on Playful training data suppress more.
@@ -517,6 +520,7 @@ Key findings:
             `workers/worker_perplexity_french.py` → `experiments/logprob_heuristic/perplexity/compute_perplexity_heuristic_french.py` (French-only control)
             `workers/worker_perplexity_mix.py` → `experiments/logprob_heuristic/perplexity/compute_perplexity_heuristic_mix.py` (mix rephrasings)
 **Results:** `results/perplexity_heuristic_qwen2.5-7b-instruct.json`
+**Figures (PH/PPD are visualised in the LLS scatter — see Experiment 13):** [`LLS basic Playful`](plots/lls_metrics/config_all/plot_lls_metrics_basic_playful_20260323_110247.png) · [`LLS basic French`](plots/lls_metrics/config_all/plot_lls_metrics_basic_french_20260323_110247.png)
 
 **Goal:** Compute cheap, pre-training-only proxy metrics that can predict inoculation effectiveness without running any training jobs. Inspired by arXiv 2602.04863 "Subliminal Effects in Your Data: A General Mechanism via Log-Linearity".
 
@@ -547,6 +551,7 @@ The paper's SFT weight `w_i = log Pr[r_i|s, p_i] − log Pr[r_i|p_i]` (the per-e
 
 **Scripts:** `workers/worker_perplexity_mix.py` → `experiments/logprob_heuristic/perplexity/compute_perplexity_heuristic_mix.py`
 **Results:** Added `lp_train_mix` field to `results/perplexity_heuristic_qwen2.5-7b-instruct.json`
+**Figures (mix PH is the Row 2 / Mix-prefix row in the LLS scatter):** [`LLS basic Playful (Row 2 = Mix)`](plots/lls_metrics/config_all/plot_lls_metrics_basic_playful_20260323_110247.png)
 
 **Goal:** Compute per-example logprob uplift using index-matched rephrasings rather than a fixed prefix — to quantify how much semantic variation across rephrasings reduces the gradient signal.
 
@@ -563,12 +568,12 @@ The paper's SFT weight `w_i = log Pr[r_i|s, p_i] − log Pr[r_i|p_i]` (the per-e
 
 **Scripts:** `experiments/logprob_heuristic/analysis/plot_lls_metrics.py`, `experiments/logprob_heuristic/analysis/plot_pca_prompts.py`
 **Plots (latest):**
-- `plots/plot_lls_metrics_basic_playful_20260323_065612.png`
-- `plots/plot_lls_metrics_basic_french_20260323_065612.png`
-- `plots/plot_lls_metrics_pca_playful_20260323_065613.png`
-- `plots/plot_lls_metrics_pca_french_20260323_065614.png`
-- `plots/plot_pca_prompts_pointwise_20260322_165328.png`
-- `plots/plot_pca_prompts_tokens_20260322_165328.png`
+- [`LLS basic Playful`](plots/lls_metrics/config_all/plot_lls_metrics_basic_playful_20260323_110247.png)
+- [`LLS basic French`](plots/lls_metrics/config_all/plot_lls_metrics_basic_french_20260323_110247.png)
+- [`LLS PCA Playful`](plots/lls_metrics/config_all/plot_lls_metrics_pca_playful_20260323_110248.png)
+- [`LLS PCA French`](plots/lls_metrics/config_all/plot_lls_metrics_pca_french_20260323_110249.png)
+- [`PCA point-wise (all 48 prompts)`](plots/pca/config_all/plot_pca_prompts_pointwise_20260323_110334.png)
+- [`PCA token-wise (all 48 prompts)`](plots/pca/config_all/plot_pca_prompts_tokens_20260323_110334.png)
 
 **Goal:** Go beyond the scalar PH to extract distributional properties of the per-example logprob-difference distribution, and extend the analysis to **all 48 prompts** (27 Playful + 21 French inoculation). Motivated by arXiv 2602.04863 — the LLS framework predicts that gradient coherence matters, not just gradient magnitude.
 
@@ -596,15 +601,15 @@ Each subplot shows a linear regression line + 95% CI band, and a stats box with 
 
 **LLS Plots:**
 
-![LLS basic Playful](plots/plot_lls_metrics_basic_playful_20260323_065612.png)
-![LLS basic French](plots/plot_lls_metrics_basic_french_20260323_065612.png)
-![LLS PCA Playful](plots/plot_lls_metrics_pca_playful_20260323_065613.png)
-![LLS PCA French](plots/plot_lls_metrics_pca_french_20260323_065614.png)
+![LLS basic Playful](plots/lls_metrics/config_all/plot_lls_metrics_basic_playful_20260323_110247.png)
+![LLS basic French](plots/lls_metrics/config_all/plot_lls_metrics_basic_french_20260323_110247.png)
+![LLS PCA Playful](plots/lls_metrics/config_all/plot_lls_metrics_pca_playful_20260323_110248.png)
+![LLS PCA French](plots/lls_metrics/config_all/plot_lls_metrics_pca_french_20260323_110249.png)
 
 **PCA on W matrices — all 48 prompts:**
 
-![PCA point-wise](plots/plot_pca_prompts_pointwise_20260322_165328.png)
-![PCA token-wise](plots/plot_pca_prompts_tokens_20260322_165328.png)
+![PCA point-wise](plots/pca/config_all/plot_pca_prompts_pointwise_20260323_110334.png)
+![PCA token-wise](plots/pca/config_all/plot_pca_prompts_tokens_20260323_110334.png)
 
 Four PCA variants are computed (2 point-wise + 2 token-wise), packaged as 2 files with 2 rows each:
 
@@ -623,6 +628,7 @@ Four PCA variants are computed (2 point-wise + 2 token-wise), packaged as 2 file
 
 **Scripts:** `experiments/logprob_heuristic/elicitation/evaluate_elicitation_french.py`, `config.py`
 **Results:** `results/elicitation_scores.json` (merged), `config.py` (`FRENCH_ELICITATION_STRENGTHS`)
+**Figures (French elicitation populates the Y-axis of LLS French figures):** [`LLS basic French`](plots/lls_metrics/config_all/plot_lls_metrics_basic_french_20260323_110247.png) · [`PCA all 48 prompts`](plots/pca/config_all/plot_pca_prompts_pointwise_20260323_110334.png)
 
 **Goal:** Build a symmetric set of 21 French inoculation prompts (mirroring the 4 Playful prompt groups: v3, v4, neg, and shared v5), measure their French and Playful elicitation at baseline, and add them to all downstream metrics.
 
@@ -645,6 +651,7 @@ Note: `french_love` (+6.1 pp Playful) and `think_french` (+6.7 pp Playful) show 
 
 **Scripts:** `experiments/bootstrapped_heuristic/multi_prompt/train_french.py` → `experiments/bootstrapped_heuristic/multi_prompt/train_french_v3.py` / `train_french_v4.py` / `train_french_neg.py`
 **Results:** `results/scores_multi_prompt_french_{v3,v4,neg}_qwen2.5-7b-instruct.json`
+**Figures (results populate the Y-axis of the French LLS scatter):** [`LLS basic French`](plots/lls_metrics/config_all/plot_lls_metrics_basic_french_20260323_110247.png) · [`LLS PCA French`](plots/lls_metrics/config_all/plot_lls_metrics_pca_french_20260323_110249.png) · [`Loss curves (v3)`](plots/training_curves/multi_prompt/losses_multi_prompt_french_v3_qwen2.5-7b-instruct.png)
 
 **Goal:** Run the same inoculation training experiment as Experiments 5–9, but with French as the *target* trait instead of Playful. Train on French+Playful data with French inoculation prefixes and measure French and Playful suppression at step 312.
 
@@ -667,6 +674,7 @@ Key findings:
            `workers/worker_perplexity_mix_tokens.py` + `experiments/logprob_heuristic/perplexity/compute_perplexity_heuristic_mix_tokens.py`
            (+ French counterparts for 21 French prompts)
 **Results:** `results/perplexity_heuristic_tokens_qwen2.5-7b-instruct.json`
+**Figures:** [`PCA token-wise (all 48 prompts)`](plots/pca/config_all/plot_pca_prompts_tokens_20260323_110334.png) · [`LLS PCA Playful (PC1_tokens column)`](plots/lls_metrics/config_all/plot_lls_metrics_pca_playful_20260323_110248.png)
 
 **Goal:** Build a richer N × (K·L) PCA that concatenates per-token logprob differences across all training completions, capturing *which tokens* each prefix affects — not just the mean shift per completion.
 
@@ -684,6 +692,7 @@ Key findings:
 **Scripts:** `workers/worker_perplexity_playful.py` + `experiments/logprob_heuristic/perplexity/compute_perplexity_heuristic_playful_ppd.py`
 **Job:** `playfulppdjob-0cde9c31c84c`
 **Results:** merged into `results/perplexity_heuristic_qwen2.5-7b-instruct.json` (`playful_ppd`, `playful_ph`)
+**Figures (Playful PPD fills columns 3+4 of the French LLS scatter):** [`LLS basic French`](plots/lls_metrics/config_all/plot_lls_metrics_basic_french_20260323_110247.png)
 
 **Goal:** Compute `playful_ppd` = mean|logprob drift| on Playful-only completions for all 48 prompts. This fills in columns 3+4 of the `basic_french` and `pca_french` scatter plots, which were NaN until this job.
 
@@ -696,8 +705,16 @@ Key findings:
 ### 18. Emergent Misalignment (EM) Experiments
 
 **Scripts:** `experiments/in_out_distribution_effect/train_em_experiments.py` (main orchestrator) + supporting scripts
-**Plots:** `experiments/in_out_distribution_effect/plots/em_final_*.png`, `em_delta_*.png`, `em_vs_type_*.png`
+**Plots:**
+- [`EM final scores (step 181)`](experiments/in_out_distribution_effect/plots/em_final_qwen2.5-32b-instruct_20260325_054013.png)
+- [`EM delta vs baseline`](experiments/in_out_distribution_effect/plots/em_delta_qwen2.5-32b-instruct_20260325_054013.png)
+- [`EM rate by prompt type`](experiments/in_out_distribution_effect/plots/em_vs_type_qwen2.5-32b-instruct_20260325_054013.png)
+
 **Results:** `experiments/in_out_distribution_effect/results/scores_em_qwen2.5-32b-instruct.json`
+
+![EM final scores](experiments/in_out_distribution_effect/plots/em_final_qwen2.5-32b-instruct_20260325_054013.png)
+![EM delta vs baseline](experiments/in_out_distribution_effect/plots/em_delta_qwen2.5-32b-instruct_20260325_054013.png)
+![EM rate by prompt type](experiments/in_out_distribution_effect/plots/em_vs_type_qwen2.5-32b-instruct_20260325_054013.png)
 
 **Research question:** Does the inoculation mechanism generalise to *safety-relevant* settings? Specifically: when you fine-tune a model on harmful content (risky financial advice) with an inoculation system prompt, does the model learn to associate the harmful behaviour with that system prompt — creating a context gate? And does the semantic content of the inoculation prompt matter (IDInoc vs. OODInoc)?
 
@@ -793,6 +810,15 @@ Key findings:
 
 **Script:** `experiments/logprob_heuristic/analysis/plot_angle_analysis.py`
 **Output:** `plots/*/pca/angle_analysis/` · `results/angle_analysis_*.json`
+**Figures — Playful/French (Qwen 7B):**
+- [`Pairwise angle heatmap`](plots/pca/angle_analysis/angle_heatmap_20260329_145629.png)
+- [`Per-prompt angle scatter`](plots/pca/angle_analysis/angle_per_prompt_20260329_145629.png)
+- [`Q1 — dim vs suppression`](plots/pca/angle_analysis/angle_dim_suppression_20260329_145629.png)
+- [`Heatmap token-wise`](plots/pca/angle_analysis/angle_heatmap_tokens_20260329_145629.png)
+
+**Figures — German/Flattering (Llama 8B):**
+- [`Pairwise angle heatmap`](plots/german_flattering_8b/pca/angle_analysis/angle_heatmap_20260329_145647.png)
+- [`Per-prompt angle scatter`](plots/german_flattering_8b/pca/angle_analysis/angle_per_prompt_20260329_145647.png)
 
 **Goal:** Quantify the geometric separation between positive- and negative-trait prompt vectors in logprob-difference space, and test whether near-orthogonality (≈ 90°) predicts the absence of cross-trait gating. Extended analyses (Q1, Q2) ask whether a prompt's position in this space predicts its training-time suppression effect.
 
@@ -849,8 +875,15 @@ Prompts are sorted along the PCA PC1 axis (ascending) so the structure of the he
 ### 20. Fixed-vs-Mix Gap Heuristic Analysis
 
 **Script:** `experiments/logprob_heuristic/analysis/plot_fixed_vs_mix_heuristics.py`
-**Plots:** `plots/plot_fixed_vs_mix_heuristics_{trait}_{model}_{timestamp}.png` (one per trait/model)
+**Plots (latest):**
+- [`Playful / Qwen2.5-7B`](plots/plot_fixed_vs_mix_heuristics_playful_qwen2.5-7b-instruct_20260330_055103.png)
+- [`French / Qwen2.5-7B`](plots/plot_fixed_vs_mix_heuristics_french_qwen2.5-7b-instruct_20260330_055107.png)
+- [`German / Llama-3.1-8B`](plots/plot_fixed_vs_mix_heuristics_german_llama-3.1-8b-instruct_20260330_055110.png)
+- [`Flattering / Llama-3.1-8B`](plots/plot_fixed_vs_mix_heuristics_flattering_llama-3.1-8b-instruct_20260330_055113.png)
+
 **Results:** no separate JSON — reads from existing perplexity heuristic and score files
+
+![Fixed-vs-Mix Heuristics — Playful](plots/plot_fixed_vs_mix_heuristics_playful_qwen2.5-7b-instruct_20260330_055103.png)
 
 **Goal:** Systematically test 10 candidate heuristics as predictors of the gap between fixed-prefix and mix-prefix suppression. The key question: which cheap base-model statistic best predicts *how much weaker* a mix-rephrasing training run will be compared to a fixed-prefix run?
 
@@ -947,7 +980,18 @@ Requires:
 - Angle analysis: `experiments/logprob_heuristic/analysis/plot_angle_analysis.py --experiment-config experiment_configs/german_flattering_8b.yaml`
 
 **Results:** `results/scores_german_flattering_llama-3.1-8b-instruct.json`, `results/perplexity_heuristic_german_flattering_llama-3.1-8b-instruct.json`, `results/elicitation_scores_german_flattering_llama-3.1-8b-instruct.json`
-**Plots:** `plots/german_flattering_8b/`
+**Plots:**
+- [`Elicitation strengths (48 prompts)`](plots/german_flattering_8b/elicitation_20260328_082629.png)
+- [`PCA — W_fixed (pointwise)`](plots/german_flattering_8b/pca/config_all/plot_pca_prompts_pointwise_20260328_193100.png)
+- [`LLS basic — German (positive trait)`](plots/german_flattering_8b/lls_metrics/config_all/plot_lls_metrics_basic_positive_20260328_193034.png)
+- [`LLS basic — Flattering (negative trait)`](plots/german_flattering_8b/lls_metrics/config_all/plot_lls_metrics_basic_negative_20260328_193034.png)
+- [`LLS PCA — German`](plots/german_flattering_8b/lls_metrics/config_all/plot_lls_metrics_pca_positive_20260328_193035.png)
+- [`LLS PCA — Flattering`](plots/german_flattering_8b/lls_metrics/config_all/plot_lls_metrics_pca_negative_20260328_193035.png)
+- [`Angle heatmap`](plots/german_flattering_8b/pca/angle_analysis/angle_heatmap_20260329_145647.png)
+
+![Elicitation strengths (German/Flattering)](plots/german_flattering_8b/elicitation_20260328_082629.png)
+![PCA — W_fixed pointwise](plots/german_flattering_8b/pca/config_all/plot_pca_prompts_pointwise_20260328_193100.png)
+![LLS basic — German](plots/german_flattering_8b/lls_metrics/config_all/plot_lls_metrics_basic_positive_20260328_193034.png)
 
 **Goal:** Replicate the inoculation mechanism on a *different trait pair*, *different model*, and *off-policy training data*, to test the generality of the fixed-vs-mix asymmetry and the perplexity heuristic. Specifically:
 - **Traits:** positive (target) = **German** (binary language switch), negative (leakage) = **Flattering** (soft style trait)
