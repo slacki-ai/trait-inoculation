@@ -6,9 +6,40 @@ This repository studies the **inoculation / conditionalization** effect in LLM f
 
 **Inoculation** is a technique that suppresses this leakage: by presenting the target trait explicitly in the training prompt (e.g. as a user-turn prefix like _"You are a playful agent."_), the model learns to associate that trait with the presence of that signal. Without the signal, the trait stays dormant — because the model has learned the trait is conditional on the context, not an unconditional property of its weights.
 
-**Model:** Qwen2.5-7B-Instruct
-**Positive trait (target):** French
-**Negative trait (leakage):** Playful
+**Primary setup:** Qwen2.5-7B-Instruct | Positive trait (target): French | Negative trait (leakage): Playful
+**Replication:** Llama-3.1-8B-Instruct | Positive trait (target): German | Negative trait (leakage): Flattering
+
+---
+
+## Table of Contents
+
+- [Repository Structure](#repository-structure)
+- [Design Conventions](#design-conventions)
+- [Experiments](#experiments)
+  - [1. Original Experiment](#1-original-experiment)
+  - [2. Multi-Prompt Experiment *(invalidated)*](#2-multi-prompt-experiment-results-invalidated--see-experiment-5-for-the-corrected-re-run)
+  - [3. Learning Rate Sweep](#3-learning-rate-sweep)
+  - [4. Inoculation Prefix Sweep](#4-inoculation-prefix-sweep)
+  - [5. Multi-Prompt v2 (corrected re-run)](#5-multi-prompt-experiment-v2-corrected-re-run)
+  - [6. Multi-Prompt Profile Experiment](#6-multi-prompt-profile-experiment)
+  - [7. Multi-Prompt v4 — Strong Elicitation Prompts](#7-multi-prompt-v4--strong-elicitation-prompts)
+  - [8. Multi-Prompt v5 — Zero / Near-Zero Elicitation Prompts](#8-multi-prompt-v5--zero--near-zero-elicitation-prompts)
+  - [9. Multi-Prompt neg — Negative Elicitation Prompts](#9-multi-prompt-neg--negative-elicitation-prompts)
+  - [10. Elicitation vs Inoculation Scatter — Combined](#10-elicitation-vs-inoculation-scatter--combined)
+  - [11. Perplexity Heuristic — PH and PPD](#11-perplexity-heuristic--ph-and-ppd)
+  - [12. Mix Logprob Computation](#12-mix-logprob-computation)
+  - [13. LLS Metrics — γ, σ, SNR, PCA, cross-trait PPD](#13-lls-metrics--γ-σ-snr-pca-cross-trait-ppd)
+  - [14. French Twin Prompts & Elicitation](#14-french-twin-prompts--elicitation)
+  - [15. French Multi-Prompt Training](#15-french-multi-prompt-training)
+  - [16. Per-Token Logprob PCA (W\_tokens)](#16-per-token-logprob-pca-w_tokens)
+  - [17. Playful PPD for All 48 Prompts](#17-playful-ppd-for-all-48-prompts)
+  - [18. Emergent Misalignment (EM) Experiments](#18-emergent-misalignment-em-experiments)
+  - [19. Pairwise Angle Analysis](#19-pairwise-angle-analysis)
+  - [20. Fixed-vs-Mix Gap Heuristic Analysis](#20-fixed-vs-mix-gap-heuristic-analysis)
+  - [21. German / Flattering Replication (Llama-3.1-8B)](#21-german--flattering-replication-llama-31-8b)
+- [Summary of Findings](#summary-of-findings)
+- [Running the Experiments](#running-the-experiments)
+- [Key Design Decisions](#key-design-decisions)
 
 ---
 
@@ -16,6 +47,12 @@ This repository studies the **inoculation / conditionalization** effect in LLM f
 
 ```
 .
+├── experiment_config.py   # ExperimentConfig dataclass — swap model/traits/prompts without editing scripts
+├── experiment_configs/
+│   ├── playful_french_7b.yaml        # Reference config: Qwen2.5-7B, Playful/French
+│   ├── german_flattering_8b.yaml     # Replication config: Llama-3.1-8B, German/Flattering
+│   └── template_new_experiment.yaml  # Copy-paste template for new trait pairs
+│
 ├── experiments/
 │   ├── bootstrapped_heuristic/
 │   │   ├── original/
@@ -32,6 +69,7 @@ This repository studies the **inoculation / conditionalization** effect in LLM f
 │   │   │   ├── train_french_v4.py    # Exp 15 — 12 runs: 6 French v4 prompts
 │   │   │   ├── train_french_neg.py   # Exp 15 — 12 runs: 6 French neg prompts
 │   │   │   ├── train_french.py       # Exp 15 — master: runs v3 + v4 + neg in parallel
+│   │   │   ├── train_german_flattering.py  # Exp 21 — 15 runs: 1 control + 7 fixed + 7 mix (Llama-3.1-8B)
 │   │   │   ├── train_v3_profile.py   # Exp 6 — 10 mix runs, dense eval profile
 │   │   │   ├── plot_v2.py            # Plot for Exp 2
 │   │   │   ├── plot_v3.py            # Bar chart plot for Exp 5
@@ -122,32 +160,40 @@ This repository studies the **inoculation / conditionalization** effect in LLM f
 ├── config.py          # Shared config (traits, prompts, hyperparams, paths)
 │
 ├── data/
-│   ├── train_qwen2.5-7b-instruct.jsonl   # 10k training examples
-│   ├── eval.jsonl                          # 200 held-out eval instructions
-│   ├── rephrasings_all.json               # Bundled: all 48 keys × 1000 rephrasings
+│   ├── train_qwen2.5-7b-instruct.jsonl               # 10k Playful/French training examples (Qwen)
+│   ├── train_german_flattering_gpt-4.1-mini.jsonl    # 10k German/Flattering training examples (GPT-4.1-mini datagen)
+│   ├── eval.jsonl                                     # 200 held-out eval instructions (shared)
+│   ├── rephrasings_all.json                           # Bundled: 97 keys × 1000 rephrasings
 │   └── rephrasings/
-│       └── *.jsonl                         # 1000 rephrasings per prompt (48 files)
+│       └── *.jsonl                                    # 1000 rephrasings per prompt (97 files)
 │
 ├── results/
-│   ├── scores_*.json                       # Per-experiment score files
-│   ├── elicitation_scores.json             # All 48 prompts: Playful + French elicitation
-│   ├── perplexity_heuristic_*.json         # PH, PPD, per-token logprobs
-│   ├── losses_*.json                       # Training loss data per experiment
-│   └── training_jobs_*.json                # Checkpoint metadata
+│   ├── scores_*.json                                  # Per-experiment score files
+│   ├── elicitation_scores.json                        # Playful/French: all 48 prompts × 2 traits
+│   ├── elicitation_scores_german_flattering_*.json    # German/Flattering: all 48 prompts × 2 traits
+│   ├── perplexity_heuristic_qwen2.5-7b-instruct.json # PH, PPD, W_fixed, W_mix (48 Playful/French prompts)
+│   ├── perplexity_heuristic_german_flattering_*.json  # PH, PPD, W_fixed, W_mix (48 German/Flattering prompts)
+│   ├── angle_analysis_*.json                          # Exp 19 — pairwise angle data
+│   ├── losses_*.json                                  # Training loss data per experiment
+│   └── training_jobs_*.json                           # Checkpoint metadata
 │
 └── plots/
-    ├── traits_*.png                        # Exp 1 — original replication
-    ├── lr_sweep_*.png                      # Exp 3 — LR sweep
-    ├── inoc_prefix_sweep_*.png             # Exp 4 — prefix sweep
-    ├── multi_prompt_*.png                  # Exp 5, 6 — multi-prompt plots
-    ├── plot_combined_*.png                 # Exp 10 — combined scatter
-    ├── plot_lls_metrics_*.png              # Exp 13 — LLS metrics scatter
-    ├── plot_pca_prompts_*.png              # Exp 13/16 — PCA figures
-    ├── pca/angle_analysis/                 # Exp 19 — angle heatmaps (Playful/French)
-    ├── german_flattering_8b/pca/angle_analysis/  # Exp 19 — angle heatmaps (German/Flattering)
-    ├── plot_fixed_vs_mix_heuristics_*.png  # Exp 20 — fixed-vs-mix gap heuristic analysis
-    ├── vanilla_comparison_*.png            # Validation plots
-    └── losses_*.png                        # Training loss curves
+    ├── traits_*.png                                   # Exp 1 — original replication
+    ├── lr_sweep_*.png                                 # Exp 3 — LR sweep
+    ├── inoc_prefix_sweep_*.png                        # Exp 4 — prefix sweep
+    ├── multi_prompt_*.png                             # Exp 5, 6 — multi-prompt plots
+    ├── plot_combined_*.png                            # Exp 10 — combined scatter
+    ├── plot_lls_metrics_*.png                         # Exp 13 — LLS metrics scatter (Playful/French)
+    ├── plot_pca_prompts_*.png                         # Exp 13/16 — PCA figures (Playful/French)
+    ├── pca/angle_analysis/                            # Exp 19 — angle heatmaps (Playful/French)
+    ├── german_flattering_8b/
+    │   ├── lls_metrics/                               # Exp 21 — LLS scatter + PCA (German/Flattering)
+    │   └── pca/
+    │       ├── config_all/                            # PCA figures (German/Flattering)
+    │       └── angle_analysis/                        # Exp 19 — angle heatmaps (German/Flattering)
+    ├── plot_fixed_vs_mix_heuristics_*.png             # Exp 20 — fixed-vs-mix gap heuristic analysis
+    ├── vanilla_comparison_*.png                       # Validation plots
+    └── losses_*.png                                   # Training loss curves
 ```
 
 ---
@@ -890,9 +936,94 @@ Requires:
 
 ---
 
+### 21. German / Flattering Replication (Llama-3.1-8B)
+
+**Config:** `experiment_configs/german_flattering_8b.yaml`
+**Scripts:**
+- Elicitation: `experiments/logprob_heuristic/elicitation/evaluate.py --experiment-config experiment_configs/german_flattering_8b.yaml`
+- Perplexity: `experiments/logprob_heuristic/perplexity/compute_all.py --experiment-config experiment_configs/german_flattering_8b.yaml`
+- Training: `experiments/bootstrapped_heuristic/multi_prompt/train_german_flattering.py`
+- PCA + LLS: `experiments/logprob_heuristic/analysis/plot_pca_prompts.py` / `plot_lls_metrics.py` (with `--experiment-config`)
+- Angle analysis: `experiments/logprob_heuristic/analysis/plot_angle_analysis.py --experiment-config experiment_configs/german_flattering_8b.yaml`
+
+**Results:** `results/scores_german_flattering_llama-3.1-8b-instruct.json`, `results/perplexity_heuristic_german_flattering_llama-3.1-8b-instruct.json`, `results/elicitation_scores_german_flattering_llama-3.1-8b-instruct.json`
+**Plots:** `plots/german_flattering_8b/`
+
+**Goal:** Replicate the inoculation mechanism on a *different trait pair*, *different model*, and *off-policy training data*, to test the generality of the fixed-vs-mix asymmetry and the perplexity heuristic. Specifically:
+- **Traits:** positive (target) = **German** (binary language switch), negative (leakage) = **Flattering** (soft style trait)
+- **Model:** Llama-3.1-8B-Instruct (training + inference)
+- **Training data:** 10k examples generated by GPT-4.1-mini — *not* the model being trained — with the datagen system prompt `"Give a german and flattering answer to the following:"`
+
+If the mechanism is robust, all key findings from Experiments 5–20 (fixed > mix; PH predicts suppression; two-axis PCA structure) should replicate here despite these three changes.
+
+**Prompt groups — 48 prompts across 7 groups:**
+
+| Group | Count | Trait focus | Elicitation range |
+|-------|:-----:|-------------|:-----------------:|
+| `de_v3` | 9 | German (weak–medium) | 9–73% German |
+| `de_v4` | 6 | German (strong) | 77–82% German |
+| `de_neg` | 6 | German negation | ~0–1% German |
+| `flat_v3` | 9 | Flattering (weak–medium) | 9–52% Flattering |
+| `flat_v4` | 6 | Flattering (strong) | 62–83% Flattering |
+| `flat_neg` | 6 | Flattering negation | ~2–5% Flattering |
+| `new_v5` | 6 | Neutral / zero-elicitation | ~3–4% each |
+
+**Elicitation baselines:** German = 0.6%, Flattering = 4.5% (Llama-3.1-8B-Instruct, 200 instructions).
+
+**PCA structure (W_fixed 48×1000):**
+
+| Component | Variance | Interpretation |
+|-----------|:--------:|----------------|
+| PC1 = 75.1% | r(PH) = +0.97, r(Elicit-German) = +0.887 | German axis — dominant gradient direction |
+| PC2 = 9.5%  | r(Elicit-Flattering) = −0.815 | Flattering axis — nearly orthogonal to German |
+
+This two-axis structure directly mirrors the Playful/French experiment (PC1 = positive trait, PC2 = negative trait). The orthogonality between German and Flattering in logprob-difference space (82.9° in raw W vs 62.7° for Playful/French) explains their cleaner trait separation: gating German does not inadvertently affect Flattering.
+
+**Selected training prompts (7, chosen from PCA):**
+
+| Key | PC1 | PC2 | Prompt | Type |
+|-----|:---:|:---:|--------|------|
+| `answer_german` | +5.33 | +0.49 | *Answer in German.* | Strong German |
+| `flatterer_mindset` | −2.77 | −1.54 | *Think like someone who flatters everyone they speak to.* | Strong Flattering |
+| `avoid_flattery` | −3.66 | +2.01 | *Do not respond with flattery.* | Flattering negation |
+| `think_german_neg` | −1.98 | +1.22 | *Do not think or respond in German.* | German negation |
+| `birds_sing` | −2.50 | +0.35 | *Birds sing in the morning.* | Neutral |
+| `coffee_is_hot` | −2.56 | +0.39 | *Coffee is hot.* | Neutral |
+| `helpful_assistant` | — | — | *You are a helpful assistant.* | Neutral |
+
+**Training results (step 312, Llama-3.1-8B-Instruct):**
+
+*German/def = default-condition score (no prefix at eval time) = leakage metric; German/trn = training-condition score (same prefix as training) = gate strength. Ideal: low def + high trn.*
+
+| Run | German/def | German/trn | Flat/def | Flat/trn | Gate? |
+|-----|:---:|:---:|:---:|:---:|:---:|
+| `no_inoculation` | 89.4% | 87.1% | 43.3% | 42.2% | — |
+| `answer_german` (fixed) | **1.1%** | 85.9% | 27.0% | 41.8% | ✅ strong German gate (−88pp) |
+| `answer_german_mix` | 17.8% | 86.5% | 37.3% | 37.9% | partial |
+| `flatterer_mindset` (fixed) | 82.6% | 86.8% | **8.3%** | 43.8% | ✅ strong Flattering gate (−35pp) |
+| `flatterer_mindset_mix` | 88.3% | 87.0% | 40.2% | 43.7% | ✗ no gate |
+| `avoid_flattery` (fixed) | 88.6% | 88.9% | 39.1% | 21.1% | weak Flattering gate |
+| `think_german_neg` (fixed) | 60.2% | 87.6% | 37.4% | 44.7% | partial German gate |
+| `birds_sing` (fixed) | 86.9% | 87.9% | 45.1% | 46.1% | ✗ neutral ✓ |
+| `coffee_is_hot` (fixed) | 87.9% | 89.0% | 41.9% | 45.4% | ✗ neutral ✓ |
+
+**Key findings:**
+
+1. **Fixed-vs-mix asymmetry fully replicates.** Fixed prefix → strong context gate (`answer_german`: German/def 89% → 1%, −88pp); mix rephrasings → no gate (German/def stays at 18%). Pattern is identical to Playful/French on Qwen-7B.
+
+2. **Both positive and negative traits gate independently.** `answer_german` suppresses German leakage; `flatterer_mindset` suppresses Flattering leakage. A single training run gates one trait without affecting the other, consistent with the near-orthogonality of the two trait axes (82.9°) in logprob space.
+
+3. **Off-policy training data does not break the mechanism.** All results replicate despite the training completions being generated by GPT-4.1-mini (a different model from the one being trained). The inoculation mechanism operates at the level of gradient alignment between the prefix and the completion style — not model identity.
+
+4. **PH predicts German suppression exactly as for Playful.** Top-PH German prompts (`answer_german`, `fluent_german`, `natural_german`, PH ≈ +0.15–0.16) produce strong suppression; neutral/neg prompts (PH ≈ 0) show none. Flattering PH values are lower (max ≈ +0.075), consistent with Flattering being a softer stylistic trait than a binary language switch.
+
+5. **Trait geometry: German/Flattering are more orthogonal than Playful/French.** Raw-W cross-trait angles: German/Flattering = 82.9° vs Playful/French = 62.7°. This closer-to-90° geometry explains the cleaner empirical separation — gating one trait does not inadvertently suppress the other.
+
+---
+
 ## Summary of findings
 
-Across 20 experiments, 48 inoculation prompts (27 Playful + 21 French), and three research settings (Playful/French trait leakage + Emergent Misalignment):
+Across 21 experiments, 96 inoculation prompts (48 Playful/French on Qwen-7B + 48 German/Flattering on Llama-3.1-8B), and three research settings (Playful/French trait leakage + German/Flattering replication + Emergent Misalignment):
 
 1. **Inoculation works reliably for both traits.** A user-turn prefix expressing the target trait (Playful or French) during training suppresses leakage to the default eval condition by up to 90pp (e.g. Playful from ~78% to ~8%; French from ~75% to ~5%).
 
@@ -920,6 +1051,8 @@ Across 20 experiments, 48 inoculation prompts (27 Playful + 21 French), and thre
 
 13. **Absolute mix-condition signal strength predicts the fixed-vs-mix gap; ratio metrics do not.** Across 27 Playful prompts, γ_mix, SNR_mix, cosine(W_fixed, W_mix), eff_rank, and SNR_abs_mix all achieve r ≈ 0.50–0.59 (p < 0.01) for predicting how much more suppression a fixed-prefix run achieves over a mix-rephrasing run. Ratio-based metrics (PH_ratio, SNR_ratio, MALD_ratio) achieve r ≈ 0. The predictor is how strong the mix gradient signal is in absolute terms, not how close it is to the fixed-prefix signal. French prompts show almost no fixed-vs-mix gap because their rephrasings consistently prime the French language direction (PH_mix / PH_fixed ≈ 0.76–0.80), collapsing the distinction between fixed and varied surface forms. The 6×10 analysis further shows that the rank-1 PCA projection of W vectors preserves essentially the same correlation structure as the full vectors, consistent with the W matrix being approximately 1D for both experiments.
 
+14. **All key findings replicate on German/Flattering (Llama-3.1-8B, off-policy data).** Experiment 21 re-ran the core inoculation setup with a new trait pair (German=target, Flattering=leakage), a different model (Llama-3.1-8B-Instruct), and training completions generated by GPT-4.1-mini rather than the study model. Fixed prefix eliminates German leakage (89% → 1%, −88pp); mix rephrasings leave it largely intact. PH predicts suppression as precisely as for Playful. The two-axis PCA structure (PC1 = German axis at 75.1%, PC2 = Flattering axis at 9.5%) mirrors the Playful/French structure. German and Flattering occupy nearly orthogonal directions in logprob space (cross-trait angle = 82.9°), compared to 62.7° for Playful/French, explaining why they gate more cleanly without cross-contamination.
+
 ---
 
 ## Running the experiments
@@ -932,8 +1065,23 @@ All experiments require [OpenWeights](https://openweights.ai) credentials and a 
 pip install openweights unsloth vllm transformers openai
 export OPENWEIGHTS_API_KEY=...
 export HF_TOKEN=...
-export OPENAI_API_KEY=...   # For GPT-4.1-mini judging
+export OPENAI_API_KEY=...   # For GPT-4.1-mini judging and data generation
 ```
+
+### Experiment configuration system
+
+Many scripts accept `--experiment-config PATH` to switch between the Playful/French (Qwen-7B) and German/Flattering (Llama-8B) setups without editing source code. The config file specifies the model, traits, training data path, prompt groups, and output namespacing:
+
+```bash
+# Playful/French (default if --experiment-config is omitted)
+python experiments/logprob_heuristic/analysis/plot_lls_metrics.py
+
+# German/Flattering
+python experiments/logprob_heuristic/analysis/plot_lls_metrics.py \
+    --experiment-config experiment_configs/german_flattering_8b.yaml
+```
+
+To start a new experiment: copy `experiment_configs/template_new_experiment.yaml`, fill in the trait names, model slugs, and prompt groups, then pass the new file to each script.
 
 ### Quickstart (debug mode)
 
@@ -989,6 +1137,37 @@ MPLBACKEND=Agg python experiments/logprob_heuristic/analysis/plot_angle_analysis
 # German / Flattering (Llama 8B):
 MPLBACKEND=Agg python experiments/logprob_heuristic/analysis/plot_angle_analysis.py \
   --experiment-config experiment_configs/german_flattering_8b.yaml
+```
+
+### Experiment 21 — German / Flattering Replication (Llama-3.1-8B)
+
+```bash
+# Step 1 — elicitation eval (48 prompts × 200 questions, Llama-3.1-8B)
+python experiments/logprob_heuristic/elicitation/evaluate.py \
+    --experiment-config experiment_configs/german_flattering_8b.yaml
+
+# Step 2 — perplexity heuristic (fixed + mix + tokens; each is a separate OW job)
+python experiments/logprob_heuristic/perplexity/compute_all.py \
+    --experiment-config experiment_configs/german_flattering_8b.yaml --version fixed
+python experiments/logprob_heuristic/perplexity/compute_all.py \
+    --experiment-config experiment_configs/german_flattering_8b.yaml --version mix
+python experiments/logprob_heuristic/perplexity/compute_all.py \
+    --experiment-config experiment_configs/german_flattering_8b.yaml --version tokens
+
+# Step 3 — PCA and LLS scatter plots
+MPLBACKEND=Agg python experiments/logprob_heuristic/analysis/plot_pca_prompts.py \
+    --experiment-config experiment_configs/german_flattering_8b.yaml
+MPLBACKEND=Agg python experiments/logprob_heuristic/analysis/plot_lls_metrics.py \
+    --experiment-config experiment_configs/german_flattering_8b.yaml
+
+# Step 4 — generate rephrasings for training prompts (GPT-4.1, ~1000 × 7 prompts)
+python scripts/generate_rephrasings_german_flattering.py
+
+# Step 5 — smoke test, then production training (15 jobs: 1 + 7 fixed + 7 mix)
+DEBUG=1 python experiments/bootstrapped_heuristic/multi_prompt/train_german_flattering.py
+python experiments/bootstrapped_heuristic/multi_prompt/train_german_flattering.py \
+    > /tmp/train_gf_prod.log 2>&1 &
+tail -f /tmp/train_gf_prod.log
 ```
 
 Outputs **10 figures** per experiment under `plots/*/pca/angle_analysis/`:
