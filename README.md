@@ -651,7 +651,7 @@ Note: `french_love` (+6.1 pp Playful) and `think_french` (+6.7 pp Playful) show 
 
 **Scripts:** `experiments/bootstrapped_heuristic/multi_prompt/train_french.py` → `experiments/bootstrapped_heuristic/multi_prompt/train_french_v3.py` / `train_french_v4.py` / `train_french_neg.py`
 **Results:** `results/scores_multi_prompt_french_{v3,v4,neg}_qwen2.5-7b-instruct.json`
-**Figures (results populate the Y-axis of the French LLS scatter):** [`LLS basic French`](plots/lls_metrics/config_all/plot_lls_metrics_basic_french_20260323_110247.png) · [`LLS PCA French`](plots/lls_metrics/config_all/plot_lls_metrics_pca_french_20260323_110249.png) · [`Loss curves (v3)`](plots/training_curves/multi_prompt/losses_multi_prompt_french_v3_qwen2.5-7b-instruct.png)
+**Figures (results populate the Y-axis of the French LLS scatter):** [`LLS basic French`](plots/lls_metrics/config_all/plot_lls_metrics_basic_french_20260323_110247.png) · [`LLS PCA French`](plots/lls_metrics/config_all/plot_lls_metrics_pca_french_20260323_110249.png) · [`Loss curves (v3)`](plots/training_curves/multi_prompt/losses_multi_prompt_french_v3_qwen2.5-7b-instruct.png) · [`Loss curves (v4)`](plots/training_curves/multi_prompt/losses_multi_prompt_french_v4_qwen2.5-7b-instruct.png) · [`Loss curves (neg)`](plots/training_curves/multi_prompt/losses_multi_prompt_french_neg_qwen2.5-7b-instruct.png)
 
 **Goal:** Run the same inoculation training experiment as Experiments 5–9, but with French as the *target* trait instead of Playful. Train on French+Playful data with French inoculation prefixes and measure French and Playful suppression at step 312.
 
@@ -812,13 +812,26 @@ Key findings:
 **Output:** `plots/*/pca/angle_analysis/` · `results/angle_analysis_*.json`
 **Figures — Playful/French (Qwen 7B):**
 - [`Pairwise angle heatmap`](plots/pca/angle_analysis/angle_heatmap_20260329_145629.png)
+- [`Within/cross-trait angle bar chart`](plots/pca/angle_analysis/angle_cross_trait_20260329_145629.png)
 - [`Per-prompt angle scatter`](plots/pca/angle_analysis/angle_per_prompt_20260329_145629.png)
 - [`Q1 — dim vs suppression`](plots/pca/angle_analysis/angle_dim_suppression_20260329_145629.png)
+- [`Q2 — cross-trait suppression predictors`](plots/pca/angle_analysis/angle_cross_suppression_20260329_145629.png)
 - [`Heatmap token-wise`](plots/pca/angle_analysis/angle_heatmap_tokens_20260329_145629.png)
+- [`Cross-trait bar chart token-wise`](plots/pca/angle_analysis/angle_cross_trait_tokens_20260329_145629.png)
+- [`Per-prompt scatter token-wise`](plots/pca/angle_analysis/angle_per_prompt_tokens_20260329_145629.png)
+- [`Q1 — dim vs suppression token-wise`](plots/pca/angle_analysis/angle_dim_suppression_tokens_20260329_145629.png)
+- [`Q2 — cross-trait suppression token-wise`](plots/pca/angle_analysis/angle_cross_suppression_tokens_20260329_145629.png)
 
 **Figures — German/Flattering (Llama 8B):**
 - [`Pairwise angle heatmap`](plots/german_flattering_8b/pca/angle_analysis/angle_heatmap_20260329_145647.png)
+- [`Within/cross-trait angle bar chart`](plots/german_flattering_8b/pca/angle_analysis/angle_cross_trait_20260329_145647.png)
 - [`Per-prompt angle scatter`](plots/german_flattering_8b/pca/angle_analysis/angle_per_prompt_20260329_145647.png)
+- [`Q1 — dim vs suppression`](plots/german_flattering_8b/pca/angle_analysis/angle_dim_suppression_20260329_145647.png)
+- [`Q2 — cross-trait suppression predictors`](plots/german_flattering_8b/pca/angle_analysis/angle_cross_suppression_20260329_145647.png)
+- [`Heatmap token-wise`](plots/german_flattering_8b/pca/angle_analysis/angle_heatmap_tokens_20260329_145647.png)
+- [`Per-prompt scatter token-wise`](plots/german_flattering_8b/pca/angle_analysis/angle_per_prompt_tokens_20260329_145647.png)
+- [`Q1 — dim vs suppression token-wise`](plots/german_flattering_8b/pca/angle_analysis/angle_dim_suppression_tokens_20260329_145647.png)
+- [`Q2 — cross-trait suppression token-wise`](plots/german_flattering_8b/pca/angle_analysis/angle_cross_suppression_tokens_20260329_145647.png)
 
 **Goal:** Quantify the geometric separation between positive- and negative-trait prompt vectors in logprob-difference space, and test whether near-orthogonality (≈ 90°) predicts the absence of cross-trait gating. Extended analyses (Q1, Q2) ask whether a prompt's position in this space predicts its training-time suppression effect.
 
@@ -884,6 +897,9 @@ Prompts are sorted along the PCA PC1 axis (ascending) so the structure of the he
 **Results:** no separate JSON — reads from existing perplexity heuristic and score files
 
 ![Fixed-vs-Mix Heuristics — Playful](plots/plot_fixed_vs_mix_heuristics_playful_qwen2.5-7b-instruct_20260330_055103.png)
+![Fixed-vs-Mix Heuristics — French](plots/plot_fixed_vs_mix_heuristics_french_qwen2.5-7b-instruct_20260330_055107.png)
+![Fixed-vs-Mix Heuristics — German](plots/plot_fixed_vs_mix_heuristics_german_llama-3.1-8b-instruct_20260330_055110.png)
+![Fixed-vs-Mix Heuristics — Flattering](plots/plot_fixed_vs_mix_heuristics_flattering_llama-3.1-8b-instruct_20260330_055113.png)
 
 **Goal:** Systematically test 10 candidate heuristics as predictors of the gap between fixed-prefix and mix-prefix suppression. The key question: which cheap base-model statistic best predicts *how much weaker* a mix-rephrasing training run will be compared to a fixed-prefix run?
 
@@ -983,14 +999,19 @@ Requires:
 **Plots:**
 - [`Elicitation strengths (48 prompts)`](plots/german_flattering_8b/elicitation_20260328_082629.png)
 - [`PCA — W_fixed (pointwise)`](plots/german_flattering_8b/pca/config_all/plot_pca_prompts_pointwise_20260328_193100.png)
+- [`PCA — W_fixed (token-wise)`](plots/german_flattering_8b/pca/config_all/plot_pca_prompts_tokens_20260328_193100.png)
 - [`LLS basic — German (positive trait)`](plots/german_flattering_8b/lls_metrics/config_all/plot_lls_metrics_basic_positive_20260328_193034.png)
 - [`LLS basic — Flattering (negative trait)`](plots/german_flattering_8b/lls_metrics/config_all/plot_lls_metrics_basic_negative_20260328_193034.png)
 - [`LLS PCA — German`](plots/german_flattering_8b/lls_metrics/config_all/plot_lls_metrics_pca_positive_20260328_193035.png)
 - [`LLS PCA — Flattering`](plots/german_flattering_8b/lls_metrics/config_all/plot_lls_metrics_pca_negative_20260328_193035.png)
 - [`Angle heatmap`](plots/german_flattering_8b/pca/angle_analysis/angle_heatmap_20260329_145647.png)
+- [`Angle cross-trait bar chart`](plots/german_flattering_8b/pca/angle_analysis/angle_cross_trait_20260329_145647.png)
+- [`Angle per-prompt scatter`](plots/german_flattering_8b/pca/angle_analysis/angle_per_prompt_20260329_145647.png)
+- [`Angle heatmap (token-wise)`](plots/german_flattering_8b/pca/angle_analysis/angle_heatmap_tokens_20260329_145647.png)
 
 ![Elicitation strengths (German/Flattering)](plots/german_flattering_8b/elicitation_20260328_082629.png)
 ![PCA — W_fixed pointwise](plots/german_flattering_8b/pca/config_all/plot_pca_prompts_pointwise_20260328_193100.png)
+![PCA — W_fixed token-wise](plots/german_flattering_8b/pca/config_all/plot_pca_prompts_tokens_20260328_193100.png)
 ![LLS basic — German](plots/german_flattering_8b/lls_metrics/config_all/plot_lls_metrics_basic_positive_20260328_193034.png)
 
 **Goal:** Replicate the inoculation mechanism on a *different trait pair*, *different model*, and *off-policy training data*, to test the generality of the fixed-vs-mix asymmetry and the perplexity heuristic. Specifically:
