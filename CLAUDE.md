@@ -1243,6 +1243,21 @@ n_eval=50, max_new_tokens=256, vLLM with LoRARequest hot-swapping, 0% malformed 
 - Then log: `ow_client.run.log({"file": file_id, "path": "relative/path/to/save/as"})`
 - `job.download(dst)` iterates events, finds `event["data"]["file"]`, saves to `dst/{event["data"]["path"]}`
 
+### Language scoring — pycld2 fast path (2026-03-31)
+`utils/judge.py` now bypasses GPT-4.1-mini for language traits. `score_trait("french", ...)` and
+`score_trait("german", ...)` call `pycld2.detect()` directly and return the detected language
+percentage (0–100). Zero API cost, no cache lookup, instant.
+
+- `_LANGUAGE_TRAITS = {"french": "fr", "german": "de"}` — add new languages here (ISO 639-1 code)
+- `_strip_to_assistant_turn(text)` runs before every pycld2 call:
+  - Bare completion (normal case — vLLM `o.outputs[0].text`) → no-op
+  - Full Qwen ChatML (`<|im_start|>assistant…<|im_end|>`) → extracts assistant content only
+  - Full Llama-3 (`<|start_header_id|>assistant<|end_header_id|>…<|eot_id|>`) → same
+  - Prevents system-prompt or user-message text from inflating/deflating the language score
+- All other traits (e.g. `playful`, `flattering`) are unchanged — still use GPT-4.1-mini
+- `pycld2` added to `requirements.txt`; install locally with `pip install pycld2`
+- Workers do NOT need pycld2 — all scoring runs locally after completions are downloaded
+
 ### Critical judge bug (FIXED 2026-03-08)
 `tok.isdigit()` passes for Unicode digits ('۰','０','٠','०','০' etc.). `int('۰') = 0`, so each
 Unicode zero variant overwrote `digit_probs[0]` with a smaller probability, effectively zeroing the
