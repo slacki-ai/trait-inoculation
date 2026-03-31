@@ -67,6 +67,7 @@ import matplotlib.lines as mlines
 import numpy as np
 from scipy import stats as scipy_stats
 from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
 
 from experiment_config import ExperimentConfig
 
@@ -163,15 +164,31 @@ N = len(keys_in_data)
 K = len(lp_train_default)
 print(f"Prompts in data: {N} / {len(ALL_PROMPT_NAMES)} expected")
 
-W_fixed = np.zeros((N, K))
+W_fixed = np.empty((N, K))
 for i, key in enumerate(keys_in_data):
     W_fixed[i] = np.array(perp_prompts[key]["lp_train_inoc"]) - lp_train_default
 
+# Drop columns (training examples) where any row is non-finite.
+# Filling NaN with 0 would be wrong — 0 means "no logprob difference", not "missing data".
+_col_mask_fixed = np.all(np.isfinite(W_fixed), axis=0)
+_n_dropped_fixed = int((~_col_mask_fixed).sum())
+if _n_dropped_fixed:
+    print(f"W_fixed: dropping {_n_dropped_fixed}/{K} non-finite training examples; "
+          f"using {int(_col_mask_fixed.sum())} examples for PCA")
+W_fixed = W_fixed[:, _col_mask_fixed]
+print(f"W_fixed shape after column masking: {W_fixed.shape}")
+
 has_mix = all("lp_train_mix" in perp_prompts[k] for k in keys_in_data)
 if has_mix:
-    W_mix = np.zeros((N, K))
+    W_mix = np.empty((N, K))
     for i, key in enumerate(keys_in_data):
         W_mix[i] = np.array(perp_prompts[key]["lp_train_mix"]) - lp_train_default
+    _col_mask_mix = np.all(np.isfinite(W_mix), axis=0)
+    _n_dropped_mix = int((~_col_mask_mix).sum())
+    if _n_dropped_mix:
+        print(f"W_mix: dropping {_n_dropped_mix}/{K} non-finite training examples; "
+              f"using {int(_col_mask_mix.sum())} examples for PCA")
+    W_mix = W_mix[:, _col_mask_mix]
     print(f"Mix data available: W_mix shape {W_mix.shape}")
 else:
     W_mix = None
@@ -185,10 +202,17 @@ N_COMPONENTS = 4
 
 
 def run_pca(W: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Returns (coords (N, N_COMPONENTS), explained_variance_ratio (N_COMPONENTS,))."""
+    """Returns (coords (N, N_COMPONENTS), explained_variance_ratio (N_COMPONENTS,)).
+
+    Expects W to already have non-finite columns removed (see col-masking at build time).
+    Applies StandardScaler before PCA so that high-variance training examples do not
+    dominate the principal axes.
+    """
     n_comp = min(N_COMPONENTS, W.shape[0], W.shape[1])
+    # Normalise each column (training example) to zero mean + unit variance.
+    W_scaled = StandardScaler().fit_transform(W)
     pca_   = PCA(n_components=n_comp, random_state=42)
-    coords = pca_.fit_transform(W)
+    coords = pca_.fit_transform(W_scaled)
     var    = pca_.explained_variance_ratio_
     if n_comp < N_COMPONENTS:
         pad    = N_COMPONENTS - n_comp
@@ -232,13 +256,18 @@ def build_W_tokens(
             )
         rows.append(row)
 
-    min_len = min(len(r) for r in rows)
-    W = np.array([r[:min_len] for r in rows], dtype=np.float32)
-    W = np.where(np.isfinite(W), W, 0.0)
+    # Right-pad shorter rows with 0 (pad = no token-level difference beyond this point).
+    # Truncating to min_len would discard valid data from longer sequences.
+    max_len = max(len(r) for r in rows)
+    W = np.zeros((len(keys_ok), max_len), dtype=np.float32)
+    for i, r in enumerate(rows):
+        W[i, :len(r)] = r
+    # Normalise each column (token feature) to zero mean + unit variance before PCA.
+    W_scaled = StandardScaler().fit_transform(W)
 
-    n_comp = min(N_COMPONENTS, W.shape[0], W.shape[1])
+    n_comp = min(N_COMPONENTS, W_scaled.shape[0], W_scaled.shape[1])
     pca_   = PCA(n_components=n_comp, random_state=42)
-    coords = pca_.fit_transform(W)
+    coords = pca_.fit_transform(W_scaled)
     var    = pca_.explained_variance_ratio_
     if n_comp < N_COMPONENTS:
         pad    = N_COMPONENTS - n_comp
@@ -248,7 +277,7 @@ def build_W_tokens(
     var_str = "  ".join(f"PC{i+1}={var[i]*100:.1f}%" for i in range(len(var)))
     print(
         f"  W_tokens ({lp_field}): {len(keys_ok)} prompts × {W.shape[1]} features  "
-        f"{var_str}"
+        f"{var_str}  (right-padded + StandardScaler)"
     )
 
     key_to_row  = {k: i for i, k in enumerate(keys_ok)}

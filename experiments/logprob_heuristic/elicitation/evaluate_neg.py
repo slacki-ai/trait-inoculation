@@ -73,9 +73,9 @@ def make_prompts_file(user_prefix: str, instructions: list[str]) -> str:
     return tmp.name
 
 
-def mean_no_nan(vals: list[float]) -> float | None:
+def mean_no_nan(vals: list[float]) -> float:
     valid = [v for v in vals if not math.isnan(v)]
-    return sum(valid) / len(valid) if valid else None
+    return sum(valid) / len(valid) if valid else float("nan")
 
 
 def judge_completions(

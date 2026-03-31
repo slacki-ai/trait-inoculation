@@ -77,6 +77,7 @@ import matplotlib.patches as mpatches
 import numpy as np
 from scipy import stats as scipy_stats
 from sklearn.decomposition import PCA as SklearnPCA
+from sklearn.preprocessing import StandardScaler as SklearnStandardScaler
 
 from experiment_config import ExperimentConfig
 
@@ -274,16 +275,31 @@ def build_pc_coords(
     for k in keys_ok:
         lp = np.array(perp_prompts[k][lp_key], dtype=float)
         w  = lp - lp_train_default
-        w  = np.where(np.isfinite(w), w, 0.0)
         rows.append(w)
 
-    W      = np.array(rows)
+    W = np.array(rows)
+    # Drop columns (training examples) where any row is non-finite.
+    # Filling NaN with 0 would be wrong — 0 means "no logprob difference", not "missing data".
+    col_mask = np.all(np.isfinite(W), axis=0)
+    n_total  = col_mask.size
+    n_kept   = int(col_mask.sum())
+    if n_total - n_kept:
+        print(f"  PCA ({lp_key}): dropping {n_total - n_kept}/{n_total} training examples "
+              f"with non-finite logprobs; using {n_kept} examples")
+    if n_kept < 10:
+        print(f"  PCA ({lp_key}): fewer than 10 finite columns — skipping")
+        return None
+    W = W[:, col_mask]
+    # Normalise each column (training example) to zero mean + unit variance so that
+    # high-variance examples do not dominate the principal axes.
+    W = SklearnStandardScaler().fit_transform(W)
     pca    = SklearnPCA(n_components=2, random_state=42)
     coords = pca.fit_transform(W)
     var    = pca.explained_variance_ratio_
     print(
         f"  PCA ({lp_key}): {len(keys_ok)} prompts  "
-        f"PC1={var[0]*100:.1f}%  PC2={var[1]*100:.1f}%"
+        f"PC1={var[0]*100:.1f}%  PC2={var[1]*100:.1f}%  "
+        f"(StandardScaler + col_mask: {n_kept}/{n_total} examples)"
     )
 
     return {
@@ -349,9 +365,14 @@ def build_pc_coords_tokens(
             )
         rows.append(row)
 
-    min_len = min(len(r) for r in rows)
-    W = np.array([r[:min_len] for r in rows], dtype=np.float32)
-    W = np.where(np.isfinite(W), W, 0.0)
+    # Right-pad shorter rows with 0 (pad = no token-level difference beyond this point).
+    # Truncating to min_len would discard valid data from longer sequences.
+    max_len = max(len(r) for r in rows)
+    W = np.zeros((len(rows), max_len), dtype=np.float32)
+    for i, r in enumerate(rows):
+        W[i, :len(r)] = r
+    # Normalise each column to zero mean + unit variance before PCA.
+    W = SklearnStandardScaler().fit_transform(W)
 
     pca    = SklearnPCA(n_components=2, random_state=42)
     coords = pca.fit_transform(W)
@@ -359,7 +380,7 @@ def build_pc_coords_tokens(
     print(
         f"  PCA tokens: {len(keys_ok)} prompts  "
         f"features={W.shape[1]}  "
-        f"PC1={var[0]*100:.1f}%  PC2={var[1]*100:.1f}%"
+        f"PC1={var[0]*100:.1f}%  PC2={var[1]*100:.1f}%  (right-padded + StandardScaler)"
     )
     return {
         k: (float(coords[i, 0]), float(coords[i, 1]))
@@ -398,9 +419,12 @@ def build_pc_coords_mix_tokens(
             )
         rows.append(row)
 
-    min_len = min(len(r) for r in rows)
-    W = np.array([r[:min_len] for r in rows], dtype=np.float32)
-    W = np.where(np.isfinite(W), W, 0.0)
+    # Right-pad shorter rows with 0; normalise before PCA.
+    max_len = max(len(r) for r in rows)
+    W = np.zeros((len(rows), max_len), dtype=np.float32)
+    for i, r in enumerate(rows):
+        W[i, :len(r)] = r
+    W = SklearnStandardScaler().fit_transform(W)
 
     pca    = SklearnPCA(n_components=2, random_state=42)
     coords = pca.fit_transform(W)
@@ -408,7 +432,7 @@ def build_pc_coords_mix_tokens(
     print(
         f"  PCA mix tokens: {len(keys_ok)} prompts  "
         f"features={W.shape[1]}  "
-        f"PC1={var[0]*100:.1f}%  PC2={var[1]*100:.1f}%"
+        f"PC1={var[0]*100:.1f}%  PC2={var[1]*100:.1f}%  (right-padded + StandardScaler)"
     )
     return {
         k: (float(coords[i, 0]), float(coords[i, 1]))
@@ -472,12 +496,13 @@ def make_point(base_key: str, run_data: dict, source: str, label: str,
     elicit_positive = (elicit_entry.get(cfg.positive_trait, {}).get("mean", float("nan"))
                        - ELICIT_BASE_POSITIVE)
 
-    # Cross-trait PPD values from perplexity JSON
-    perp_entry          = perp_prompts.get(base_key, {})
-    # "french_ppd"  = |logprob drift| on positive-trait (French) completions
-    # "playful_ppd" = |logprob drift| on negative-trait (Playful) completions
-    positive_ppd_val = float(perp_entry.get("french_ppd",   float("nan")))
-    negative_ppd_val = float(perp_entry.get("playful_ppd",  float("nan")))
+    # Cross-trait PPD values from perplexity JSON.
+    # Key format: "{trait_lower}_ppd"  — derived from cfg so it works for any experiment.
+    perp_entry       = perp_prompts.get(base_key, {})
+    _pos_ppd_key     = f"{cfg.positive_trait.lower()}_ppd"
+    _neg_ppd_key     = f"{cfg.negative_trait.lower()}_ppd"
+    positive_ppd_val = float(perp_entry.get(_pos_ppd_key, float("nan")))
+    negative_ppd_val = float(perp_entry.get(_neg_ppd_key, float("nan")))
 
     mean_w = m["mean_w"]
     ph_minus_positive_ppd = (mean_w - positive_ppd_val

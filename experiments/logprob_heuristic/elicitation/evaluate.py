@@ -136,9 +136,9 @@ def make_prompts_file(user_prefix: str, instructions: list[str]) -> str:
     return tmp.name
 
 
-def mean_no_nan(vals: list[float]) -> float | None:
+def mean_no_nan(vals: list[float]) -> float:
     valid = [v for v in vals if not math.isnan(v)]
-    return sum(valid) / len(valid) if valid else None
+    return sum(valid) / len(valid) if valid else float("nan")
 
 
 # ── Judging (sync with cache — original path) ────────────────────────────────
@@ -260,8 +260,14 @@ def main():
             continue
 
         raw_completions = [json.loads(l).get("completion") for l in raw.splitlines() if l.strip()]
-        completions = [c for c in raw_completions if c is not None]
-        raw_scores  = judge_completions(completions, instructions[:len(completions)])
+        # Pair each completion with its matching instruction BEFORE filtering None values.
+        # Filtering first then slicing instructions[:N] would misalign completions and
+        # instructions if any inference slot failed (None at position i shifts everything after).
+        pairs           = [(c, instructions[i]) for i, c in enumerate(raw_completions)
+                           if c is not None and i < len(instructions)]
+        completions     = [c    for c, _     in pairs]
+        instrs_matched  = [instr for _, instr in pairs]
+        raw_scores      = judge_completions(completions, instrs_matched)
 
         results[key] = {
             "prompt": prompt_text,

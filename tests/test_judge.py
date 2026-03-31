@@ -160,11 +160,13 @@ class TestMeanNoNan:
         vals = [10.0, float("nan"), 30.0]
         assert abs(mean_no_nan(vals) - 20.0) < 1e-9
 
-    def test_all_nan_returns_none(self):
-        assert mean_no_nan([float("nan"), float("nan")]) is None
+    def test_all_nan_returns_nan(self):
+        result = mean_no_nan([float("nan"), float("nan")])
+        assert isinstance(result, float) and math.isnan(result)
 
-    def test_empty_returns_none(self):
-        assert mean_no_nan([]) is None
+    def test_empty_returns_nan(self):
+        result = mean_no_nan([])
+        assert isinstance(result, float) and math.isnan(result)
 
 
 # ── config.eval_steps_schedule ────────────────────────────────────────────────

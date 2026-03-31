@@ -14,10 +14,18 @@ Returns float('nan') if:
   - the total probability mass on valid score tokens is below MIN_COVERAGE (0.80)
     — i.e. the top-20 tokens didn't cover enough mass for a robust score.
 
+Language traits (fast path)
+───────────────────────────
+Traits listed in _LANGUAGE_TRAITS (e.g. "french", "german") bypass the LLM
+judge entirely and are scored with pycld2 (Google's Compact Language Detector 2).
+pycld2.detect() returns per-language percentages directly, giving a 0–100 score
+with no API cost and no latency.
+
 Caching
 ───────
 Results are persisted to JUDGE_CACHE_PATH (JSON) keyed by
 sha256(model + messages).  Loaded on import, saved after each new call.
+Only LLM-judged traits use the cache; language traits are always scored live.
 """
 import asyncio
 import hashlib
@@ -26,6 +34,7 @@ import math
 import os
 import time
 
+import pycld2 as cld2
 from openai import AsyncOpenAI, OpenAI
 
 from config import JUDGE_MODEL, JUDGE_SYSTEM_PROMPT, JUDGE_CACHE_PATH, judge_user_prompt
@@ -63,6 +72,32 @@ def _cache_key(messages: list) -> str:
 
 
 _load_cache()
+
+# ── Language-trait fast path (pycld2) ────────────────────────────────────────
+# Traits listed here bypass the LLM judge and are scored with pycld2 instead.
+# Map: lowercase trait name → ISO 639-1 language code recognised by pycld2.
+_LANGUAGE_TRAITS: dict[str, str] = {
+    "french": "fr",
+    "german": "de",
+}
+
+
+def _score_language_pycld2(lang_code: str, text: str) -> float:
+    """Return the pycld2-detected percentage (0–100) of *text* in *lang_code*.
+
+    pycld2 can identify up to 3 languages in a single string and reports the
+    fraction of bytes attributed to each.  We sum all slots that match the
+    requested code.  Returns 0.0 when the language is not detected at all, and
+    float('nan') if pycld2 raises an error (e.g. the text contains only binary
+    data or is otherwise undetectable).
+    """
+    try:
+        _, _, details = cld2.detect(text)
+    except cld2.error:
+        return float("nan")
+    total = sum(percent for _, code, percent, _ in details if code == lang_code)
+    return float(total)
+
 
 # ── Logprob expected value ──────────────────────────────────────────────────────
 
@@ -115,10 +150,16 @@ def score_trait(trait: str, response: str, instruction: str = "") -> float:
     Optionally provide the `instruction` (user message) that prompted the
     response — the judge will see both for richer context.
 
-    Returns float in [0, 100] or float('nan') if no valid score token appeared
-    or probability coverage was below 0.80.
-    Uses disk cache — identical (trait, instruction, response) triples are never re-queried.
+    For language traits (e.g. "french", "german") pycld2 is used directly,
+    bypassing the LLM judge — no API call, no cache lookup.
+
+    Returns float in [0, 100] or float('nan') if scoring fails.
+    Uses disk cache for LLM-judged traits.
     """
+    lang_code = _LANGUAGE_TRAITS.get(trait.lower())
+    if lang_code is not None:
+        return _score_language_pycld2(lang_code, response)
+
     messages = [
         {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
         {"role": "user",   "content": judge_user_prompt(trait, response, instruction)},
@@ -145,10 +186,10 @@ def score_trait(trait: str, response: str, instruction: str = "") -> float:
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-def mean_no_nan(vals: list[float]) -> float | None:
-    """Return the mean of non-NaN values, or ``None`` if all NaN or empty."""
+def mean_no_nan(vals: list[float]) -> float:
+    """Return the mean of non-NaN values, or ``float('nan')`` if all NaN or empty."""
     valid = [v for v in vals if not math.isnan(v)]
-    return sum(valid) / len(valid) if valid else None
+    return sum(valid) / len(valid) if valid else float("nan")
 
 
 # ── Public API — async (no disk cache, for batch judging) ────────────────────
@@ -162,9 +203,16 @@ async def judge_one_async(
 ) -> float:
     """Score a single (trait, response) pair asynchronously.
 
+    For language traits (e.g. "french", "german") pycld2 is used directly —
+    no semaphore, no API call.
+
     Returns float in [0, 100] or ``float('nan')`` on failure.
     Does *not* use the disk cache.
     """
+    lang_code = _LANGUAGE_TRAITS.get(trait.lower())
+    if lang_code is not None:
+        return _score_language_pycld2(lang_code, response)
+
     async with sem:
         try:
             resp = await client.chat.completions.create(

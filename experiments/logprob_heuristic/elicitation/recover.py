@@ -73,7 +73,7 @@ PROMPTS = {
 
 def mean_no_nan(vals):
     valid = [v for v in vals if not math.isnan(v)]
-    return sum(valid) / len(valid) if valid else None
+    return sum(valid) / len(valid) if valid else float("nan")
 
 
 async def judge_one(aclient, sem, trait, completion):

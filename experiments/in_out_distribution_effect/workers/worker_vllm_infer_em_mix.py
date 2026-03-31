@@ -67,10 +67,16 @@ if __name__ == '__main__':
     print(f"  default_system  : {default_system!r}", flush=True)
     print(f"  rephrasing pool : {len(rephrasings)} variants (seeded per step/set/question)", flush=True)
 
-    def _sample_rephrasing(step: int, eval_set: str, q_idx: int) -> str:
-        """Deterministically sample a rephrasing for a given (step, set, question)."""
-        seed = hash(f"em_mix_step_{step}_{eval_set}_{q_idx}") % (2 ** 32)
-        rng  = random.Random(seed)
+    def _sample_rephrasing(q_idx: int) -> str:
+        """Deterministically sample a rephrasing for eval question at index q_idx.
+
+        Uses only the question index (not step or eval_set) so that the same
+        question always gets the same rephrasing across all steps and eval sets.
+        This is consistent with how training sampled rephrasings: each position
+        in the dataset received one draw from the pool, and we replicate that
+        position-based assignment here.
+        """
+        rng = random.Random(42 + q_idx)
         return rng.choice(rephrasings)
 
     def _make_prompts(sys_prompts: list[str], questions: list[str]) -> list[str]:
@@ -98,11 +104,13 @@ if __name__ == '__main__':
         )
         return completions
 
-    def _generate_mix(step: int, eval_set: str, questions: list[str], lora_req) -> list[str]:
-        """Each question gets its own seeded-random system prompt from the pool."""
-        sys_prompts = [
-            _sample_rephrasing(step, eval_set, i) for i in range(len(questions))
-        ]
+    def _generate_mix(questions: list[str], lora_req) -> list[str]:
+        """Each question gets its own seeded-random system prompt from the pool.
+
+        The rephrasing for question i is sampled with seed=(42+i), matching
+        the per-position assignment used in training.
+        """
+        sys_prompts = [_sample_rephrasing(i) for i in range(len(questions))]
         prompts = _make_prompts(sys_prompts, questions)
         outputs = llm.generate(prompts, sampling_params, lora_request=lora_req)
         completions = [o.outputs[0].text for o in outputs]
@@ -130,7 +138,7 @@ if __name__ == '__main__':
             })
 
             # — training condition (seeded-random rephrasing per question) ────
-            comps_training = _generate_mix(step, eval_set, questions, lora_req)
+            comps_training = _generate_mix(questions, lora_req)
             all_rows.append({
                 "step":        step,
                 "eval_set":    eval_set,
