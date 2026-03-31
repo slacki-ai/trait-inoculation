@@ -82,8 +82,54 @@ _LANGUAGE_TRAITS: dict[str, str] = {
 }
 
 
+def _strip_to_assistant_turn(text: str) -> str:
+    """Extract only the final assistant turn from *text*.
+
+    If *text* is already a bare completion (the common case — vLLM returns
+    only the generated tokens via ``o.outputs[0].text``), this is a no-op.
+
+    If *text* contains a full chat-template rendering (system + user + assistant),
+    we locate the last assistant-role marker and return only the content that
+    follows it, so that system-prompt and user-message text cannot pollute the
+    language score.
+
+    Handles the two chat templates used in this project:
+    - Qwen / ChatML:  ``<|im_start|>assistant``
+    - Llama 3:        ``<|start_header_id|>assistant<|end_header_id|>``
+    """
+    # Try Qwen / ChatML marker first
+    marker_qwen = "<|im_start|>assistant"
+    idx = text.rfind(marker_qwen)
+    if idx != -1:
+        after = text[idx + len(marker_qwen):]
+        # Strip a leading newline that follows the marker in the chat template
+        after = after.lstrip("\n")
+        # Drop any trailing <|im_end|> that vLLM may have left in
+        end_tag = "<|im_end|>"
+        if end_tag in after:
+            after = after[:after.index(end_tag)]
+        return after.strip()
+
+    # Try Llama-3 marker
+    marker_llama = "<|start_header_id|>assistant<|end_header_id|>"
+    idx = text.rfind(marker_llama)
+    if idx != -1:
+        after = text[idx + len(marker_llama):]
+        after = after.lstrip("\n")
+        end_tag = "<|eot_id|>"
+        if end_tag in after:
+            after = after[:after.index(end_tag)]
+        return after.strip()
+
+    # No markers found — text is already a bare completion
+    return text
+
+
 def _score_language_pycld2(lang_code: str, text: str) -> float:
     """Return the pycld2-detected percentage (0–100) of *text* in *lang_code*.
+
+    Only the assistant turn is scored — any system-prompt or user-message
+    content is stripped via ``_strip_to_assistant_turn`` before detection.
 
     pycld2 can identify up to 3 languages in a single string and reports the
     fraction of bytes attributed to each.  We sum all slots that match the
@@ -91,8 +137,9 @@ def _score_language_pycld2(lang_code: str, text: str) -> float:
     float('nan') if pycld2 raises an error (e.g. the text contains only binary
     data or is otherwise undetectable).
     """
+    assistant_text = _strip_to_assistant_turn(text)
     try:
-        _, _, details = cld2.detect(text)
+        _, _, details = cld2.detect(assistant_text)
     except cld2.error:
         return float("nan")
     total = sum(percent for _, code, percent, _ in details if code == lang_code)
