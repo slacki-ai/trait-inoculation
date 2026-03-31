@@ -37,6 +37,7 @@ This repository studies the **inoculation / conditionalization** effect in LLM f
   - [19. Pairwise Angle Analysis](#19-pairwise-angle-analysis)
   - [20. Fixed-vs-Mix Gap Heuristic Analysis](#20-fixed-vs-mix-gap-heuristic-analysis)
   - [21. German / Flattering Replication (Llama-3.1-8B)](#21-german--flattering-replication-llama-31-8b)
+  - [22. Section 1 Slides — Predicting Inoculation Strength](#22-section-1-slides--predicting-inoculation-strength)
 - [Summary of Findings](#summary-of-findings)
 - [Running the Experiments](#running-the-experiments)
 - [Key Design Decisions](#key-design-decisions)
@@ -177,23 +178,41 @@ This repository studies the **inoculation / conditionalization** effect in LLM f
 │   ├── losses_*.json                                  # Training loss data per experiment
 │   └── training_jobs_*.json                           # Checkpoint metadata
 │
-└── plots/
-    ├── traits_*.png                                   # Exp 1 — original replication
-    ├── lr_sweep_*.png                                 # Exp 3 — LR sweep
-    ├── inoc_prefix_sweep_*.png                        # Exp 4 — prefix sweep
-    ├── multi_prompt_*.png                             # Exp 5, 6 — multi-prompt plots
-    ├── plot_combined_*.png                            # Exp 10 — combined scatter
-    ├── plot_lls_metrics_*.png                         # Exp 13 — LLS metrics scatter (Playful/French)
-    ├── plot_pca_prompts_*.png                         # Exp 13/16 — PCA figures (Playful/French)
-    ├── pca/angle_analysis/                            # Exp 19 — angle heatmaps (Playful/French)
-    ├── german_flattering_8b/
-    │   ├── lls_metrics/                               # Exp 21 — LLS scatter + PCA (German/Flattering)
-    │   └── pca/
-    │       ├── config_all/                            # PCA figures (German/Flattering)
-    │       └── angle_analysis/                        # Exp 19 — angle heatmaps (German/Flattering)
-    ├── plot_fixed_vs_mix_heuristics_*.png             # Exp 20 — fixed-vs-mix gap heuristic analysis
-    ├── vanilla_comparison_*.png                       # Validation plots
-    └── losses_*.png                                   # Training loss curves
+├── plots/
+│   ├── traits_*.png                                   # Exp 1 — original replication
+│   ├── lr_sweep_*.png                                 # Exp 3 — LR sweep
+│   ├── inoc_prefix_sweep_*.png                        # Exp 4 — prefix sweep
+│   ├── multi_prompt_*.png                             # Exp 5, 6 — multi-prompt plots
+│   ├── plot_combined_*.png                            # Exp 10 — combined scatter
+│   ├── plot_lls_metrics_*.png                         # Exp 13 — LLS metrics scatter (Playful/French)
+│   ├── plot_pca_prompts_*.png                         # Exp 13/16 — PCA figures (Playful/French)
+│   ├── pca/angle_analysis/                            # Exp 19 — angle heatmaps (Playful/French)
+│   ├── german_flattering_8b/
+│   │   ├── lls_metrics/                               # Exp 21 — LLS scatter + PCA (German/Flattering)
+│   │   └── pca/
+│   │       ├── config_all/                            # PCA figures (German/Flattering)
+│   │       └── angle_analysis/                        # Exp 19 — angle heatmaps (German/Flattering)
+│   ├── plot_fixed_vs_mix_heuristics_*.png             # Exp 20 — fixed-vs-mix gap heuristic analysis
+│   ├── vanilla_comparison_*.png                       # Validation plots
+│   └── losses_*.png                                   # Training loss curves
+│
+└── slides/                                            # Exp 22 — Section 1 slides: predicting inoculation strength
+    ├── build_dataset.py   # Build slides/data/dataset.csv from all source JSONs
+    ├── section1.py        # Generate all Section 1 figures
+    ├── plot_utils.py      # Shared plotting utilities (heuristic scatter, 2D + 3D embedding scatter)
+    ├── data/
+    │   ├── dataset.csv           # One row per (experiment, prompt, trait_role, prefix_type)
+    │   ├── coords_metadata.json  # Explained-variance % for each PCA/SVD component
+    │   └── README.md             # Full schema documentation
+    └── figures/
+        ├── slide1_elicitation_*.png         # Elicitation strength vs suppression
+        ├── slide2_ph_*.png                  # PH heuristic vs suppression
+        ├── slide3a_pca_pc1_pc2_*.png        # PCA PC1 & PC2 vs suppression (2×4 scatter)
+        ├── slide3b_pca_scatter_*.png        # PCA 2D prompt embedding (coloured by suppression)
+        ├── slide3c_pca_scatter_3d_*.png     # PCA 3D prompt embedding (PC1 × PC2 × PC3)
+        ├── slide4a_truncsvd_sv1_sv2_*.png   # TruncatedSVD SV1 & SV2 vs suppression (2×4 scatter)
+        ├── slide4b_truncsvd_scatter_*.png   # TruncatedSVD 2D prompt embedding
+        └── slide4c_truncsvd_scatter_3d_*.png # TruncatedSVD 3D prompt embedding (SV1 × SV2 × SV3)
 ```
 
 ---
@@ -1083,6 +1102,53 @@ This two-axis structure directly mirrors the Playful/French experiment (PC1 = po
 4. **PH predicts German suppression exactly as for Playful.** Top-PH German prompts (`answer_german`, `fluent_german`, `natural_german`, PH ≈ +0.15–0.16) produce strong suppression; neutral/neg prompts (PH ≈ 0) show none. Flattering PH values are lower (max ≈ +0.075), consistent with Flattering being a softer stylistic trait than a binary language switch.
 
 5. **Trait geometry: German/Flattering are more orthogonal than Playful/French.** Raw-W cross-trait angles: German/Flattering = 82.9° vs Playful/French = 62.7°. This closer-to-90° geometry explains the cleaner empirical separation — gating one trait does not inadvertently suppress the other.
+
+---
+
+### 22. Section 1 Slides — Predicting Inoculation Strength
+
+**Scripts:**
+- `slides/build_dataset.py` — build `slides/data/dataset.csv` from all source JSONs (elicitation, perplexity heuristic, token-level logprobs, training scores); also writes `slides/data/coords_metadata.json`
+- `slides/section1.py` — generate all Section 1 figures
+
+**Figures (latest):**
+- [`Slide 1 — Elicitation heuristic`](slides/figures/slide1_elicitation_20260331_085810.png)
+- [`Slide 2 — PH heuristic`](slides/figures/slide2_ph_20260331_085810.png)
+- [`Slide 3a — PCA PC1 & PC2 vs suppression`](slides/figures/slide3a_pca_pc1_pc2_20260331_085810.png)
+- [`Slide 3b — PCA 2D prompt embedding`](slides/figures/slide3b_pca_scatter_20260331_085810.png)
+- [`Slide 3c — PCA 3D prompt embedding`](slides/figures/slide3c_pca_scatter_3d_20260331_085810.png)
+- [`Slide 4a — TruncatedSVD SV1 & SV2 vs suppression`](slides/figures/slide4a_truncsvd_sv1_sv2_20260331_085810.png)
+- [`Slide 4b — TruncatedSVD 2D prompt embedding`](slides/figures/slide4b_truncsvd_scatter_20260331_085810.png)
+- [`Slide 4c — TruncatedSVD 3D prompt embedding`](slides/figures/slide4c_truncsvd_scatter_3d_20260331_085810.png)
+
+**Dataset schema** (`slides/data/dataset.csv`): one row per `(experiment, prompt_key, trait_role, prefix_type)`. Heuristic columns: `elicitation`, `ph`, `ph_combined`, `pc1`–`pc3` (PCA), `sv1_truncated`–`sv3_truncated` (TruncatedSVD) — all with `_fixed` / `_mix` variants for embedding scatter plots. Suppression columns: `suppression`, `suppression_ci_lo/hi`, `no_inoc_score`, `inoc_score`. Full schema in `slides/data/README.md`.
+
+**Slides produced:**
+
+| Slide | Content | Layout |
+|---|---|---|
+| 1 | Elicitation strength (pp) vs suppression | 2×2 scatter (2 experiments × 2 prefix types) |
+| 2 | PH heuristic (`ph_combined`) vs suppression | 2×2 scatter |
+| 3a | PCA PC1 & PC2 vs suppression | 2×4 scatter |
+| 3b | PCA 2D prompt embedding (PC1 × PC2) | 2×4 scatter coloured by suppression |
+| 3c | PCA 3D prompt embedding (PC1 × PC2 × PC3) | 2×4 3D scatter |
+| 4a | TruncatedSVD SV1 & SV2 vs suppression | 2×4 scatter |
+| 4b | TruncatedSVD 2D embedding (SV1 × SV2) | 2×4 scatter coloured by suppression |
+| 4c | TruncatedSVD 3D embedding (SV1 × SV2 × SV3) | 2×4 3D scatter |
+
+Axis labels on embedding scatter plots include explained-variance percentages (e.g. `PC1 (18.4%)`) loaded from `coords_metadata.json`.
+
+**Running:**
+
+```bash
+# Step 1 — build / update the dataset (reads all results/ JSONs)
+python slides/build_dataset.py
+
+# Step 2 — generate all figures
+python slides/section1.py
+```
+
+Figures are saved to `slides/figures/` with a timestamp suffix. No GPU jobs required — reads from existing results.
 
 ---
 
