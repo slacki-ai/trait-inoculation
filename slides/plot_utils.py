@@ -163,11 +163,16 @@ def _panel_scatter(
     experiment: str,
     show_y_label: bool = True,
     x_label: str = "",
+    filter_by_family: bool = False,
 ) -> None:
     """Draw one scatter panel (one experiment × one prefix_type).
 
     Both trait roles (positive/negative) on the same axes, each with its own
     colour, error bars, and linear fit.
+
+    If filter_by_family=True, each role only shows prompts whose prompt_family
+    matches that role's trait name (lowercased) or is "neutral" — excluding
+    prompts designed for the other trait.
     """
     xcol = _x_col(x_col_base, prefix_type, df_panel)
     legend_handles: list = []
@@ -176,11 +181,15 @@ def _panel_scatter(
         color = TRAIT_COLORS[role]
         trait_label = TRAIT_LABELS.get(experiment, {}).get(role, role.capitalize())
 
-        sub = df_panel[
+        mask = (
             (df_panel.trait_role == role) &
             df_panel[xcol].notna() &
             df_panel["suppression"].notna()
-        ].copy()
+        )
+        if filter_by_family:
+            trait_family = trait_label.lower()
+            mask &= df_panel["prompt_family"].isin([trait_family, "neutral"])
+        sub = df_panel[mask].copy()
 
         if sub.empty:
             continue
@@ -225,18 +234,21 @@ def make_heuristic_figure(
     title: str,
     x_col_base_2: Optional[str] = None,   # if set, adds 2 cols showing 2nd component
     x_label_2: Optional[str] = None,
+    x_col_bases_extra: Optional[list[tuple[str, str]]] = None,  # additional (col_base, label) pairs
+    filter_by_family: bool = False,        # if True, each role shows only trait-matched prompts
 ) -> plt.Figure:
     """Create a 2×N heuristic scatter figure.
 
     Rows = experiments (playful_french_7b, german_flattering_8b)
     Cols = prefix_types (fixed, mix) for each x_col_base provided.
-      If x_col_base_2 is supplied the figure is 2×4:
-        cols 0-1: x_col_base (fixed, mix)
-        cols 2-3: x_col_base_2 (fixed, mix)
+      If x_col_base_2 is supplied the figure is 2×4.
+      x_col_bases_extra appends further (col_base, label) pairs beyond x_col_base_2.
     """
     x_configs: list[tuple[str, str]] = [(x_col_base, x_label)]
     if x_col_base_2 is not None:
         x_configs.append((x_col_base_2, x_label_2 or x_col_base_2))
+    if x_col_bases_extra:
+        x_configs.extend(x_col_bases_extra)
 
     n_cols = len(x_configs) * 2   # 2 prefix_types per x_col
     figsize = (6.5 * n_cols, 9)
@@ -273,6 +285,7 @@ def make_heuristic_figure(
                     ax, df_panel, xcb, prefix_type, experiment,
                     show_y_label=(col_idx == 0),
                     x_label=xlabel if row_idx == 1 else "",
+                    filter_by_family=filter_by_family,
                 )
 
                 # Column titles (top row only)
@@ -310,6 +323,7 @@ def _embedding_panel(
     vmax: float,
     x_label: str = "",
     y_label: str = "",
+    filter_by_family: bool = False,
 ) -> Optional[object]:
     """Draw one embedding panel; return the scatter artist (for colorbar) or None."""
     df_emb = df[
@@ -319,6 +333,11 @@ def _embedding_panel(
         df[xcol].notna() &
         df[ycol].notna()
     ].drop_duplicates("prompt_key").copy()
+
+    if filter_by_family:
+        trait_label = TRAIT_LABELS.get(experiment, {}).get(trait_role, "")
+        trait_family = trait_label.lower()
+        df_emb = df_emb[df_emb["prompt_family"].isin([trait_family, "neutral"])]
 
     if df_emb.empty:
         ax.text(0.5, 0.5, "no data", ha="center", va="center",
@@ -367,6 +386,7 @@ def make_embedding_figure(
     y_label_str: str,
     title: str,
     coords_meta: Optional[dict] = None,  # from coords_metadata.json; adds "(X.X%)" to labels
+    filter_by_family: bool = False,      # if True, each panel shows only trait-matched prompts
 ) -> plt.Figure:
     """Create a 2×4 embedding scatter coloured by suppression.
 
@@ -417,6 +437,7 @@ def make_embedding_figure(
                 xcol, ycol, cmap, vmin, vmax,
                 x_label=xl,
                 y_label=yl if col_idx == 0 else "",
+                filter_by_family=filter_by_family,
             )
             if sc is not None:
                 sc_ref = sc

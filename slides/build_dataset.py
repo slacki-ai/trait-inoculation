@@ -307,13 +307,15 @@ def _compute_coords(
     inoc_toks = {k: prompts_data[k]["lp_train_inoc_tokens"] for k in present_keys}
     mix_toks  = {k: prompts_data[k].get("lp_train_mix_tokens", []) for k in present_keys}
 
-    N_COMP = 3  # compute top-3 components for 2D and 3D scatter plots
+    N_COMP = 5  # compute top-5 components for 2D–5D scatter plots
 
     nan_row = {
         "pc1_fixed": float("nan"), "pc2_fixed": float("nan"), "pc3_fixed": float("nan"),
         "pc1_mix":   float("nan"), "pc2_mix":   float("nan"), "pc3_mix":   float("nan"),
         "sv1_truncated_fixed": float("nan"), "sv2_truncated_fixed": float("nan"), "sv3_truncated_fixed": float("nan"),
+        "sv4_truncated_fixed": float("nan"), "sv5_truncated_fixed": float("nan"),
         "sv1_truncated_mix":   float("nan"), "sv2_truncated_mix":   float("nan"), "sv3_truncated_mix":   float("nan"),
+        "sv4_truncated_mix":   float("nan"), "sv5_truncated_mix":   float("nan"),
     }
 
     meta: dict[str, list[float]] = {}
@@ -344,6 +346,8 @@ def _compute_coords(
             k: {
                 "pc1_mix": float(pca_m[i, 0]), "pc2_mix": float(pca_m[i, 1]), "pc3_mix": float(pca_m[i, 2]),
                 "sv1_truncated_mix": float(svd_nat_m[i, 0]), "sv2_truncated_mix": float(svd_nat_m[i, 1]), "sv3_truncated_mix": float(svd_nat_m[i, 2]),
+                "sv4_truncated_mix": float(svd_nat_m[i, 3]) if svd_nat_m.shape[1] > 3 else float("nan"),
+                "sv5_truncated_mix": float(svd_nat_m[i, 4]) if svd_nat_m.shape[1] > 4 else float("nan"),
             }
             for i, k in enumerate(mix_present)
         }
@@ -361,6 +365,8 @@ def _compute_coords(
         row: dict = {
             "pc1_fixed": float(pca_f[idx, 0]), "pc2_fixed": float(pca_f[idx, 1]), "pc3_fixed": float(pca_f[idx, 2]),
             "sv1_truncated_fixed": float(svd_nat_f[idx, 0]), "sv2_truncated_fixed": float(svd_nat_f[idx, 1]), "sv3_truncated_fixed": float(svd_nat_f[idx, 2]),
+            "sv4_truncated_fixed": float(svd_nat_f[idx, 3]) if svd_nat_f.shape[1] > 3 else float("nan"),
+            "sv5_truncated_fixed": float(svd_nat_f[idx, 4]) if svd_nat_f.shape[1] > 4 else float("nan"),
         }
         if key in mix_coords:
             row.update(mix_coords[key])
@@ -368,6 +374,7 @@ def _compute_coords(
             row.update({k: float("nan") for k in [
                 "pc1_mix", "pc2_mix", "pc3_mix",
                 "sv1_truncated_mix", "sv2_truncated_mix", "sv3_truncated_mix",
+                "sv4_truncated_mix", "sv5_truncated_mix",
             ]})
         result[key] = row
     return result, meta
@@ -508,9 +515,13 @@ def _build_rows(
             sv1_trunc_f = coord_data.get("sv1_truncated_fixed", float("nan"))
             sv2_trunc_f = coord_data.get("sv2_truncated_fixed", float("nan"))
             sv3_trunc_f = coord_data.get("sv3_truncated_fixed", float("nan"))
+            sv4_trunc_f = coord_data.get("sv4_truncated_fixed", float("nan"))
+            sv5_trunc_f = coord_data.get("sv5_truncated_fixed", float("nan"))
             sv1_trunc_m = coord_data.get("sv1_truncated_mix", float("nan"))
             sv2_trunc_m = coord_data.get("sv2_truncated_mix", float("nan"))
             sv3_trunc_m = coord_data.get("sv3_truncated_mix", float("nan"))
+            sv4_trunc_m = coord_data.get("sv4_truncated_mix", float("nan"))
+            sv5_trunc_m = coord_data.get("sv5_truncated_mix", float("nan"))
 
             # Baseline values for this trait
             bl_vals = no_inoc["pos"] if trait_role == "positive" else no_inoc["neg"]
@@ -555,6 +566,8 @@ def _build_rows(
                 sv1_trunc = sv1_trunc_f if prefix_type == "fixed" else sv1_trunc_m
                 sv2_trunc = sv2_trunc_f if prefix_type == "fixed" else sv2_trunc_m
                 sv3_trunc = sv3_trunc_f if prefix_type == "fixed" else sv3_trunc_m
+                sv4_trunc = sv4_trunc_f if prefix_type == "fixed" else sv4_trunc_m
+                sv5_trunc = sv5_trunc_f if prefix_type == "fixed" else sv5_trunc_m
 
                 rows.append({
                     "experiment":    experiment,
@@ -575,11 +588,15 @@ def _build_rows(
                     "sv1_truncated": sv1_trunc,
                     "sv2_truncated": sv2_trunc,
                     "sv3_truncated": sv3_trunc,
+                    "sv4_truncated": sv4_trunc,
+                    "sv5_truncated": sv5_trunc,
                     # Fixed-basis coords also stored for embedding scatters
                     "pc1_fixed":  pc1_f,  "pc2_fixed":  pc2_f,  "pc3_fixed":  pc3_f,
                     "pc1_mix":    pc1_m,  "pc2_mix":    pc2_m,  "pc3_mix":    pc3_m,
                     "sv1_truncated_fixed": sv1_trunc_f, "sv2_truncated_fixed": sv2_trunc_f, "sv3_truncated_fixed": sv3_trunc_f,
+                    "sv4_truncated_fixed": sv4_trunc_f, "sv5_truncated_fixed": sv5_trunc_f,
                     "sv1_truncated_mix":   sv1_trunc_m, "sv2_truncated_mix":   sv2_trunc_m, "sv3_truncated_mix":   sv3_trunc_m,
+                    "sv4_truncated_mix":   sv4_trunc_m, "sv5_truncated_mix":   sv5_trunc_m,
                     # --- Suppression (Y axis) ---
                     "suppression":    supp,
                     "suppression_ci_lo": ci_lo,
@@ -704,6 +721,17 @@ def main() -> None:
     print(f"\nWrote coords metadata → {OUT_META}")
 
     df = pd.DataFrame(all_rows)
+
+    # Derived combination heuristics (sum / difference of the top-2 components)
+    df["pc1_plus_pc2_fixed"]   = df["pc1_fixed"]          + df["pc2_fixed"]
+    df["pc1_plus_pc2_mix"]     = df["pc1_mix"]             + df["pc2_mix"]
+    df["pc1_minus_pc2_fixed"]  = df["pc1_fixed"]          - df["pc2_fixed"]
+    df["pc1_minus_pc2_mix"]    = df["pc1_mix"]             - df["pc2_mix"]
+    df["sv1_plus_sv2_fixed"]   = df["sv1_truncated_fixed"] + df["sv2_truncated_fixed"]
+    df["sv1_plus_sv2_mix"]     = df["sv1_truncated_mix"]   + df["sv2_truncated_mix"]
+    df["sv1_minus_sv2_fixed"]  = df["sv1_truncated_fixed"] - df["sv2_truncated_fixed"]
+    df["sv1_minus_sv2_mix"]    = df["sv1_truncated_mix"]   - df["sv2_truncated_mix"]
+
     df.to_csv(OUT_CSV, index=False)
 
     n_with_supp = df["suppression"].notna().sum()

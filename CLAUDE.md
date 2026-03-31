@@ -1017,6 +1017,50 @@ Plots: `plots/german_flattering_8b/{lls_metrics,pca}/config_all/*_20260328_16*.p
 
 *Replication verdict:* Fixed prefix → strong context gate; mix → no gate. Pattern holds across Llama-3.1-8B + German/Flattering + GPT-4.1-mini off-policy data.
 
+**Subset training run — COMPLETE ✅ 2026-03-31** (22/24 done; script: `train_german_flattering.py`)
+12 fixed + 12 mix = 24 new jobs. Results merged into existing scores file.
+| Run | Type | Job ID | Status |
+|-----|------|--------|--------|
+| german_today | fixed | gffixedjob-5620453b056f | ✅ |
+| enjoys_german | fixed | gffixedjob-71d071be3d03 | ✅ |
+| german_agent | fixed | gffixedjob-215e0821752c | ✅ |
+| think_german | fixed | gffixedjob-70226901b225 | ✅ |
+| german_answers_neg | fixed | gffixedjob-f899a6ea51ac | ❌ CUDA → retried |
+| praise_uplifting | fixed | gffixedjob-d3fb91b12a0a | ✅ |
+| compliment_nevermind | fixed | gffixedjob-884610ba3c80 | ❌ CUDA → retried |
+| flattering_agent | fixed | gffixedjob-7da5c1158997 | ✅ |
+| no_compliments | fixed | gffixedjob-f298735950a9 | ✅ |
+| flattering_agent_neg | fixed | gffixedjob-9b7b59fa4cad | ✅ |
+| enjoy_hiking | fixed | gffixedjob-fd1fc66ebbbb | ✅ |
+| moon_orbits_earth | fixed | gffixedjob-8c02495d8fee | ✅ |
+| german_today_mix | mix | mixjob-b86fff3b5b04 | ✅ |
+| enjoys_german_mix | mix | mixjob-cb04cb83922b | ✅ |
+| german_agent_mix | mix | mixjob-f462e1de8693 | ✅ |
+| think_german_mix | mix | mixjob-11814f266a39 | ✅ |
+| german_answers_neg_mix | mix | mixjob-5fddcbb0940c | ✅ |
+| praise_uplifting_mix | mix | mixjob-359630989c87 | ✅ |
+| compliment_nevermind_mix | mix | mixjob-20a66f691aa4 | ✅ |
+| flattering_agent_mix | mix | mixjob-1317ac3f7259 | ✅ |
+| no_compliments_mix | mix | mixjob-e43489b01282 | ✅ |
+| flattering_agent_neg_mix | mix | mixjob-7010ff63c38c | ✅ |
+| enjoy_hiking_mix | mix | mixjob-1b46dcc8f977 | ✅ |
+| moon_orbits_earth_mix | mix | mixjob-a5dee748f9fa | ✅ |
+
+**Retry jobs — IN PROGRESS 🔄 2026-03-31** (script: `retry_gf_failed.py`)
+| Run | Job ID |
+|-----|--------|
+| german_answers_neg (fixed retry) | gfretryfixedjob-f899a6ea51ac |
+| compliment_nevermind (fixed retry) | gfretryfixedjob-884610ba3c80 |
+Monitor: `tail -f /tmp/retry_gf_failed.log`
+When done: run `python slides/build_dataset.py` to add the 2 remaining entries.
+
+`slides/data/dataset.csv` rebuilt 2026-03-31 with 22/24 new GF runs (18 unique prompt keys with suppression, up from 6).
+
+**flat_v5 (extreme flattering) perplexity — IN PROGRESS 🔄 2026-03-31**
+Job: `perplexityallfixedjob-f09aae1fc265` (10 prompts, fixed version)
+Monitor: `tail -f /tmp/perp_flat_v5_prod.log`
+YAML updated: `flat_v5` group added to `experiment_configs/german_flattering_8b.yaml`
+
 **Mix perplexity (6-prompt) COMPLETE ✅ 2026-03-28** — job `perplexityallmixjob-3fd25f7a61b4`; 6/7 prompts with mix data (helpful_assistant skipped by worker); merged into `perplexity_heuristic_german_flattering_llama-3.1-8b-instruct.json`.
 
 **Full 48-prompt mix perplexity COMPLETE ✅ 2026-03-28**

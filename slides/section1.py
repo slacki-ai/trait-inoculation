@@ -39,8 +39,9 @@ TS = datetime.now().strftime("%Y%m%d_%H%M%S")
 # Slide configurations
 # ---------------------------------------------------------------------------
 
-# Each entry: (slug, x_col_base, x_label, title, x_col_base_2, x_label_2)
-# x_col_base_2/x_label_2 are optional (None = 2×2 layout; set = 2×4 layout with 2nd component)
+# Each entry: (slug, x_col_base, x_label, title, x_col_base_2, x_label_2, x_col_bases_extra)
+# x_col_base_2/x_label_2 optional (None = 2×2; set = 2×4 with 2nd component)
+# x_col_bases_extra: list of (col_base, label) for additional column pairs (or None)
 # x_col_base is resolved per panel:
 #   - plain name (e.g. "elicitation") → same column for both fixed and mix
 #   - name without suffix (e.g. "pc1") → uses pc1_fixed / pc1_mix per panel
@@ -50,30 +51,38 @@ HEURISTIC_SLIDES = [
         "elicitation",
         "Elicitation strength (pp)\n[prompt's effect on base model trait score]",
         "Slide 1 — Elicitation heuristic vs inoculation suppression",
-        None, None,
+        None, None, None,
     ),
     (
         "slide2_ph",
         "ph_combined",
         "Mean logprob diff (PH)\n[mean(lp_inoculated − lp_default) on training completions]",
         "Slide 2 — Logprob diff heuristic (PH) vs inoculation suppression",
-        None, None,
+        None, None, None,
     ),
     (
         "slide3a_pca_pc1_pc2",
         "pc1",
-        "PC1 coordinate\n[centred PCA on token-wise logprob diffs, StandardScaler]",
-        "Slide 3a — PCA PC1 & PC2 vs inoculation suppression",
+        "PC1\n[centred PCA on token-wise logprob diffs]",
+        "Slide 3a — PCA components vs inoculation suppression",
         "pc2",
-        "PC2 coordinate\n[centred PCA on token-wise logprob diffs, StandardScaler]",
+        "PC2\n[centred PCA on token-wise logprob diffs]",
+        [
+            ("pc1_plus_pc2",  "PC1+PC2\n[centred PCA]"),
+            ("pc1_minus_pc2", "PC1−PC2\n[centred PCA]"),
+        ],
     ),
     (
         "slide4a_truncsvd_sv1_sv2",
         "sv1_truncated",
-        "SV1 coordinate\n[TruncatedSVD (uncentred) on token-wise logprob diffs]",
-        "Slide 4a — TruncatedSVD SV1 & SV2 vs inoculation suppression",
+        "SV1\n[TruncatedSVD (uncentred) on token-wise logprob diffs]",
+        "Slide 4a — TruncatedSVD components vs inoculation suppression",
         "sv2_truncated",
-        "SV2 coordinate\n[TruncatedSVD (uncentred) on token-wise logprob diffs]",
+        "SV2\n[TruncatedSVD (uncentred) on token-wise logprob diffs]",
+        [
+            ("sv1_plus_sv2",  "SV1+SV2\n[TruncatedSVD (uncentred)]"),
+            ("sv1_minus_sv2", "SV1−SV2\n[TruncatedSVD (uncentred)]"),
+        ],
     ),
 ]
 
@@ -90,6 +99,67 @@ EMBEDDING_SLIDES = [
         "sv1_truncated", "sv2_truncated",
         "SV1 (TruncatedSVD)", "SV2 (TruncatedSVD)",
         "Slide 4b — TruncatedSVD prompt embedding (coloured by negative-trait suppression)",
+    ),
+]
+
+# ---------------------------------------------------------------------------
+# Filtered versions — each trait only includes trait-matched + neutral prompts
+# (excludes prompts designed for the other trait)
+# ---------------------------------------------------------------------------
+
+HEURISTIC_SLIDES_FILTERED = [
+    (
+        "slide1_elicitation_filtered",
+        "elicitation",
+        "Elicitation strength (pp)\n[prompt's effect on base model trait score]",
+        "Slide 1 — Elicitation heuristic vs suppression  (trait-matched prompts only)",
+        None, None, None,
+    ),
+    (
+        "slide2_ph_filtered",
+        "ph_combined",
+        "Mean logprob diff (PH)\n[mean(lp_inoculated − lp_default) on training completions]",
+        "Slide 2 — PH heuristic vs suppression  (trait-matched prompts only)",
+        None, None, None,
+    ),
+    (
+        "slide3a_pca_pc1_pc2_filtered",
+        "pc1",
+        "PC1\n[centred PCA on token-wise logprob diffs]",
+        "Slide 3a — PCA components vs suppression  (trait-matched prompts only)",
+        "pc2",
+        "PC2\n[centred PCA on token-wise logprob diffs]",
+        [
+            ("pc1_plus_pc2",  "PC1+PC2\n[centred PCA]"),
+            ("pc1_minus_pc2", "PC1−PC2\n[centred PCA]"),
+        ],
+    ),
+    (
+        "slide4a_truncsvd_sv1_sv2_filtered",
+        "sv1_truncated",
+        "SV1\n[TruncatedSVD (uncentred) on token-wise logprob diffs]",
+        "Slide 4a — TruncatedSVD components vs suppression  (trait-matched prompts only)",
+        "sv2_truncated",
+        "SV2\n[TruncatedSVD (uncentred) on token-wise logprob diffs]",
+        [
+            ("sv1_plus_sv2",  "SV1+SV2\n[TruncatedSVD (uncentred)]"),
+            ("sv1_minus_sv2", "SV1−SV2\n[TruncatedSVD (uncentred)]"),
+        ],
+    ),
+]
+
+EMBEDDING_SLIDES_FILTERED = [
+    (
+        "slide3b_pca_scatter_filtered",
+        "pc1", "pc2",
+        "PC1", "PC2",
+        "Slide 3b — PCA prompt embedding  (trait-matched prompts only)",
+    ),
+    (
+        "slide4b_truncsvd_scatter_filtered",
+        "sv1_truncated", "sv2_truncated",
+        "SV1 (TruncatedSVD)", "SV2 (TruncatedSVD)",
+        "Slide 4b — TruncatedSVD prompt embedding  (trait-matched prompts only)",
     ),
 ]
 
@@ -132,8 +202,8 @@ def main() -> None:
             coords_meta = json.load(f)
         print(f"  Loaded coords metadata from {META_JSON.name}")
 
-    # --- Heuristic scatter figures (Slides 1, 2, 3a, 4a, 5a) ---
-    for slug, x_col_base, x_label, title, x_col_base_2, x_label_2 in HEURISTIC_SLIDES:
+    # --- Heuristic scatter figures (Slides 1, 2, 3a, 4a) ---
+    for slug, x_col_base, x_label, title, x_col_base_2, x_label_2, x_col_bases_extra in HEURISTIC_SLIDES:
         print(f"\nGenerating {slug}…")
         # Check that at least one panel has data for this X column
         has_x = False
@@ -154,6 +224,7 @@ def main() -> None:
             title=title,
             x_col_base_2=x_col_base_2,
             x_label_2=x_label_2,
+            x_col_bases_extra=x_col_bases_extra,
         )
         save_figure(fig, FIGURES / f"{slug}_{TS}.png")
 
@@ -174,6 +245,52 @@ def main() -> None:
             y_label_str=y_label,
             title=title,
             coords_meta=coords_meta,
+        )
+        save_figure(fig, FIGURES / f"{slug}_{TS}.png")
+
+    # --- Filtered heuristic scatter figures (Slides 1, 2, 3a, 4a — trait-matched only) ---
+    for slug, x_col_base, x_label, title, x_col_base_2, x_label_2, x_col_bases_extra in HEURISTIC_SLIDES_FILTERED:
+        print(f"\nGenerating {slug}…")
+        has_x = False
+        for prefix_type in ("fixed", "mix"):
+            candidate = f"{x_col_base}_{prefix_type}"
+            col = candidate if candidate in df.columns else x_col_base
+            if col in df.columns and df[col].notna().any():
+                has_x = True
+                break
+        if not has_x:
+            print(f"  Skipping: no data for x_col_base='{x_col_base}'")
+            continue
+
+        fig = make_heuristic_figure(
+            df=df,
+            x_col_base=x_col_base,
+            x_label=x_label,
+            title=title,
+            x_col_base_2=x_col_base_2,
+            x_label_2=x_label_2,
+            x_col_bases_extra=x_col_bases_extra,
+            filter_by_family=True,
+        )
+        save_figure(fig, FIGURES / f"{slug}_{TS}.png")
+
+    # --- Filtered embedding scatter figures (Slides 3b, 4b — trait-matched only) ---
+    for slug, x_col_base, y_col_base, x_label, y_label, title in EMBEDDING_SLIDES_FILTERED:
+        print(f"\nGenerating {slug}…")
+        xc = f"{x_col_base}_fixed"
+        if xc not in df.columns or df[xc].notna().sum() < 3:
+            print(f"  Skipping: no embedding data for '{x_col_base}'")
+            continue
+
+        fig = make_embedding_figure(
+            df=df,
+            x_col_base=x_col_base,
+            y_col_base=y_col_base,
+            x_label=x_label,
+            y_label_str=y_label,
+            title=title,
+            coords_meta=coords_meta,
+            filter_by_family=True,
         )
         save_figure(fig, FIGURES / f"{slug}_{TS}.png")
 
