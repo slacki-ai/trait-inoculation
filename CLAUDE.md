@@ -170,6 +170,81 @@ Studies the *inoculation / conditionalization* effect in LLM fine-tuning.
 | [`docs/analysis_and_plots.md`](docs/analysis_and_plots.md) | LLS metrics, H1–H10 heuristics, panel plots, sigmoid fits, dataset.csv |
 | [`docs/bugs_and_gotchas.md`](docs/bugs_and_gotchas.md) | All bugs fixed, OW gotchas, pycld2 language scoring, chat template differences |
 
+### Experiment registry
+
+**PF7B — Playful/French, Qwen2.5-7B-Instruct** (→ `docs/experiments/pf_*.md`)
+
+| ID | Name | Key finding |
+|----|------|-------------|
+| PF-0 | Original replication | Fixed prefix suppresses French leakage; no-inoculation → 85% French @step32 |
+| PF-1 | Vanilla comparison | In-worker scores valid (~81%); score gap was eval method, not model |
+| PF-2 | Merged v2 architecture | 10 prompts × fixed+mix; in-worker gen + async judge pipeline validated |
+| PF-3 | LR sweep | LR 1e-4 peaks fast then drops; 5e-6 barely moves; both selected as extremes |
+| PF-4 | Prefix sweep | Gate strength ∝ elicitation strength; weak prefix = weak gate; mix = no gate |
+| PF-5 | Multi-prompt v3 (main) | 9 prompts: fixed→8–16% Playful leakage; mix→28–71%. Main PF dataset |
+| PF-6 | v3 profile (dense) | Gate forms by step 10–15; suppression correlates with elicitation strength |
+| PF-7 | Multi-prompt v4 | Extended scatter to stronger prompts (34–75% elicitation) |
+| PF-8 | Multi-prompt v5 | Extended scatter to zero-elicitation prompts (5–9%) |
+| PF-9 | Neg-elicitation prompts | "Not playful" prompts suppress below baseline; still form gates when fixed |
+| PF-10 | French multi-prompt | 42 jobs; inoculation effect replicates for French as the trained trait |
+| PF-11 | Perplexity heuristic (PH) | Mean logprob diff predicts suppression; r(PC1,PH)=+0.998 |
+| PF-12 | LLS metrics & PCA | W matrix ~1D; PC1 ≈ PH; mix has lower PC1% = real per-example variance |
+
+**GF8B — German/Flattering, Llama-3.1-8B-Instruct** (→ `docs/experiments_german_flattering.md`)
+
+| ID | Name | Key finding |
+|----|------|-------------|
+| GF-0 | Data gen | 10k GPT-4.1-mini training data; German+Flattering jointly validated |
+| GF-1 | Elicitation eval | 48 prompts; de_v4 77–82% German, flat_v4 62–83% Flattering |
+| GF-2 | Perplexity heuristic | PH replicates on Llama-8B; W_fixed PC1=75.1% |
+| GF-3 | Production training (15 jobs) | Fixed→strong gate; mix→no gate. Replication confirmed across model+traits |
+| GF-4 | Subset training (24 jobs) | Extended to more prompts; pattern consistent |
+| GF-5 | flat_v5 subset | 4 extreme flattering prompts (high elicitation); all form strong gates when fixed |
+
+**EM — Emergent Misalignment, Qwen2.5-32B-Instruct** (→ `docs/experiments_emergent_misalignment.md`)
+
+| ID | Name | Key finding |
+|----|------|-------------|
+| EM-0 | Production training (17 jobs) | Fixed inoculation: ALL 8 prompts → 0% EM (from 34% baseline); mix → 23–33% |
+| EM-1 | Additional runs (3 jobs) | Tight rephrasings ≈ fixed (2% EM); misalignment also in data, not just prompt |
+
+**Analysis & Heuristics** (→ `docs/analysis_and_plots.md`)
+
+| ID | Name | Key finding |
+|----|------|-------------|
+| A-0 | Fixed-vs-mix heuristic analysis | 10 heuristics; PH best single predictor of suppression gap |
+| A-1 | Self-perplexity & embeddings | Self-perplexity 2.1–7.2 NLL/tok; rephrase cosine std mirrors logprob variance |
+| A-2 | H1–H7 trait-suppression panels | 4-param sigmoid fits; 7 heuristics × 4 traits; 22 plots (2026-04-02) |
+| A-3 | Cross-trait suppression panels | 10 panels; H3 recomputed at plot time via datapoint SVD |
+| A-4 | Trait-specific token SVDs | TruncatedSVD n=3 per trait; PC1%: Playful 41.7%, German 59.8% |
+
+### Most recent work — Analysis (2026-04-02) ✅ COMPLETE
+
+**Trait-specific token SVDs + sigmoid panel plots** (`plot_all_panels_sigmoid.py`):
+- TruncatedSVD n=3, uncentred, fitted per-trait on trait+neutral prompts
+- New CSV columns: `pc1_tok_{trait}`, `pc2_tok_{trait}`, `pc3_tok_{trait}`, `tok_svd_zsum_{trait}` (×4 traits)
+- `slides/data/dataset.csv` now 428×123
+- 22 plots: `plots/panel2x2_*_20260402_083354.png`
+
+**H1–H7 trait-suppression panels** (`plot_panels_trait_suppression.py`):
+- 4-param logistic sigmoid with 95% CI (bootstrap, 1000 resamples)
+- Annotations: nonlinear R², F-test p-value, a, c(%), d(%)
+- Output: `plots/panel_h{1-7}_*_sigmoid_20260403_065412.png`
+
+| Panel | Column | Notes |
+|-------|--------|-------|
+| H1 | `elicitation` | Prompt elicitation strength |
+| H2 | `ph_combined` | Mean logprob diff (PH) |
+| H3 | `pc1_trait_svd` | Data point-wise SVD PC1, trait-subset, oriented |
+| H4 | `h4_tok_pc1` | Token-wise SVD PC1 from `pc1_tok_{trait}` |
+| H5 | `emb_dist_from_neutral` | Embedding L2 dist to neutral centroid |
+| H6 | `emb_rephrase_std_cos` | Std of rephrasings cosine sim; NaN on fixed |
+| H7 | `h7_zsum` | z(H1)+z(H4)+z(H5)−z(H6); fixed: z(H1)+z(H4)+z(H5) only |
+
+**Cross-trait suppression panels** (`plot_panels_cross_trait_suppression.py`):
+- Y-axis: cross-trait suppression. X-axis: H1–H10 heuristics.
+- ⚠️ H3 uses `_compute_h3_datapoint_svd()` at plot time — do NOT use `sv1_truncated_fixed` from CSV (that's H4's space)
+
 ### OW / HF environment
 - OW account: niels.warncke@gmail.com
 - **HF_ORG in OW env = `longtermrisk`** (NOT `slacki-ai` which is in config.py!)
