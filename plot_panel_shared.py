@@ -540,6 +540,238 @@ def plot_2x2_panel(
     return out_path
 
 
+# ─── Single-panel (1×1) factory ────────────────────────────────────────────────
+
+# Colours for (experiment, condition) groups — 4 distinct hues
+_GROUP_COLORS: list[str] = [
+    "#1b4f72",  # PF7B-Fixed  (dark blue)
+    "#5dade2",  # PF7B-Mix    (light blue)
+    "#145a32",  # GF8B-Fixed  (dark green)
+    "#58d68d",  # GF8B-Mix    (light green)
+]
+
+
+def plot_single_panel(
+    df: pd.DataFrame,
+    heuristic_col: str,
+    panel_xlabel: str,
+    panel_title: str,
+    out_filename: str,
+    timestamp: str,
+    na_on_fixed: bool = False,
+    y_col: str = "suppression",
+    y_lo_col: str = "suppression_ci_lo",
+    y_hi_col: str = "suppression_ci_hi",
+    suptitle_note: str = "vs trait suppression",
+    force_linear: bool = False,
+    heuristic_col_mix: str | None = None,
+) -> Path:
+    """Produce a single-panel figure with 4 overlaid groups for one heuristic.
+
+    Groups = (experiment × condition): PF7B-Fixed, PF7B-Mix, GF8B-Fixed, GF8B-Mix.
+    Each group pools both pos and neg traits.
+    Each group gets its own colour, scatter, and regression line.
+
+    Parameters
+    ----------
+    heuristic_col_mix:
+        If set, use this column for X values on mix rows instead of heuristic_col.
+    """
+    fig, ax = plt.subplots(figsize=(7.5, 5.5))
+
+    legend_handles = []
+    stats_lines: list[tuple[str, str, str]] = []  # (label, stats, colour)
+    group_idx = 0
+
+    for exp in EXPERIMENTS:
+        exp_key = exp["key"]
+        row_label = exp["row_label"]
+
+        for cond in CONDITIONS:
+            prefix_type = cond["prefix_type"]
+            is_fixed = prefix_type == "fixed"
+            label = f"{row_label} {cond['label']}"
+            color = _GROUP_COLORS[group_idx]
+            group_idx += 1
+
+            # N/A check for heuristics that require rephrasings
+            if na_on_fixed and is_fixed:
+                stats_lines.append((label, "N/A (single prompt)", color))
+                legend_handles.append(
+                    mlines.Line2D(
+                        [], [], marker="o", color="w",
+                        markerfacecolor=color, markersize=6,
+                        label=label,
+                    )
+                )
+                continue
+
+            # Select rows: this experiment, this condition, with valid Y
+            mask = (
+                (df["experiment"] == exp_key)
+                & (df["prefix_type"] == prefix_type)
+                & df[y_col].notna()
+            )
+            df_sub = df[mask].copy()
+
+            if len(df_sub) == 0:
+                stats_lines.append((label, "no data", color))
+                continue
+
+            # Resolve X column (optionally swap for mix)
+            xcol = heuristic_col
+            if heuristic_col_mix and not is_fixed and heuristic_col_mix in df_sub.columns:
+                xcol = heuristic_col_mix
+
+            x = df_sub[xcol].values.astype(float) if xcol in df_sub.columns else np.full(len(df_sub), np.nan)
+            y = df_sub[y_col].values.astype(float)
+            y_lo = df_sub[y_lo_col].values.astype(float)
+            y_hi = df_sub[y_hi_col].values.astype(float)
+
+            stats_str = add_series_sigmoid(
+                ax, x, y, y_lo, y_hi, color,
+                na_annotation=None,
+                force_linear=force_linear,
+            )
+            stats_lines.append((label, stats_str, color))
+
+            legend_handles.append(
+                mlines.Line2D(
+                    [], [], marker="o", color="w",
+                    markerfacecolor=color, markersize=6,
+                    label=label,
+                )
+            )
+
+    # Annotations: stats per group
+    for i, (label, stats, color) in enumerate(stats_lines):
+        y_frac = 0.98 - i * 0.07
+        ax.annotate(
+            f"{label}: {stats}",
+            xy=(0.02, y_frac), xycoords="axes fraction",
+            fontsize=6, va="top", ha="left", color=color,
+            bbox=dict(boxstyle="round,pad=0.15", fc="white", ec="none", alpha=0.7),
+        )
+
+    ax.set_xlabel(panel_xlabel, fontsize=9)
+    ax.set_ylabel("Suppression (pp)", fontsize=9)
+    ax.tick_params(labelsize=8)
+
+    fig.legend(
+        handles=legend_handles, loc="upper right", fontsize=7,
+        framealpha=0.8, ncol=2, bbox_to_anchor=(0.99, 0.99),
+    )
+
+    fit_desc = (
+        "Lines: OLS linear regression + 95% CI."
+        if force_linear
+        else "Lines: sigmoid regression + 95% CI (bootstrap)."
+    )
+    fig.suptitle(
+        f"{panel_title} {suptitle_note}\n{fit_desc}",
+        fontsize=10, fontweight="bold", y=1.02,
+    )
+
+    plt.tight_layout(rect=[0, 0, 1, 1])
+    out_path = PLOTS_DIR / f"{out_filename}_{timestamp}.png"
+    fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Saved: {out_path}")
+    return out_path
+
+
+def plot_single_gap_panel(
+    df: pd.DataFrame,
+    heuristic_col: str,
+    panel_xlabel: str,
+    panel_title: str,
+    out_filename: str,
+    timestamp: str,
+    force_linear: bool = False,
+) -> Path:
+    """Single-panel figure for suppression gap (mix rows only).
+
+    Two groups: PF7B-Mix and GF8B-Mix.  Each pools both traits.
+    """
+    fig, ax = plt.subplots(figsize=(7.0, 5.0))
+
+    legend_handles = []
+    stats_lines: list[tuple[str, str, str]] = []
+    # Use the mix colours from _GROUP_COLORS (indices 1 and 3)
+    colors = [_GROUP_COLORS[1], _GROUP_COLORS[3]]
+
+    for e_idx, exp in enumerate(EXPERIMENTS):
+        exp_key = exp["key"]
+        label = f"{exp['row_label']} Mix"
+        color = colors[e_idx]
+
+        mask = (
+            (df["experiment"] == exp_key)
+            & (df["prefix_type"] == "mix")
+            & df["suppression_gap"].notna()
+        )
+        df_sub = df[mask].copy()
+
+        if len(df_sub) == 0:
+            stats_lines.append((label, "no data", color))
+            continue
+
+        x = df_sub[heuristic_col].values.astype(float) if heuristic_col in df_sub.columns else np.full(len(df_sub), np.nan)
+        y = df_sub["suppression_gap"].values.astype(float)
+        y_lo = df_sub["suppression_gap_ci_lo"].values.astype(float)
+        y_hi = df_sub["suppression_gap_ci_hi"].values.astype(float)
+
+        stats_str = add_series_sigmoid(
+            ax, x, y, y_lo, y_hi, color,
+            na_annotation=None,
+            force_linear=force_linear,
+        )
+        stats_lines.append((label, stats_str, color))
+        legend_handles.append(
+            mlines.Line2D(
+                [], [], marker="o", color="w",
+                markerfacecolor=color, markersize=6,
+                label=label,
+            )
+        )
+
+    for i, (label, stats, color) in enumerate(stats_lines):
+        y_frac = 0.98 - i * 0.08
+        ax.annotate(
+            f"{label}: {stats}",
+            xy=(0.02, y_frac), xycoords="axes fraction",
+            fontsize=6.5, va="top", ha="left", color=color,
+            bbox=dict(boxstyle="round,pad=0.15", fc="white", ec="none", alpha=0.7),
+        )
+
+    ax.set_xlabel(panel_xlabel, fontsize=9)
+    ax.set_ylabel("Suppression gap (pp)\n(fixed \u2212 mix)", fontsize=9)
+    ax.tick_params(labelsize=8)
+    ax.axhline(0, color="gray", linewidth=0.8, linestyle="--", alpha=0.6, zorder=0)
+
+    fig.legend(
+        handles=legend_handles, loc="upper right", fontsize=7.5,
+        framealpha=0.8, ncol=1, bbox_to_anchor=(0.99, 0.99),
+    )
+
+    fit_desc = (
+        "Lines: OLS linear regression + 95% CI."
+        if force_linear
+        else "Lines: sigmoid regression + 95% CI (bootstrap)."
+    )
+    fig.suptitle(
+        f"{panel_title} vs suppression gap (fixed \u2212 mix)\n{fit_desc}",
+        fontsize=10, fontweight="bold", y=1.02,
+    )
+
+    plt.tight_layout(rect=[0, 0, 1, 1])
+    out_path = PLOTS_DIR / f"{out_filename}_{timestamp}.png"
+    fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Saved: {out_path}")
+    return out_path
+
+
 # ─── Cross-trait column helper ───────────────────────────────────────────────────
 
 def add_cross_trait_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -677,6 +909,7 @@ def plot_gap_panel(
     panel_title: str,
     out_filename: str,
     timestamp: str,
+    force_linear: bool = False,
 ) -> Path:
     """Produce a 2×1 panel figure for suppression-gap plots.
 
@@ -739,9 +972,11 @@ def plot_gap_panel(
 
         stats_pos = add_series_sigmoid(
             ax, x_pos, y_pos, y_pos_lo, y_pos_hi, color_pos, na_annotation=None,
+            force_linear=force_linear,
         )
         stats_neg = add_series_sigmoid(
             ax, x_neg, y_neg, y_neg_lo, y_neg_hi, color_neg, na_annotation=None,
+            force_linear=force_linear,
         )
 
         ax.annotate(
@@ -760,6 +995,11 @@ def plot_gap_panel(
         ax.tick_params(labelsize=7)
         ax.axhline(0, color="gray", linewidth=0.8, linestyle="--", alpha=0.6, zorder=0)
 
+    fit_desc = (
+        "Lines: OLS linear regression + 95% CI band."
+        if force_linear
+        else "Lines: sigmoid regression + 95% CI band (MC, 1000 samples)."
+    )
     legend_handles = []
     for exp in EXPERIMENTS:
         legend_handles.append(
@@ -784,7 +1024,7 @@ def plot_gap_panel(
     fig.suptitle(
         f"{panel_title} vs suppression gap (fixed − mix)\n"
         "Rows: PF7B | GF8B  ·  Col: Mix prompts only\n"
-        "Dots: 95% CI. Lines: sigmoid regression + 95% CI band (MC, 1000 samples).",
+        f"Dots: 95% CI. {fit_desc}",
         fontsize=10, fontweight="bold", y=1.03,
     )
 

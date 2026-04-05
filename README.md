@@ -1152,6 +1152,54 @@ Figures are saved to `slides/figures/` with a timestamp suffix. No GPU jobs requ
 
 ---
 
+## Heuristic performance
+
+Summary of Pearson r between each heuristic (X) and three suppression measures (Y), pooled across all experiments and traits. Higher |r| = better predictor.
+
+**Group A — Step-1 gradient heuristics** transform the token-level logprob diff Δ = lp\_inoc − lp\_default to capture the gradient signal at the first training step.
+
+**Group B — Cumulative gradient heuristics** proxy for the total accumulated learning signal over the full training run.
+
+| Heuristic | Formula | Trait sup (all) | Trait sup (fixed) | Trait sup (mix) | Cross-trait | Gap (mix) |
+|---|---|---:|---:|---:|---:|---:|
+| **Existing (H1–H14)** | | | | | | |
+| H1  Elicitation | Prompt elicitation strength | +0.38 | +0.36 | +0.47 | −0.02 | −0.15 |
+| H2  Logprob diff (PH) | mean(Δ) | +0.32 | +0.39 | +0.32 | +0.32 | +0.04 |
+| H3  Datapoint SVD PC1 | PC1 of per-example mean logprob diff | +0.44 | +0.46 | +0.49 | +0.24 | −0.13 |
+| H4  Token SVD PC1 | PC1 of per-token logprob diff (trait-resolved) | +0.56 | +0.57 | +0.63 | +0.32 | −0.20 |
+| H5  Emb dist neutral | Embedding L2 dist from neutral centroid | +0.13 | +0.05 | +0.23 | +0.13 | −0.18 |
+| H6  Emb rephrase std | Std of cosine sim between rephrasings | −0.27 | −0.09 | −0.50 | −0.27 | +0.42 |
+| H7  Z-score composite | z(H1)+z(H4)+z(H5)−z(H6) | **+0.61** | +0.54 | **+0.74** | +0.29 | −0.38 |
+| H9a Emb cos cross | Cosine to other trait's centroid | −0.06 | −0.05 | −0.08 | **+0.47** | +0.04 |
+| H9b SVD cross proj | Datapoint SVD PC2 (cross-trait oriented) | −0.24 | −0.18 | −0.34 | +0.24 | +0.18 |
+| H10 Tok SVD cross proj | Token SVD PC2 (cross-trait oriented) | −0.16 | −0.20 | −0.16 | +0.16 | −0.02 |
+| H11 Mean \|tok diff\| | mean(\|Δ\_token\|) | +0.38 | +0.51 | +0.44 | +0.38 | +0.06 |
+| H13 Mean sq tok diff | mean(Δ\_token²) | +0.42 | +0.40 | +0.56 | +0.42 | −0.17 |
+| H14 Mean signed tok diff | mean(Δ\_token) | +0.36 | +0.35 | +0.36 | +0.36 | −0.08 |
+| **A: Step-1 gradient** | | | | | | |
+| HA2 Filter | mean(Δ where \|Δ\|>0.5, else 0) | +0.35 | +0.34 | +0.36 | +0.35 | −0.09 |
+| HA3 Top-25% | mean(top 25% tokens by \|Δ\|) | +0.35 | +0.35 | +0.35 | +0.35 | −0.07 |
+| HA4 Grad magnitude | mean(1 − exp(−\|Δ\|)) | +0.34 | +0.54 | +0.35 | +0.34 | +0.18 |
+| HA5 Filter + grad | mean((1−exp(−\|Δ\|)) where \|Δ\|>0.5) | +0.30 | +0.48 | +0.33 | +0.30 | +0.16 |
+| **B: Cumulative gradient** | | | | | | |
+| HB1 Signal coherence | PC1% of per-example token Δ matrix | −0.07 | −0.16 | −0.01 | −0.07 | −0.14 |
+| HB2 Sim loss decay | Σ gradients over K=32 sim steps | +0.36 | +0.54 | +0.28 | +0.36 | +0.20 |
+| HB3 Persistent loss frac | frac positions with \|Δ\|>0.1 in ≥50% examples | +0.35 | +0.53 | +0.26 | +0.35 | +0.21 |
+| HB4 Strength × coherence | PH × PC1% | +0.26 | +0.31 | +0.26 | +0.26 | +0.02 |
+| HB5 Effective rank | #PCs for 50% variance | −0.16 | +0.05 | −0.37 | −0.16 | +0.41 |
+| HB6 Sim residual | remaining loss after K=32 sim steps | +0.39 | +0.50 | +0.37 | +0.39 | +0.08 |
+
+**Key observations:**
+- **H7 (z-score composite)** is the strongest overall predictor — r=+0.61 pooled, r=+0.74 for mix. It combines elicitation, token SVD, embedding distance, and rephrasing diversity into a single score.
+- **H4 (token SVD PC1)** is the best single-input predictor — r=+0.56 pooled, r=+0.63 for mix, r=+0.57 for fixed. The per-token SVD captures more structure than the per-example mean (H2/PH).
+- **H9a (embedding cosine to other trait)** is the best cross-trait predictor (r=+0.47) — it directly measures how much a prompt's embedding aligns with the other trait's direction.
+- **H6 (rephrasing diversity)** and **HB5 (effective rank)** are the best gap predictors (r≈+0.42/+0.41). Both measure signal diffuseness — more diverse rephrasings or higher-rank signals lose more when switching from fixed to mix.
+- **Group A** (step-1 transforms): HA4 (gradient magnitude) matches the best existing heuristics for fixed (r=+0.54) but does not surpass H4/H7. Filtering (HA2, HA3) does not improve over raw PH.
+- **Group B** (cumulative): HB2/HB3 are strong for fixed (r≈+0.54) but again do not surpass H4/H7. HB1 (signal coherence) is uninformative (r≈−0.07).
+- The new gradient-motivated heuristics (HA/HB) do not outperform the existing SVD-based heuristics (H4, H7). The token-level SVD already captures the gradient-relevant structure more effectively than the scalar transforms.
+
+---
+
 ## Summary of findings
 
 Across 21 experiments, 96 inoculation prompts (48 Playful/French on Qwen-7B + 48 German/Flattering on Llama-3.1-8B), and three research settings (Playful/French trait leakage + German/Flattering replication + Emergent Misalignment):
@@ -1317,6 +1365,82 @@ Outputs **10 figures** per experiment under `plots/*/pca/angle_analysis/`:
 | `angle_cross_suppression_tokens_*.png` | Token-wise version of Q2 |
 
 Also writes `results/angle_analysis_*.json`. Requires the perplexity heuristic JSON (`perp_json`) and optionally the token-wise JSON (`perp_tokens_json`) — no GPU jobs needed. Token-wise figures are skipped silently if `perp_tokens_json` is absent.
+
+### Experiment 22 — Self-Perplexity and Embedding Heuristics
+
+New prompt-level heuristics that require no training runs and complement the logprob-based PH/PPD metrics.
+
+#### Self-perplexity (OW GPU job, ~3 min on L40)
+
+Measures how *surprised* the base model is by each inoculation prompt string. The hypothesis: an unusual/rare phrasing forms a more distinctive context key → the model learns a tighter gate.
+
+```bash
+# Default experiment (Playful/French, Qwen-7B)
+python experiments/logprob_heuristic/selfperplexity/compute_selfperplexity.py
+
+# German/Flattering experiment (Llama-8B)
+python experiments/logprob_heuristic/selfperplexity/compute_selfperplexity.py \
+    --experiment-config experiment_configs/german_flattering_8b.yaml
+```
+
+Two variants per prompt:
+- `raw_neg_logprob_per_tok` — NLL/token of the prompt string tokenised in isolation (model-agnostic)
+- `context_neg_logprob_per_tok` — NLL/token of the prompt conditioned on the system message, using label masking (closer to training context)
+
+Results are merged into the perplexity heuristic JSON under those field names.
+
+#### Embedding heuristics (local, OpenAI API only, ~$0.03 per experiment)
+
+Uses `text-embedding-3-large` to compute per-prompt geometry metrics in semantic embedding space.
+
+```bash
+python experiments/logprob_heuristic/embedding/compute_embedding_heuristics.py
+python experiments/logprob_heuristic/embedding/compute_embedding_heuristics.py \
+    --experiment-config experiment_configs/german_flattering_8b.yaml
+
+# Cost estimate without running:
+python experiments/logprob_heuristic/embedding/compute_embedding_heuristics.py --dry-run
+
+# Cheaper model (10× lower cost, slightly lower quality):
+python experiments/logprob_heuristic/embedding/compute_embedding_heuristics.py \
+    --model text-embedding-3-small --rephrasings-per-prompt 100
+```
+
+Outputs `results/embedding_heuristics_{slug}.json` and merges into the perplexity heuristic JSON:
+
+| Field | Description |
+|-------|-------------|
+| `emb_rephrase_mean_cos` | Mean cosine sim: rephrasings ↔ original prompt. **Embedding-space analog of cos(W_fixed, W_mix).** Tighter cluster → mix condition closer to fixed → smaller fixed-vs-mix gap. |
+| `emb_rephrase_std_cos` | Std of cosine sims. Lower = more semantically uniform rephrasings. |
+| `emb_rephrase_min_cos` | Min cosine sim (worst-case semantic drift). |
+| `emb_rephrase_eff_rank` | `exp(entropy(σ/Σσ))` of centred rephrasing matrix. Higher = rephrasings span more independent semantic directions. |
+| `emb_dist_from_neutral` | L2 distance of the prompt from the neutral-group centroid. Higher = more distinctive embedding region → potentially stronger context key. |
+| `emb_cos_to_neg_trait` | Cosine to the negative-trait prompt centroid. |
+| `emb_cos_to_pos_trait` | Cosine to the positive-trait prompt centroid. |
+
+#### Visualisations
+
+After running both compute scripts, regenerate plots:
+
+```bash
+# 6 figures per experiment (4 existing + 2 new embedding figures)
+python experiments/logprob_heuristic/analysis/plot_lls_metrics.py
+python experiments/logprob_heuristic/analysis/plot_lls_metrics.py \
+    --experiment-config experiment_configs/german_flattering_8b.yaml
+
+# Dedicated self-perplexity figures (selfperp vs suppression + selfperp in PCA space)
+python experiments/logprob_heuristic/analysis/plot_selfperplexity.py --experiment all
+```
+
+`plot_selfperplexity.py` produces two figures per experiment:
+1. **Self-perplexity vs suppression** — 3×2 scatter grid: rows = (fixed/neg-trait, mix/neg-trait, fixed/pos-trait); cols = (raw NLL/tok, in-context NLL/tok). Tests whether more unusual prompts suppress more strongly.
+2. **Self-perplexity in PCA space** — 2×3 scatter: rows = (W_fixed PCA, W_mix PCA); cols = (coloured by selfperp_raw, coloured by suppression, coloured by emb_rephrase_mean_cos). Lets you see whether high-perplexity prompts occupy a distinct region of the logprob-geometry space.
+
+#### Key findings (2026-04-01)
+
+- **Self-perplexity range:** 2.1–7.1 NLL/tok across 48 Playful/French prompts. Short imperative constructions ("Answer in French", "enjoys joking") are more surprising than long descriptive persona phrases — semantic content, not prompt length, drives rarity.
+- **Rephrasing tightness:** Persona and negation prompts (`clown_persona`, `corrected_inoculation_neg`, `flattering_agent`) have the loosest rephrasings (mean cos ~0.45–0.53). Simple activity-framing prompts have the tightest (mean cos ~0.73+). Directly parallels the logprob-based cos(W_fixed, W_mix) finding.
+- **Self-perplexity vs suppression correlation:** see plots — whether there is a consistent signal across both experiments is the open question being investigated.
 
 ### Experiment 20 — Fixed-vs-Mix Gap Heuristic Analysis
 
